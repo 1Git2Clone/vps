@@ -32,6 +32,8 @@
       };
     in
     {
+      nixosConfigurations.vps = vps;
+
       devShells.${system}.default = pkgs.mkShell {
         buildInputs = with pkgs; [
           nixd
