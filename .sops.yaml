@@ -1,7 +1,9 @@
 keys:
-  - &hutao age1twlfuf88nxhdevt070c3yrklljm0xc0jpyut0722av342ux4tqzqtl3mpz
-  - &nixos age1wa7049wzlytz0rc3psfj8vynwrjfjud9y0p7p8v80vzemdwjudgqcejyav
+  - &primary age1hxd7xtvy5e52pe9d8x2p7g6yls0zmsp668p0rvu0qw02dd7dryuqrvuq7h
+  - &backup age1twlfuf88nxhdevt070c3yrklljm0xc0jpyut0722av342ux4tqzqtl3mpz
 creation_rules:
   - path_regex: secrets\.yaml$
     key_groups:
-      - age: [*hutao, *nixos]
+      - age:
+          - *primary
+          - *backup
