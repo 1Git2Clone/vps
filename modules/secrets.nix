@@ -1,15 +1,6 @@
 # ==============================================================================
 # Secrets
 # ==============================================================================
-#
-# NOTE: When the image is loaded, do this to move the secret key onto it:
-#
-# ```sh
-# ssh root@nixos 'install -d -m 0700 /var/lib/sops-nix'
-# scp /var/lib/sops-nix/key.txt root@nixos:/var/lib/sops-nix/key.txt
-# ssh root@nixos reboot
-# ```
-# ==============================================================================
 {
   sops = {
     defaultSopsFile = ../secrets.yaml;
