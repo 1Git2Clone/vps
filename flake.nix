@@ -44,16 +44,6 @@
         ];
       };
 
-      nixosConfigurations.vps = nixpkgs.lib.nixosSystem {
-        inherit system;
-        modules = [
-          ./configuration.nix
-          ./disk-config.nix
-          disko.nixosModules.disko
-          sops-nix.nixosModules.sops
-        ];
-      };
-
       packages.${system}.default = vps.config.system.build.toplevel;
       apps.${system} = {
         default = {
