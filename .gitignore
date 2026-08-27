@@ -1,0 +1,4 @@
+result
+secrets/**/*
+!secrets/*.example
+!secrets/*.example.*
