@@ -8,9 +8,23 @@ The image for my self-hosted infrastructure.
 nix develop
 ```
 
-Then do whatever edits you want...
+### Configuration
 
-To test it out do
+Set your `config.yaml` using SOPS + age
+
+```sh
+mkdir -p ~/.sops-nix
+age-keygen | tee ~/.sops-nix/key.txt > /dev/null
+chmod 0600 ~/.sops-nix/key.txt
+```
+
+Then edit it
+
+```sh
+SOPS_AGE_KEY_FILE=/var/lib/sops-nix/key.txt nix develop -c sops secrets.yaml
+```
+
+### Building
 
 ```sh
 nix build .#default
