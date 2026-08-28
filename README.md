@@ -46,5 +46,5 @@ The actual system (infinitely more useful):
 QEMU_OPTS="-vnc :0" nix run .#default
 ```
 
-And ssh into it from another terminal (`ssh -p 2222 root@127.0.0.1`) (there's
+And ssh into it from another terminal (`ssh -p 2222 hutao@127.0.0.1`) (there's
 no place like `127.0.0.1`).
