@@ -6,5 +6,6 @@
     ./modules/users.nix
     ./modules/firewall.nix
     ./modules/security.nix
+    ./modules/backups.nix
   ];
 }
