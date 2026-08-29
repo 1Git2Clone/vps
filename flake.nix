@@ -125,7 +125,70 @@
       };
 
       packages.${system}.default = vps.config.system.build.toplevel;
+
       apps.${system} = {
+        # ── Initial install, in one command ────────────────────────────────────
+        #   nix run .#install -- root@<ip>
+        #
+        # This exists because the one genuinely manual step in a NixOS install is
+        # unavoidable and easy to forget: the target must hold a decryption key
+        # BEFORE its first activation, or sops-install-secrets fails and the
+        # machine boots with no credentials — including its own root and user
+        # passwords. You cannot bootstrap a secret from nothing.
+        #
+        # What it does that a bare nixos-anywhere invocation does not:
+        #   * checks the age key actually decrypts secrets.yaml first, so the
+        #     failure happens here rather than three minutes into an install
+        #   * stages it into an extra-files tree at 0600, in a temp dir that is
+        #     cleaned up, instead of a hand-made directory that lingers
+        #   * selects vps-hetzner, not vps — the wrong one targets /dev/vda and
+        #     fails at disko on a Hetzner machine
+        install = {
+          type = "app";
+          program = nixpkgs.lib.getExe (
+            pkgs.writeShellApplication {
+              name = "install-vps";
+              runtimeInputs = with pkgs; [
+                nixos-anywhere
+                sops
+                coreutils
+              ];
+              text = ''
+                target=''${1:-}
+                if [ -z "$target" ]; then
+                  echo "usage: nix run .#install -- root@<host>" >&2
+                  exit 64
+                fi
+
+                key="''${SOPS_AGE_KEY_FILE:-$HOME/.sops-nix/key.txt}"
+                if [ ! -f "$key" ]; then
+                  echo "no age key at $key (set SOPS_AGE_KEY_FILE)" >&2
+                  exit 1
+                fi
+
+                # Fail here, not mid-install, if this key cannot read the secrets.
+                if ! SOPS_AGE_KEY_FILE="$key" sops -d --extract '["email"]["postmaster"]' \
+                     secrets.yaml >/dev/null 2>&1; then
+                  echo "$key does not decrypt secrets.yaml — the installed host would have no credentials" >&2
+                  exit 1
+                fi
+                echo "age key verified against secrets.yaml"
+
+                stage=$(mktemp -d)
+                trap 'rm -rf "$stage"' EXIT
+                install -d -m 0755 "$stage/var/lib/sops-nix"
+                install -m 0600 "$key" "$stage/var/lib/sops-nix/key.txt"
+
+                exec nixos-anywhere \
+                  --flake ".#vps-hetzner" \
+                  --target-host "$target" \
+                  --extra-files "$stage" \
+                  "''${@:2}"
+              '';
+            }
+          );
+        };
+
         default = {
           type = "app";
           program = nixpkgs.lib.getExe (

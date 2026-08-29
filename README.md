@@ -224,9 +224,10 @@ Three things worth knowing before the first apply:
   `/dev/vda`; that one line is the only difference between the two, and
   installing the wrong one fails at disko.
 
-- **`install-sops-key.sh` puts the age key on the target** before its first
-  boot, via nixos-anywhere's extra-files mechanism. Without it, activation
-  cannot decrypt anything.
+- **`nix run .#install -- root@<ip>` puts the age key on the target** before its
+  first boot, via nixos-anywhere's extra-files mechanism, and refuses to start if
+  that key cannot decrypt `secrets.yaml`. Without the key, activation cannot
+  decrypt anything and the machine boots with no credentials at all.
 
 - **The primary IP is its own resource** with `auto_delete = false` and
   `prevent_destroy`. Every A record points at it and the SPF record hard-codes

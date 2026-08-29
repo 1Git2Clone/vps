@@ -64,27 +64,18 @@ resource "hcloud_server" "vps" {
   }
 }
 
-# nixos-anywhere installs, then keeps the machine up to date with nixos-rebuild
-# on subsequent applies — so there is no second deployment tool to keep in sync.
-module "deploy" {
-  source = "github.com/nix-community/nixos-anywhere//terraform/all-in-one"
-
-  # vps-hetzner, not vps: Hetzner Cloud presents the root disk as /dev/sda while
-  # the local QEMU VM gets /dev/vda. Installing the wrong one repartitions
-  # nothing and fails at disko.
-  nixos_system_attr      = "${abspath("${path.module}/..")}#nixosConfigurations.vps-hetzner.config.system.build.toplevel"
-  nixos_partitioner_attr = "${abspath("${path.module}/..")}#nixosConfigurations.vps-hetzner.config.system.build.diskoScript"
-
-  target_host = hcloud_primary_ip.main.ip_address
-
-  # Changing this triggers a reinstall, so it is the server's identity: a
-  # replaced machine gets NixOS installed on it, an existing one does not.
-  instance_id = hcloud_server.vps.id
-
-  # Without the age key on the target, sops-install-secrets fails during
-  # activation and the machine comes up with no root or user password at all.
-  extra_files_script = "${path.module}/install-sops-key.sh"
-
-  # debug_logging   = true
-  # build_on_remote = true
-}
+# NOTE: the nixos-anywhere module used to live here and has been REMOVED, on
+# purpose. It declared `null_resource.nixos-remote`, whose creation runs a full
+# install — disko repartitions the disk and the closure is written over whatever
+# is there. That is correct for a blank machine and catastrophic for a running
+# one, and it is exactly what a plan proposes any time tofu's state does not
+# already contain it: a fresh clone, a lost state file, or a `state rm` all
+# produce a plan that silently includes "reinstall the mail server".
+#
+# The split is now:
+#   infrastructure (server, IPs, firewall, DNS, rDNS)  -> tofu, here
+#   installing NixOS onto a blank machine              -> nixos-anywhere, by hand
+#   updating a machine that already runs NixOS         -> deploy .#vps
+#
+# Both commands are in docs/deploying.md. Neither can be triggered by an
+# `apply`, which is the point.
