@@ -20,7 +20,33 @@
 {
   networking.nftables = {
     enable = true;
+
+    # DO NOT set this back to true.
+    #
+    # The default flushes the ENTIRE nftables ruleset before loading, which
+    # includes the tables docker owns. Docker only builds those when dockerd
+    # starts, so after any reload of this unit — i.e. after any deploy that
+    # touches the firewall — creating a container fails with:
+    #
+    #   Unable to enable DNAT rule: iptables -t nat -A DOCKER ...
+    #   iptables: No chain/target/match by that name
+    #
+    # Running containers keep working, because their rules are already
+    # programmed. It only breaks the NEXT container start, which is why it can
+    # sit latent for several deploys and then take out mail the one time a
+    # container is restarted. Recovery is `systemctl restart docker`.
+    #
+    # With flushing off, the ruleset below deletes and recreates only its own
+    # table and leaves docker's alone.
+    flushRuleset = false;
+
     ruleset = ''
+      # Idempotent replace of just this table: create-if-missing, then delete,
+      # then define. Without the no-op create, `delete` fails on a first load
+      # and the whole ruleset is rejected.
+      table inet nixos-fw { }
+      delete table inet nixos-fw
+
       table inet nixos-fw {
         chain input {
           type filter hook input priority filter; policy drop;

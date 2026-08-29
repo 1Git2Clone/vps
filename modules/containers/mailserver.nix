@@ -53,13 +53,28 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
     };
-    # 0644, deliberately: opendkim inside DMS does not run as root and the
-    # container's uid map does not line up with any group on this host, so a
-    # tighter mode is unreadable to the one process that needs it. The host
-    # directory is 0700 root, and the file is only exposed inside DMS.
+    # 0600, owned by DMS's opendkim uid — NOT 0644.
+    #
+    # opendkim enforces RequireSafeKeys (on by default, and not overridden in
+    # DMS's opendkim.conf): it REFUSES to load a signing key that is
+    # world-readable. A 0644 key produces
+    #
+    #   opendkim: <id>: error loading key 'default._domainkey.<domain>'
+    #
+    # and then, because opendkim is a milter on the outbound path, postfix
+    # answers submissions with "451 4.7.1 Service unavailable - try again
+    # later". Receiving keeps working, so the failure looks like anything
+    # except a file mode. The key itself is valid and matches DNS throughout.
+    #
+    # 102:104 are opendkim's uid:gid inside the DMS image, which has no
+    # counterpart on this host — hence numeric. Verify after an image bump with:
+    #   docker exec mailserver id opendkim
+    #
+    # The mount is read-only, so DMS cannot correct the mode itself the way it
+    # does for keys it manages in its own config volume.
     script = ''
       install -d -m 0700 -o root -g root /var/lib/mailserver/dkim
-      install -m 0644 -o root -g root \
+      install -m 0600 -o 102 -g 104 \
         ${config.sops.secrets.email_dkim_private_key.path} ${dkimKey}
     '';
   };
