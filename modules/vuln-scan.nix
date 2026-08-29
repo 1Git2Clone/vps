@@ -76,6 +76,26 @@ let
       else "https://osv.dev/vulnerability/" + . end;
 
     def link: "[`" + . + "`](" + cve_url + ")";
+
+    # EPSS is a probability in [0,1]; render it the way a human reads risk.
+    def pct_str: if . == null then "n/a" else ((. * 1000 | round) / 10 | tostring) + "%" end;
+
+    # EPSS thresholds SCALED BY SEVERITY. A critical worth 0.5% exploit probability
+    # deserves a look; a low needs to be near-certain before it does. This is what
+    # silences the perpetual noise — Debian "affected, will not fix" entries from
+    # 2005, and CPE collisions like util-linux `flock` matching the 2006 Flock
+    # browser — without hiding anything: everything still appears in the report file.
+    # Gating on the PERCENTILE rather than the raw probability: percentiles are
+    # self-normalising, so the bar does not drift as EPSS is recalibrated, and
+    # "top 10% most likely to be exploited" is a claim that survives restating.
+    # CVE-2025-68121 — CVSS 10.0, EPSS 0.0077 — sits at the 52nd percentile and is
+    # excluded by every row of this table, which is the correct answer.
+    def gate:
+      {"CRITICAL": 0.90, "HIGH": 0.95, "MEDIUM": 0.98, "LOW": 0.99, "UNKNOWN": 0.99}[.] // 0.99;
+
+    # A finding earns a place in the channel if it is known-exploited, or if its
+    # exploit percentile clears the bar for its severity.
+    def matched: .kev or ((.pct // 0) >= (.severity | gate));
     def trunc($n): if (length > $n) then (.[0:$n - 1] + "…") else . end;
     def short: (. | split("/") | .[-1] | trunc(28));
 
@@ -105,15 +125,23 @@ let
     | ($R | map([.cves[] | select(.fixed != "" and (.severity == "CRITICAL" or .severity == "HIGH"))]
                 | length) | add // 0) as $urgent
 
+    # The axes that actually predict trouble. CVSS says how bad it would be if
+    # exploited; these say whether it is being exploited.
+    | ($R | map([.cves[] | select(.kev)] | length) | add // 0)                       as $kevn
+    | ($R | map([.cves[] | select((.epss // 0) >= 0.10)] | length) | add // 0)       as $epss10
+    | ($R | map([.cves[] | select((.epss // 0) >= 0.01)] | length) | add // 0)       as $epss1
+    | ($R | map([.cves[] | select(matched)] | length) | add // 0)                    as $hits
+    | ($R | map([.cves[] | select(.epss == null)] | length) | add // 0)              as $unscored
+
     # Every fixable finding, worst first, tagged with the target it came from.
     | ([$R[] | . as $t | $t.cves[] | select(.fixed != "") | . + {tgt: $t.source}]
        | sort_by([(.severity | sev_rank), .tgt, .pkg, .id])) as $act
 
-    | (if   $failed > 0  then { c: 10038562, t: ("⚠️ Vulnerability Scan — " + ($failed | tostring) + " target(s) FAILED to scan") }
-       elif $urgent > 0  then { c: 15158332, t: ("🔴 Vulnerability Scan — " + ($urgent | tostring) + " fixable critical/high") }
-       elif $fixable > 0 then { c: 15105570, t: ("🟠 Vulnerability Scan — " + ($fixable | tostring) + " fixable CVEs") }
-       elif $total > 0   then { c: 16776960, t: ("🟡 Vulnerability Scan — " + ($total | tostring) + " CVEs, none with a fix available") }
-       else                   { c: 3066993,  t: "✅ Vulnerability Scan — All Clear" } end) as $hdr
+    | (if   $failed > 0 then { c: 10038562, t: ("⚠️ Vulnerability Scan — " + ($failed | tostring) + " target(s) FAILED to scan") }
+       elif $kevn > 0   then { c: 15158332, t: ("🚨 Vulnerability Scan — " + ($kevn | tostring) + " ACTIVELY EXPLOITED (CISA KEV)") }
+       elif $hits > 0   then { c: 15105570, t: ("🟠 Vulnerability Scan — " + ($hits | tostring) + " worth attention") }
+       elif $total > 0  then { c: 3066993,  t: ("✅ Vulnerability Scan — nothing above threshold") }
+       else                  { c: 3066993,  t: "✅ Vulnerability Scan — All Clear" } end) as $hdr
 
     | if $in.meta.mode == "markdown" then
     # =============================================================================
@@ -132,7 +160,10 @@ let
             + ($R | map(select(.running == false)) | length | tostring) + " not running) |",
           "| Packages inspected | " + ($pkgtotal | tostring) + " |",
           "| Findings | " + ($total | tostring) + " |",
-          "| **Fixable now** | **" + ($fixable | tostring) + "** (" + ($urgent | tostring) + " critical/high) |",
+          "| **Actively exploited (CISA KEV)** | **" + ($kevn | tostring) + "** |",
+          "| **Exploit probability >10%** | **" + ($epss10 | tostring) + "** |",
+          "| Exploit probability >1% | " + ($epss1 | tostring) + " |",
+          "| Fixable now | " + ($fixable | tostring) + " (" + ($urgent | tostring) + " critical/high) |",
           "| No fix available | " + ($nofix | tostring) + " |",
           "| Critical / High / Medium / Low / Unknown | " + ($crit | tostring) + " / "
             + ($high | tostring) + " / " + ($med | tostring) + " / " + ($low | tostring)
@@ -156,22 +187,28 @@ let
                ""]
             + (if ($t.cves | length) == 0 then ["_No known vulnerabilities._", ""]
                else
-                 ([$t.cves[] | select(.fixed != "")] | sort_by([(.severity | sev_rank), .pkg, .id])) as $f
-                 | ([$t.cves[] | select(.fixed == "")] | sort_by([(.severity | sev_rank), .pkg, .id])) as $n
+                 ([$t.cves[] | select(.fixed != "")]
+                  | sort_by([(if .kev then 0 else 1 end), ((.epss // 0) * -1), (.severity | sev_rank), .pkg, .id])) as $f
+                 | ([$t.cves[] | select(.fixed == "")]
+                    | sort_by([(if .kev then 0 else 1 end), ((.epss // 0) * -1), (.severity | sev_rank), .pkg, .id])) as $n
                  | (if ($f | length) > 0 then
                       ["#### 🛠️ Fixable (" + ($f | length | tostring) + ")", "",
-                       "| Severity | CVE | Package | Installed | Fixed in |",
-                       "|---|---|---|---|---|"]
-                      + ($f | map("| " + (.severity | sev_emoji) + " " + .severity
+                       "| EPSS | KEV | Severity | CVE | Package | Installed | Fixed in |",
+                       "|---|---|---|---|---|---|---|"]
+                      + ($f | map("| " + (.epss | pct_str)
+                                  + " | " + (if .kev then "🚨 yes" else "" end)
+                                  + " | " + (.severity | sev_emoji) + " " + .severity
                                   + " | " + (.id | link) + " | `" + .pkg + "` | `" + .installed
                                   + "` | **" + .fixed + "** |"))
                       + [""]
                     else [] end)
                  + (if ($n | length) > 0 then
                       ["#### ⏳ No fix available (" + ($n | length | tostring) + ")", "",
-                       "| Severity | CVE | Package | Installed |",
-                       "|---|---|---|---|"]
-                      + ($n | map("| " + (.severity | sev_emoji) + " " + .severity
+                       "| EPSS | KEV | Severity | CVE | Package | Installed |",
+                       "|---|---|---|---|---|---|"]
+                      + ($n | map("| " + (.epss | pct_str)
+                                  + " | " + (if .kev then "🚨 yes" else "" end)
+                                  + " | " + (.severity | sev_emoji) + " " + .severity
                                   + " | " + (.id | link) + " | `" + .pkg + "` | `" + .installed + "` |"))
                       + [""]
                     else [] end)
@@ -201,72 +238,77 @@ let
     # flood. Everything else, and the complete package inventory, is in the single
     # markdown file attached to the first message.
     # =============================================================================
-      ( ("**Scanned:** " + ($R | length | tostring) + " targets ("
-         + ($R | map(select(.kind == "image")) | length | tostring) + " images, "
-         + ($R | map(select(.running == false)) | length | tostring) + " not running) · "
-         + ($pkgtotal | tostring) + " packages inspected\n"
-         + "**Findings:** " + ($total | tostring) + " total\n\n"
-         + "**🛠️ Fixable now: " + ($fixable | tostring) + "** — a fixed version exists"
-         + (if $urgent > 0 then " (**" + ($urgent | tostring) + "** critical/high)" else "" end) + "\n"
-         + "**⏳ No fix available: " + ($nofix | tostring) + "** — nothing to apply yet\n\n"
-         + "🔴 " + ($crit | tostring) + " · 🟠 " + ($high | tostring) + " · 🟡 " + ($med | tostring)
-         + " · 🔵 " + ($low | tostring) + " · ⚪ " + ($unk | tostring)
-         + "\n*Totals include unfixable CVEs and bundled dependencies that may never be reachable "
-         + "in your configuration — treat “fixable” as the work queue.*"
+      ( ("**" + ($R | length | tostring) + " targets** · "
+         + ($pkgtotal | tostring) + " packages · "
+         + ($total | tostring) + " findings"
+         + (if ($R | map(select(.running == false)) | length) > 0
+            then " · " + ($R | map(select(.running == false)) | length | tostring) + " not running"
+            else "" end)
+         + "\n\n"
+         + "### 🎯 Worth attention: **" + ($hits | tostring) + "**\n"
+         + "🚨 KEV **" + ($kevn | tostring) + "**"
+         + "  ·  ⚡ EPSS ≥10% **" + ($epss10 | tostring) + "**"
+         + "  ·  ≥1% **" + ($epss1 | tostring) + "**\n"
+         + "🛠️ " + ($fixable | tostring) + " fixable  ·  ⏳ " + ($nofix | tostring) + " no fix"
+         + (if $unscored > 0 then "  ·  ❔ " + ($unscored | tostring) + " unscored" else "" end)
+         + "\n\n"
+         + "-# Gate: in KEV, or above the EPSS percentile for its severity "
+         + "(critical p90 · high p95 · medium p98 · low p99). "
+         + "The remaining " + (($total - $hits) | tostring)
+         + " are below threshold — mostly unfixable distro entries and stale CPE matches. "
+         + "All of them are in the attached report.\n"
+         + (if ($failures | length) > 0
+            then "\n⚠️ **Failed to scan:** " + ($failures | map(.source | short) | join(", ")) + "\n"
+            else "" end)
+         + (if ($in.meta.epss_available | not)
+            then "\n⚠️ **EPSS feed unavailable — this run is NOT ranked by exploitability.**"
+            else "" end)
+         + (if ($in.meta.kev_available | not)
+            then "\n⚠️ **CISA KEV feed unavailable — actively-exploited CVEs are not flagged.**"
+            else "" end)
          + (if $in.meta.db_warning != "" then "\n\n⚠️ **" + $in.meta.db_warning + "**" else "" end)
         ) as $desc
 
-      | ($R | map(
-          . as $t
-          | { name: ((($t | target_icon) + " " + ($t.source | short)) | trunc(250)),
-              value: (
-                if ($t.ok | not) then
-                  "❌ **failed** — no data"
-                elif ($t.cves | length) == 0 then
-                  "✅ clean · " + ($t.packages | length | tostring) + " pkgs"
-                else
-                  "🛠️ **" + ([$t.cves[] | select(.fixed != "")] | length | tostring)
-                  + "** of " + ($t.cves | length | tostring)
-                  + " · " + ($t.packages | length | tostring) + " pkgs"
-                end),
-              inline: true }) | .[0:24]) as $tfields
-
-      | { title: $hdr.t, description: $desc, color: $hdr.c, fields: $tfields,
-          footer: { text: "complete report attached · " + $in.meta.host + " · " + $in.meta.duration } }
+      | { title: $hdr.t, description: $desc, color: $hdr.c,
+          footer: { text: "full report attached · " + $in.meta.host + " · " + $in.meta.duration } }
         as $overview
 
-      # Critical and high, GROUPED BY DEPENDENCY. One image can carry a hundred
-      # CVEs for a single package — chromium inside grafana, say — and listing them
-      # individually is what made the report unreadable. The channel gets a count
-      # per package; every CVE id and link is in the attached file.
-      | ([$R[] | . as $t | $t.cves[]
-          | select(.severity == "CRITICAL" or .severity == "HIGH")
-          | {tgt: $t.source, pkg: .pkg, installed: .installed, fixed: .fixed, severity: .severity}]
+      # Worst offenders, grouped by dependency. Gated entries first; if nothing is
+      # gated we still show the highest-scoring few, because "here is the worst we
+      # found and it is still negligible" is the reassuring version of an all-clear.
+      | ([$R[] | . as $t | $t.cves[] | . + {tgt: $t.source}]
          | group_by([.tgt, .pkg])
          | map({
              tgt: .[0].tgt,
              pkg: .[0].pkg,
              installed: .[0].installed,
              n: length,
-             crit: ([.[] | select(.severity == "CRITICAL")] | length),
-             high: ([.[] | select(.severity == "HIGH")] | length),
-             # highest fix version seen for the package: the one bump that clears
-             # the most of these at once
+             hits: ([.[] | select(matched)] | length),
+             kev: ([.[] | select(.kev)] | length),
+             maxepss: ([.[] | (.epss // 0)] | max),
+             maxpct: ([.[] | (.pct // 0)] | max),
+             top: (sort_by([((.epss // 0) * -1)]) | .[0]),
              fix: ([.[] | .fixed | select(. != "")] | sort | last // "")
            })
-         | sort_by([(.crit * -1), (.high * -1), (.n * -1), .pkg])) as $groups
+         | sort_by([(if .kev > 0 then 0 else 1 end), (.hits * -1), (.maxepss * -1)])) as $allg
+      | (($allg | map(select(.hits > 0))) as $g
+         | if ($g | length) > 0 then $g else ($allg[0:3]) end) as $groups
+      | (($allg | map(select(.hits > 0)) | length) == 0) as $below
 
       | ($groups | map(
-          (if .crit > 0 then "🔴" else "🟠" end)
-          + " **" + (.pkg | trunc(32)) + "** `" + (.installed | trunc(18)) + "` — "
-          + (.n | tostring) + " CVE" + (if .n == 1 then "" else "s" end)
-          + " (" + (.crit | tostring) + "🔴 " + (.high | tostring) + "🟠)"
-          + (if .fix == "" then " · *no fix*" else " → **" + (.fix | trunc(18)) + "**" end)
+          (if .kev > 0 then "🚨" else (.top.severity | sev_emoji) end)
+          + " **" + (.pkg | trunc(30)) + "** `" + (.installed | trunc(16)) + "` — "
+          + (if .kev > 0 then "**KEV** · " else "" end)
+          + "EPSS " + (.maxepss | pct_str)
+          + " (p" + ((.maxpct * 100) | floor | tostring) + ")"
+          + (if .hits > 0 then " · **" + (.hits | tostring) + "** of " + (.n | tostring)
+             else " · " + (.n | tostring) + " CVEs" end)
+          + (if .fix == "" then " · *no fix*" else " → **" + (.fix | trunc(16)) + "**" end)
           + "  ·  " + (.tgt | short))) as $lines
 
       | ($lines | chunk_lines(1000)) as $blocks
-      | ($overview | [.title, .description, .footer.text, (.fields[] | .name, .value)]
-         | join("") | length) as $ovc
+      # The summary is now description-only — no field grid to account for.
+      | ($overview | [.title, .description, .footer.text] | join("") | length) as $ovc
 
       # How many whole blocks fit in a budget, stopping at the first that does not.
       | ($blocks | length) as $nb
@@ -294,16 +336,16 @@ let
         ( { embeds: ([$overview]
             + (if $n1 > 0 then
                 [block_embed($blocks[0:$n1];
-                  ("🛠️ Critical & high by dependency — " + ($shown | tostring)
-                   + " of " + ($groups | length | tostring) + " packages");
-                  "counts per package · every CVE id and link is in the attached report")]
+                  (if $below then "🔍 Highest scoring (all below threshold)"
+                   else "⚡ Worth attention — " + ($shown | tostring) + " of " + ($groups | length | tostring) end);
+                  "KEV first, then EPSS · every CVE id and link is in the attached report")]
                else [] end)) },
           ( if $n2 > 0 then
               { embeds: [block_embed($rest[0:$n2];
-                  "🛠️ Critical & high by dependency (continued)";
+                  "⚡ Exploitable dependencies (continued)";
                   (if $unshown > 0
-                   then ($unshown | tostring) + " more affected packages not shown — see the attached report"
-                   else "end of critical & high dependencies" end))] }
+                   then ($unshown | tostring) + " more exploitable packages not shown — see the attached report"
+                   else "end of the exploitable set" end))] }
             else empty end ) ) )
       end
   '';
@@ -322,6 +364,10 @@ let
       coreutils
       gzip
       gnused
+      # Declared, not inherited: `awk` resolved from the ambient PATH on a
+      # workstation and was simply absent under the unit, silently zeroing the
+      # EPSS join. Same failure mode as `hostname` before it.
+      gawk
       # nix-store, for enumerating the system closure
       nix
       # Declared explicitly rather than inherited from the ambient system PATH:
@@ -522,20 +568,80 @@ let
           >> "$WORK/results.jsonl"
       fi
 
+      # --- Exploitability enrichment ------------------------------------------
+      # CVSS scores how bad a CVE would be IF exploited and says nothing about
+      # whether anyone ever will. CVE-2025-68121 — a Go crypto/tls session
+      # resumption bug — is rated 10.0 CRITICAL by NVD and sits at EPSS 0.0077,
+      # the 52nd percentile: median. Ranking by CVSS therefore buries the few
+      # findings that matter under hundreds that merely score high.
+      #
+      # EPSS  = probability of exploitation in the next 30 days (FIRST.org).
+      # KEV   = CISA's catalogue of CVEs observed exploited in the wild.
+      # Both are fetched whole and joined locally; per-CVE API calls against
+      # 10k findings would be neither polite nor fast.
+      jq -r '.cves[]?.id' "$WORK/results.jsonl" | sort -u > "$WORK/our-cves.txt"
+
+      echo "{}" > "$WORK/epss.json"
+      echo "[]" > "$WORK/kev-list.json"
+
+      if curl -fsS -m 180 -L -o "$WORK/epss.csv.gz" \
+           "https://epss.empiricalsecurity.com/epss_scores-current.csv.gz" 2>> "$WORK/enrich.err" \
+         && gzip -dc "$WORK/epss.csv.gz" 2>/dev/null | tail -n +3 > "$WORK/epss.csv"
+      then
+        # Join on our CVEs only: the feed carries ~366k rows.
+        awk -F, 'NR==FNR { want[$1]; next } ($1 in want) { printf "%s\t%s\t%s\n", $1, $2, $3 }' \
+          "$WORK/our-cves.txt" "$WORK/epss.csv" > "$WORK/epss-ours.tsv" || : > "$WORK/epss-ours.tsv"
+        jq -R -n '[inputs | split("\t")
+                   | select(length >= 3)
+                   | {key: .[0], value: {epss: (.[1] | tonumber), pct: (.[2] | tonumber)}}]
+                  | from_entries' < "$WORK/epss-ours.tsv" > "$WORK/epss.json" \
+          || echo "{}" > "$WORK/epss.json"
+        echo "EPSS: scored $(grep -c . "$WORK/epss-ours.tsv" || echo 0) of $(grep -c . "$WORK/our-cves.txt" || echo 0) CVEs"
+      else
+        echo "WARNING: EPSS feed unavailable — findings will not be ranked by exploit probability" >&2
+      fi
+
+      # cisa.gov answers 403 to datacenter IP ranges — verified from this host,
+      # with and without a browser User-Agent — so the canonical URL is tried
+      # first and CISA's own GitHub mirror (cisagov/kev-data, same catalogue,
+      # same entry count) is the fallback that actually works from here.
+      if curl -fsS -m 180 -o "$WORK/kev.json" \
+             "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json" \
+             2>> "$WORK/enrich.err" \
+         || curl -fsS -m 180 -L -o "$WORK/kev.json" \
+             "https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities.json" \
+             2>> "$WORK/enrich.err"
+      then
+        jq '[.vulnerabilities[].cveID]' "$WORK/kev.json" > "$WORK/kev-list.json" \
+          || echo "[]" > "$WORK/kev-list.json"
+        echo "KEV: $(jq 'length' "$WORK/kev-list.json") known-exploited CVEs in the catalogue"
+      else
+        echo "WARNING: CISA KEV feed unavailable — cannot flag actively exploited CVEs" >&2
+      fi
+
       # --- Build the report ---------------------------------------------------
       DURATION="$(( $(date +%s) - STARTED_EPOCH ))s"
 
       jq -s \
+        --slurpfile epss "$WORK/epss.json" \
+        --slurpfile kev "$WORK/kev-list.json" \
         --arg started "$STARTED" \
         --arg duration "$DURATION" \
         --arg host "$(uname -n)" \
         --arg db_warning "$DB_WARNING" \
         --arg inventory "${if fullInventory then "1" else "0"}" \
-        '{ meta: {
-             started: $started, duration: $duration, host: $host,
-             db_warning: $db_warning, inventory: $inventory
-           },
-           results: . }' \
+        '($epss[0] // {}) as $e
+         | (($kev[0] // []) | map({key: ., value: true}) | from_entries) as $k
+         | { meta: {
+               started: $started, duration: $duration, host: $host,
+               db_warning: $db_warning, inventory: $inventory,
+               epss_available: (($e | length) > 0),
+               kev_available: (($k | length) > 0)
+             },
+             results: [ .[] | .cves |= map(
+               . + { epss: ($e[.id].epss // null),
+                     pct:  ($e[.id].pct  // null),
+                     kev:  ($k[.id] // false) }) ] }' \
         "$WORK/results.jsonl" > "$WORK/report-input.json"
 
       # One file: every target, every package, every CVE. This is the artefact
