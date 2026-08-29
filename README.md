@@ -15,6 +15,8 @@ nothing to remember to run.
 ├── configuration.nix     # the import list, nothing else
 ├── disk-config.nix       # disko layout + the local QEMU VM
 ├── flake.nix             # nixosConfigurations.vps and .vps-hetzner
+├── .pre-commit-config.yaml  # the checks, shared by the commit hook and CI
+├── .github/workflows/    # CI, run on the GitHub mirror
 ├── modules/
 │   ├── options.nix       # infra.* — domain, tailnet IP, proxy network
 │   ├── secrets.nix       # every sops key, declared
@@ -23,6 +25,9 @@ nothing to remember to run.
 │   ├── services.nix      # sshd, tailscale, fail2ban, docker
 │   ├── security.nix      # auditd rules
 │   ├── backups.nix       # restic → B2, daily + weekly quiescent minecraft
+│   ├── vuln-scan.nix     # weekly CVE report, every image + the system closure
+│   ├── syncthing.nix     # tailnet-only, /home/hutao/syncthing
+│   ├── boot.nix hardware.nix networking.nix nix.nix users.nix
 │   └── containers/       # one module per service
 └── tofu/                 # hcloud server + edge firewall, Cloudflare DNS
 ```
@@ -40,8 +45,9 @@ nothing to remember to run.
 | `kuma` | proxy network only, reached at `status.` |
 | `dozzle` | 8080, tailnet only |
 | `grafana` | host networking, :3000, tailnet only |
-| `tempo` | host networking, OTLP 4317/4318 bound to the tailnet address |
+| `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
 | `minecraft` | 25565; RCON on loopback only |
+| `syncthing` | not a container — a host service; GUI on 8384, tailnet only |
 
 Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is over
 Tailscale SSH. Keeping 22 is what lets git remotes stay portless: ssh has no
@@ -248,6 +254,42 @@ nixfmt $(git ls-files '*.nix') && statix check .
 tofu -chdir=tofu fmt -recursive && tofu -chdir=tofu validate
 ```
 
+### Hooks
+
+```sh
+nix develop -c pre-commit install         # once per clone
+nix develop -c pre-commit run --all-files
+```
+
+`.pre-commit-config.yaml` is the single definition — the local commit hook and CI
+run the same file, so a check cannot pass here and fail there. It covers nixfmt,
+statix, `tofu fmt`, the usual whitespace/YAML/merge-conflict hooks, and
+**gitleaks** over the staged diff.
+
+gitleaks scans the staged diff rather than the working directory on purpose:
+`gitleaks dir` reads gitignored files, and `tofu/terraform.tfvars` legitimately
+holds live tokens — scanning it would fail the hook forever over a file git will
+never accept. History scanning is a CI step instead.
+
+## CI
+
+`.github/workflows/ci.yml`, running on the GitHub mirror rather than on a Forgejo
+runner. Forgejo Actions is enabled server-side (`FORGEJO__actions__ENABLED`), but
+a runner would put nix builds and a polling daemon on the box that serves mail.
+
+| Job | What |
+|---|---|
+| `lint` | `pre-commit run --all-files`, then gitleaks across the full history |
+| `evaluate` | evaluates both `nixosConfigurations`, then `nix flake check` — which is where deploy-rs's `deploy-schema` and `deploy-activate` actually run |
+
+Evaluation, not a build: it catches what actually breaks this repo — a typo'd
+option, a missing module argument, an infinite recursion — without asking a CI
+runner to realise a multi-gigabyte closure.
+
+**The mirror is push-only.** Commit here and let it flow across; anything edited
+on GitHub is overwritten by the next sync, and CI can lag a push until Forgejo's
+mirror job runs (*Synchronize Now* in the repo's mirror settings).
+
 ## Running
 
 Tests:
@@ -265,6 +307,12 @@ QEMU_OPTS="-vnc :0" nix run .#default
 And ssh into it from another terminal — `ssh -p 2222 hutao@127.0.0.1` (there's
 no place like `127.0.0.1`). Port 2222 on both ends, because sshd moved off 22 so
 forgejo could publish it.
+
+The VM disk is 32G (`virtualisation.vmVariantWithDisko`). The disko default of 2G
+leaves ~987M for `/` once the ESP takes its gigabyte, which cannot hold the eleven
+declared images — the VM fills up mid-boot and every service that needs disk fails
+in a way that reads like a bug in that service. This applies to `nix run .` only;
+the Hetzner disk is sized by the provider.
 
 ## Provisioning
 
@@ -344,7 +392,29 @@ restic-b2 snapshots                       # wrapper with the repo and password w
 fail2ban-client status forgejo-ssh
 nft list table inet f2b-table             # where the bans actually are
 nft list table inet nixos-fw
+
+systemctl status vuln-scan.timer          # Saturdays 06:00 UTC
+systemctl start vuln-scan                 # run one now — it posts to Discord
+journalctl -u vuln-scan -n 50
 ```
+
+The vulnerability scan covers every image declared in
+`virtualisation.oci-containers` — running or not, so a stopped container is still
+scanned — plus the NixOS system closure, which is what covers tailscale, sshd,
+docker and the kernel. It posts at most two Discord messages and attaches the
+complete report as a single markdown file.
+
+Findings are ranked by **EPSS and CISA KEV, not CVSS**. CVSS scores how bad a bug
+would be if exploited and says nothing about whether anyone is exploiting it:
+CVE-2025-68121 is rated 10.0 by NVD and sits at the 52nd percentile of exploit
+probability. The channel only shows what is in KEV or above the EPSS percentile
+for its severity (critical p90, high p95, medium p98, low p99), which is also
+what keeps Debian's perpetual "affected, will not fix" entries and CPE collisions
+out of it. Everything else is still in the attachment.
+
+A scan that cannot run reports a failure — it never degrades into an all-clear.
+If a run dies before reporting, an exit trap posts an ABORTED notice, because
+silence and "no findings" must not look the same.
 
 The weekly minecraft job stops the server, snapshots, and starts it again from
 `ExecStopPost` — so the server comes back whether restic succeeded or not. A live
