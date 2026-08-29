@@ -8,3 +8,6 @@ tofu/*.tfstate.*
 tofu/terraform.tfvars
 tofu/*.auto.tfvars
 tofu/.terraform.tfstate.lock.info
+# Plan files embed variable values — including tokens — in cleartext.
+tofu/*.tfplan
+tofu/*.tfplan.json

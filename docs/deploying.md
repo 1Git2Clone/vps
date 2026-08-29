@@ -102,15 +102,32 @@ tofu plan          # READ IT. Abort on any "destroy and then create" of hcloud_s
 tofu apply
 ```
 
-`tofu` creates the server with your ssh key attached at creation, then the
-nixos-anywhere module installs `nixosConfigurations.vps-hetzner` over the
-bootstrap image: kexec into the NixOS installer, disko repartitions `/dev/sda`,
-the closure is copied in, GRUB is installed, reboot. Nothing of the bootstrap
-image survives.
+`tofu` creates the server with your ssh key attached at creation. It does **not**
+install NixOS — that is deliberate. Run the install separately:
+
+```sh
+nix run .#install -- root@$(tofu -chdir=tofu output -raw vps_ipv4)
+```
+
+tofu used to own the install through nixos-anywhere's module. That was removed:
+the module declares a `null_resource` whose *creation* runs a full install, so
+any plan made without it already in state — a fresh clone, a lost state file, a
+`state rm` — quietly proposes reinstalling a running mail server. Infrastructure
+and OS installation are now separate on purpose.
 
 ### Installing onto a server that already exists
 
-nixos-anywhere does not need tofu. Any reachable machine works:
+One command:
+
+```sh
+nix run .#install -- root@<ip>
+```
+
+It verifies the age key decrypts `secrets.yaml` **before** starting, stages it
+into a temporary extra-files tree at 0600, and selects `vps-hetzner`. Extra
+arguments are passed through to nixos-anywhere (`--debug`, `--build-on-remote`).
+
+Equivalent by hand, if you ever need to vary it:
 
 ```sh
 mkdir -p /tmp/extra/var/lib/sops-nix
