@@ -42,6 +42,13 @@ in
     POSTMASTER_ADDRESS=${config.sops.placeholder.email_postmaster}
   '';
 
+  # ONLY the des_key. It is the single secret roundcube needs, and a sops
+  # template must contain nothing else — anything non-secret in here reads as a
+  # credential to whoever opens the file next.
+  sops.templates."roundcube.env".content = ''
+    ROUNDCUBEMAIL_DES_KEY=${config.sops.placeholder.email_roundcube_des_key}
+  '';
+
   # Same reasoning as dozzle's users file: a rendered secret's real path lives
   # under a generation directory, and docker would pin the old inode. Copying to
   # a stable path is what makes the mount survive a secret rotation.
@@ -139,10 +146,26 @@ in
         ROUNDCUBEMAIL_SMTP_SERVER = "tls://${hostname}";
         ROUNDCUBEMAIL_SMTP_PORT = "587";
 
+        # NOT credentials. "%u" and "%p" are literally those two characters —
+        # roundcube's own placeholders, which it replaces at request time with
+        # the username and password of whoever is logged in, held only in that
+        # user's session. Each person therefore authenticates to submission as
+        # themselves. Writing a real account here would make every user send as
+        # that one account.
+        #
+        # These match roundcube's built-in defaults; they are spelled out
+        # because submission auth silently failing is what "554 5.7.1 Client
+        # host rejected" looks like, and a default you cannot see is a bad thing
+        # to depend on for that.
+        ROUNDCUBEMAIL_SMTP_USER = "%u";
+        ROUNDCUBEMAIL_SMTP_PASSWORD = "%p";
+
         ROUNDCUBEMAIL_DB_TYPE = "sqlite";
         ROUNDCUBEMAIL_SKIN = "elastic";
         ROUNDCUBEMAIL_PLUGINS = "archive,zipdownload,managesieve,markasjunk,show_additional_headers,hide_blockquote,newmail_notifier";
       };
+
+      environmentFiles = [ config.sops.templates."roundcube.env".path ];
 
       volumes = [
         "roundcube_db:/var/roundcube/db"
