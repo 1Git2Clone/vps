@@ -13,7 +13,7 @@ locals {
   inbound = [
     { protocol = "udp", port = "41641", description = "Wireguard/Tailscale" },
     { protocol = "tcp", port = "22", description = "Forgejo SSH" },
-    { protocol = "tcp", port = "2222", description = "Host sshd" },
+    { protocol = "tcp", port = "2222", description = "Host sshd (NixOS; 22 belongs to forgejo)" },
     { protocol = "tcp", port = "25", description = "SMTP" },
     { protocol = "tcp", port = "465", description = "SMTPS" },
     { protocol = "tcp", port = "587", description = "SMTP Submission" },
@@ -32,13 +32,13 @@ locals {
     { protocol = "udp", port = "443", description = "QUIC / Tailscale DERP" },
     { protocol = "udp", port = "123", description = "NTP" },
     { protocol = "udp", port = "3478", description = "STUN (Tailscale)" },
-    { protocol = "udp", port = "41641", description = "Tailscale direct" },
+    { protocol = "udp", port = "41641", description = "Tailscale direct (avoids DERP relay)" },
     { protocol = "tcp", port = "7844", description = "Cloudflare Tunnel TCP" },
     { protocol = "udp", port = "7844", description = "Cloudflare Tunnel UDP" },
     { protocol = "tcp", port = "25", description = "SMTP out" },
     # Server-to-server ssh on the host sshd port. Added during the CX33 -> CX43
     # migration so the old box could rsync directly to the new one.
-    { protocol = "tcp", port = "2222", description = "Host sshd out" },
+    { protocol = "tcp", port = "2222", description = "Host sshd, server-to-server" },
   ]
 }
 

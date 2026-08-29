@@ -158,6 +158,72 @@ Beyond what the Ansible vault held, this port needs:
 evaluation time and a registration contact is not a credential. It is
 `infra.acmeEmail` in `modules/options.nix`.
 
+## Deploying
+
+Two ways, and the second exists because the first is a third-party dependency.
+
+### 1. deploy-rs — the normal path
+
+```sh
+nix develop            # or: nix run github:serokell/deploy-rs -- .#vps
+deploy .#vps
+```
+
+Builds locally, pushes the closure over ssh, activates, then **reconnects on a
+fresh connection to confirm the box is still reachable**. If it cannot, the
+machine rolls itself back to the previous generation unattended. That is the
+whole reason it is here: it is the only thing that saves you from a firewall or
+sshd change that locks you out, which is a failure you otherwise fix from the
+provider's console.
+
+It runs as root on the target (via `security.sudo.wheelNeedsPassword = false`),
+and is pinned by revision in `flake.lock`, so upstream changing does not change
+what you run — only `nix flake update` does.
+
+### 2. nixos-rebuild — no extra dependency, no rollback
+
+```sh
+nix develop            # nixos-rebuild is in the devShell
+nixos-rebuild switch --flake .#vps-hetzner \
+  --target-host hutao@vps --use-remote-sudo
+```
+
+`nixos-rebuild` ships with NixOS and is therefore absent on a non-NixOS
+workstation, which is why the devShell provides it. Outside the shell, use
+`nix run nixpkgs#nixos-rebuild -- switch ...`.
+
+Identical build, push and activation — NixOS calls the same
+`switch-to-configuration`. What you lose is the confirmation step. Break sshd,
+nftables or networking and nothing rolls back; you recover from the Hetzner
+console, or by picking the previous generation in the GRUB menu at boot.
+
+Worth using deliberately when you *want* no supervision — e.g. deploying from
+the box itself.
+
+### If deploy-rs ever disappears from GitHub
+
+The risk is bigger than losing `deploy`: flake inputs are fetched from source,
+not from the binary cache, so an unresolvable input means **the flake stops
+evaluating entirely** and `nixos-rebuild --flake` fails too.
+
+Three mitigations, in order of effort:
+
+1. **Nothing breaks while the store path is present.** A locked input already
+   realised in `/nix/store` is not refetched. `nix flake archive` copies every
+   input into the store on purpose, and `nix-store --gc` is what would remove
+   them again.
+2. **Keep a copy**: `nix flake archive --to file:///path/to/mirror` writes all
+   inputs somewhere you control.
+3. **Cut it out** — a three-part edit to `flake.nix`, after which option 2 above
+   is the only deploy path:
+   - delete the `deploy-rs` entry from `inputs`
+   - delete `deploy-rs` from the `outputs = { ... }` argument list
+   - delete the `deploy` and `checks` outputs, and `deploy-rs.packages.${system}.default`
+     from the devShell
+
+   Nothing in `modules/` references it, so the machine configuration itself is
+   unaffected.
+
 ## Documentation
 
 | Doc | For |

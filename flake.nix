@@ -78,9 +78,15 @@
       # health, and a container crashlooping is both visible and recoverable —
       # rolling the whole system back for it would be the wrong reflex.
       deploy.nodes.vps = {
-        # The MagicDNS name, not an IP: this survives the primary-IP swap during
-        # the migration, so the same command works before and after cutover.
-        hostname = "hu-tao";
+        # The MagicDNS name, not an IP: it survived the primary-IP swap during
+        # the migration, so the same command works before and after a cutover.
+        #
+        # This is the tailnet node name, which is NOT the same thing as
+        # networking.hostName — renaming the machine in the tailscale admin
+        # console changes it and silently breaks deploys with
+        # "Host key verification failed" or a DNS failure. Check with
+        # `tailscale status` if a deploy suddenly cannot reach the box.
+        hostname = "vps";
 
         profiles.system = {
           sshUser = "hutao";
@@ -119,6 +125,10 @@
           age
           ssh-to-age
           nixos-anywhere
+          # The deploy fallback. nixos-rebuild ships with NixOS, so it is NOT on
+          # a non-NixOS workstation unless it is here — and the fallback is
+          # worthless if it cannot be run on the machine you deploy from.
+          nixos-rebuild
           opentofu
           deploy-rs.packages.${system}.default
         ];

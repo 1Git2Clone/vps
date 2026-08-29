@@ -24,6 +24,17 @@ nix flake check          # optional; deploy builds anyway
 deploy .#vps
 ```
 
+Without deploy-rs — same result, no automatic rollback:
+
+```sh
+nix develop            # provides nixos-rebuild on a non-NixOS workstation
+nixos-rebuild switch --flake .#vps-hetzner --target-host hutao@vps --use-remote-sudo
+```
+
+See "If deploy-rs ever disappears" in the README: an unresolvable flake input
+stops the flake evaluating at all, so that fallback needs the input removed
+first, not just a different command.
+
 That is the whole thing. `deploy-rs` builds locally, pushes the closure,
 activates it, then **waits for a fresh connection to confirm the box is still
 reachable**. If it cannot reconnect, the machine rolls itself back to the

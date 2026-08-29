@@ -14,8 +14,13 @@
 # — tofu would build a new one and the DNS records would follow it.
 
 resource "hcloud_ssh_key" "main" {
-  name       = "${var.server_name}-install"
-  public_key = var.ssh_public_key
+  name = "${var.server_name}-install"
+
+  # Type and base64 only. Hetzner stores a key WITHOUT its trailing comment, so
+  # passing "ssh-ed25519 AAAA... user@host" verbatim makes every plan see a
+  # difference in public_key — and public_key forces replacement, so a cosmetic
+  # comment turns into destroy-and-recreate on an otherwise no-op apply.
+  public_key = join(" ", slice(split(" ", var.ssh_public_key), 0, 2))
 }
 
 # A primary IP as its own resource, deliberately: the SPF record hard-codes this
@@ -26,6 +31,11 @@ resource "hcloud_primary_ip" "main" {
   type        = "ipv4"
   location    = var.location
   auto_delete = false
+
+  # Declared, because it is set live and matters: this address carries the mail
+  # reputation and the smtp.<domain> PTR. Leaving it out of the config means
+  # every plan quietly proposes turning the protection OFF.
+  delete_protection = true
 
   lifecycle {
     prevent_destroy = true

@@ -23,7 +23,10 @@ variable "domain" {
 }
 
 variable "server_name" {
-  description = "Hetzner Cloud server name."
+  description = <<-EOT
+    Hetzner Cloud server name, and the prefix for the primary IP and install-key
+    names. Overridden in terraform.tfvars.
+  EOT
   type        = string
   default     = "hu-tao"
 }
