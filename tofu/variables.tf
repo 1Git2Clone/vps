@@ -24,11 +24,36 @@ variable "domain" {
 
 variable "server_name" {
   description = <<-EOT
-    Hetzner Cloud server name, and the prefix for the primary IP and install-key
-    names. Overridden in terraform.tfvars.
+    Server name as it exists in the Hetzner console. Purely a label; it is NOT
+    networking.hostName and NOT the tailnet node name. Kept equal to the live
+    value so a plan never proposes a cosmetic rename — config describes what is
+    there, it does not nag about naming.
   EOT
   type        = string
-  default     = "hu-tao"
+  default     = "nixos-16gb-fsn1-1"
+}
+
+variable "primary_ip_name" {
+  description = <<-EOT
+    Label on the primary IP. Defaults to the name Hetzner generated when it was
+    created; renaming it would be churn for no behavioural change, and this
+    address is the one carrying the mail reputation and PTR — the last thing
+    worth touching for aesthetics.
+  EOT
+  type        = string
+  default     = "primary_ip-134632948"
+}
+
+variable "primary_ip_v6_name" {
+  description = "Label on the IPv6 primary IP, matching what Hetzner generated."
+  type        = string
+  default     = "primary_ip-147045245"
+}
+
+variable "ssh_key_name" {
+  description = "Label on the install ssh key, matching what is in the account."
+  type        = string
+  default     = "hutao@laptop"
 }
 
 variable "server_type" {
