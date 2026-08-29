@@ -44,6 +44,12 @@
   virtualisation.vmVariantWithDisko = {
     virtualisation = {
       memorySize = 4096;
+      # The default 2G disk leaves ~1G for / once the ESP takes its gigabyte,
+      # which is not enough to pull the eleven declared container images — the
+      # local VM fills up and every scan fails with ENOSPC. Test-only: the
+      # Hetzner disk is sized by the provider, and vmVariantWithDisko applies to
+      # `nix run .` alone, never to vps-hetzner.
+      diskSize = 32768;
       forwardPorts = [
         {
           from = "host";
