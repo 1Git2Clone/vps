@@ -1,0 +1,68 @@
+# ==============================================================================
+# pre-commit — the checks that run before a commit, and again in CI
+# ==============================================================================
+# One definition, two consumers: `pre-commit install` wires these to the local
+# commit hook, and .github/workflows/ci.yml runs the very same file with
+# `pre-commit run --all-files`. A check cannot pass locally and fail in CI
+# because of drift between two lists, because there is only one list.
+#
+# The nix tools are `language: system`, so they come from the dev shell rather
+# than from a pre-commit-managed environment — nixfmt and statix are already
+# pinned by the flake, and a second copy pinned by pre-commit could disagree
+# with it. Run these from inside `nix develop`.
+#
+#   nix develop -c pre-commit install       # once, per clone
+#   nix develop -c pre-commit run --all-files
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+        # secrets.yaml is sops output: valid YAML, but the parser has no reason
+        # to walk it and nothing here would act on the result.
+        exclude: ^secrets\.yaml$
+      - id: check-added-large-files
+        # The UEFI variable stores are ~530K and legitimately tracked.
+        args: [--maxkb=1024]
+
+  - repo: local
+    hooks:
+      - id: nixfmt
+        name: nixfmt-rfc-style
+        description: Every .nix file in this repo is formatted with nixfmt-rfc-style.
+        entry: nixfmt --check
+        language: system
+        files: \.nix$
+
+      - id: statix
+        name: statix
+        description: Lint for nix antipatterns.
+        entry: statix check
+        language: system
+        files: \.nix$
+        pass_filenames: false
+
+      - id: tofu-fmt
+        name: tofu fmt
+        entry: tofu fmt -check -recursive tofu/
+        language: system
+        files: \.tf$
+        pass_filenames: false
+
+      # gitleaks over a hand-rolled "is it still encrypted" grep: it scans the
+      # staged diff against a maintained ruleset, so it catches a pasted token
+      # anywhere in the tree rather than only a decrypted secrets.yaml.
+      #
+      # --staged, not a directory scan: `gitleaks dir` reads gitignored files
+      # too, and tofu/terraform.tfvars legitimately holds live tokens. Scanning
+      # it would fail the hook forever over a file git will never accept.
+      # Full-history scanning belongs in CI, where it is a separate step.
+      - id: gitleaks
+        name: gitleaks (staged changes)
+        entry: gitleaks git --staged --redact --no-banner
+        language: system
+        pass_filenames: false
+        always_run: true

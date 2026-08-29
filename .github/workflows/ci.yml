@@ -1,0 +1,84 @@
+# ==============================================================================
+# CI
+# ==============================================================================
+# Runs on GitHub rather than on a Forgejo runner: git.hu-tao.dev is the source
+# of truth and this repo is mirrored to GitHub, so CI costs the VPS nothing —
+# no runner process competing with the mail server for CPU, and no nix store
+# churn on a disk that is already 63% full.
+#
+# Because the mirror is push-only, everything here must be committed on the
+# Forgejo side and allowed to flow across. Editing these files on GitHub would
+# be overwritten by the next mirror push.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push supersedes the first; no point linting a commit that is already
+# two commits stale.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          # gitleaks scans commits; a shallow clone would scan almost nothing.
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # The same file the local commit hook uses, so a green CI means a clean
+      # `pre-commit run --all-files` on the developer's machine and vice versa.
+      - name: pre-commit
+        run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
+
+      # The pre-commit hook scans the STAGED diff, which is empty in CI, so the
+      # history scan lives here instead. fetch-depth 0 above is what makes it a
+      # real scan rather than a scan of one commit.
+      - name: gitleaks (full history)
+        run: nix develop .#ci -c gitleaks git --redact --no-banner .
+
+  evaluate:
+    name: Evaluate the NixOS configurations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: cachix/install-nix-action@v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Evaluation only — deliberately not a build. This catches the failure
+      # that actually happens in this repo (a module that does not evaluate:
+      # a typo'd option, a missing argument, an infinite recursion) without
+      # asking a CI runner to realise a multi-gigabyte system closure.
+      - name: Evaluate vps-hetzner
+        run: |
+          nix eval --raw \
+            .#nixosConfigurations.vps-hetzner.config.system.build.toplevel.drvPath
+
+      - name: Evaluate vps (local VM variant)
+        run: |
+          nix eval --raw \
+            .#nixosConfigurations.vps.config.system.build.toplevel.drvPath
+
+      # deploy-rs contributes deployChecks here, which validate the deploy
+      # node/profile schema — the config that is only otherwise exercised by
+      # running an actual deploy.
+      - name: nix flake check
+        run: nix flake check --print-build-logs

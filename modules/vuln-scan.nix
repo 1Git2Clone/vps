@@ -28,7 +28,12 @@
 #
 # Runs weekly, Saturday 06:00 UTC. To run manually:
 #   systemctl start vuln-scan && journalctl -u vuln-scan -f
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   # Every image this host declares, straight from the container config. This is
@@ -711,7 +716,10 @@ in
 {
   systemd.services.vuln-scan = {
     description = "Scan Docker images and NixOS for known CVEs";
-    after = [ "docker.service" "network-online.target" ];
+    after = [
+      "docker.service"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     serviceConfig = {
       Type = "oneshot";
