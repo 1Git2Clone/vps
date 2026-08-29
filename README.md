@@ -280,11 +280,18 @@ a runner would put nix builds and a polling daemon on the box that serves mail.
 | Job | What |
 |---|---|
 | `lint` | `pre-commit run --all-files`, then gitleaks across the full history |
-| `evaluate` | evaluates both `nixosConfigurations`, then `nix flake check` — which is where deploy-rs's `deploy-schema` and `deploy-activate` actually run |
+| `evaluate` | evaluates both `nixosConfigurations`, then `nix flake check --no-build`, then builds deploy-rs's `deploy-schema` |
 
 Evaluation, not a build: it catches what actually breaks this repo — a typo'd
 option, a missing module argument, an infinite recursion — without asking a CI
 runner to realise a multi-gigabyte closure.
+
+`--no-build` is load-bearing. deploy-rs's `deploy-activate` check references the
+system closure, so a plain `nix flake check` builds the whole system, and since
+deploy-rs `follows` our nixpkgs its binary is a cache miss and is compiled from
+source — 5+ minutes on *every* run, because a GitHub runner starts with an empty
+nix store each time. `deploy-schema` is built separately: it is the half that
+validates `deploy.json` and it needs only check-jsonschema.
 
 **The mirror is push-only.** Commit here and let it flow across; anything edited
 on GitHub is overwritten by the next sync, and CI can lag a push until Forgejo's

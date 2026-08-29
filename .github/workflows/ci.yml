@@ -77,8 +77,21 @@ jobs:
           nix eval --raw \
             .#nixosConfigurations.vps.config.system.build.toplevel.drvPath
 
-      # deploy-rs contributes deployChecks here, which validate the deploy
-      # node/profile schema — the config that is only otherwise exercised by
-      # running an actual deploy.
-      - name: nix flake check
-        run: nix flake check --print-build-logs
+      # --no-build, and the reason matters: deploy-rs contributes a
+      # `deploy-activate` check that references the whole system closure, so a
+      # plain `nix flake check` builds the entire NixOS system — and because
+      # deploy-rs `follows` our nixpkgs, its binary is a cache miss and gets
+      # compiled from source. That was 5+ minutes on every run, not just the
+      # first: a GitHub runner starts with an empty nix store every time.
+      #
+      # This still evaluates every output, which is what catches a broken
+      # module.
+      - name: nix flake check (evaluate)
+        run: nix flake check --no-build --print-build-logs
+
+      # The half of deployChecks worth actually building: it validates deploy.json
+      # against deploy-rs's schema — the config only otherwise exercised by
+      # running a real deploy — and pulls in check-jsonschema alone, no Rust
+      # toolchain and no system closure.
+      - name: Validate the deploy schema
+        run: nix build --print-build-logs .#checks.x86_64-linux.deploy-schema
