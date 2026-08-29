@@ -7,14 +7,20 @@
     content = {
       type = "gpt";
       partitions = {
+        # BIOS boot partition: where GRUB's core image goes on a GPT disk.
+        # Hetzner Cloud boots these VMs in legacy BIOS mode, so this is the
+        # partition that actually gets used — see modules/boot.nix.
         boot = {
           name = "boot";
           size = "1M";
           type = "EF02";
         };
+        # 1G, not 512M: this is also /boot, holding a kernel and initrd per
+        # generation. It cannot be grown later without a reinstall, and running
+        # it out of space breaks the next deploy rather than the current boot.
         ESP = {
           name = "ESP";
-          size = "512M";
+          size = "1G";
           type = "EF00";
           content = {
             type = "filesystem";
@@ -42,8 +48,9 @@
         {
           from = "host";
           host.address = "127.0.0.1";
+          # 2222 on both ends: sshd moved off 22 so forgejo could publish it.
           host.port = 2222;
-          guest.port = 22;
+          guest.port = 2222;
         }
       ];
       qemu.options = [

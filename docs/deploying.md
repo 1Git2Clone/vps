@@ -1,0 +1,226 @@
+# Deploying
+
+Three paths, in order of how often you'll walk them: **redeploy** (constantly),
+**first deploy** (once per machine), **bare metal** (once, or after a disaster).
+
+Everything below assumes the ssh key is loaded, because it is passphrase-
+protected and nothing here can prompt for it:
+
+```sh
+ssh-agent -a /tmp/hutao-agent.sock >/dev/null 2>&1
+SSH_AUTH_SOCK=/tmp/hutao-agent.sock ssh-add ~/.ssh/id_ed25519
+export SSH_AUTH_SOCK=/tmp/hutao-agent.sock
+```
+
+A `Permission denied (publickey)` from any command here almost always means the
+agent is gone, not that a key is missing on a server.
+
+---
+
+## 1. Redeploy — the everyday path
+
+```sh
+nix flake check          # optional; deploy builds anyway
+deploy .#vps
+```
+
+That is the whole thing. `deploy-rs` builds locally, pushes the closure,
+activates it, then **waits for a fresh connection to confirm the box is still
+reachable**. If it cannot reconnect, the machine rolls itself back to the
+previous generation without being asked.
+
+What it protects and what it does not:
+
+| Failure | Caught by |
+|---|---|
+| firewall / sshd / networking change locks you out | **deploy-rs auto-rollback** |
+| unbootable kernel or initrd | GRUB generation menu, 5s timeout at boot |
+| a container fails to start | *not* auto-rolled back — see below |
+
+The last row is deliberate. deploy-rs confirms reachability, not service health.
+A crashlooping container is visible and you still have ssh, so:
+
+```sh
+ssh -p 2222 hutao@hu-tao 'systemctl --failed; systemctl status docker-<name>'
+ssh -p 2222 hutao@hu-tao 'sudo nixos-rebuild switch --rollback'
+```
+
+Rolling the whole system back because one container is unhappy is usually the
+wrong reflex — fix it forward.
+
+### Ports and names, so nothing surprises you
+
+- `hu-tao` is the **MagicDNS name**, which is why `deploy.nodes.vps.hostname` is
+  a name and not an address. It survives the primary-IP handover during a
+  migration, so the same command works before and after cutover.
+- ssh is on **2222**. Port 22 belongs to forgejo, so that git clone URLs need no
+  port. Going through Tailscale SSH instead would hit its interactive re-auth
+  check, which cannot be scripted — hence port 2222 and a normal key.
+
+### If a deploy fails with "lacks a signature by a trusted key"
+
+`nix.settings.trusted-users` must include `@wheel` (it does, in
+`modules/nix.nix`). If you ever deploy to a machine that predates that setting,
+you cannot push to it — build on the box instead:
+
+```sh
+rsync -a --delete --exclude .git -e 'ssh -p 2222' ./ hutao@hu-tao:nixos-image/
+ssh -p 2222 hutao@hu-tao 'cd nixos-image && sudo nixos-rebuild switch --flake .#vps-hetzner'
+```
+
+That is also the bootstrap for the very first deploy after an install.
+
+---
+
+## 2. First deploy to a machine that already runs NixOS
+
+Same as a redeploy, with two one-time steps:
+
+```sh
+# 1. Trust the host key, or deploy-rs fails with "Host key verification failed"
+#    and no way to answer the prompt.
+ssh-keyscan -p 2222 -H hu-tao >> ~/.ssh/known_hosts
+
+# 2. Confirm the box can decrypt its own secrets before relying on it.
+ssh -p 2222 hutao@hu-tao 'sudo ls /run/secrets/ | wc -l'   # expect 17
+```
+
+Then `deploy .#vps`.
+
+---
+
+## 3. Bare metal — a brand new server
+
+This is meant to be close to one command. It is, **provided the machine's
+quirks are already in the config** — see "What makes this automatic" below.
+
+```sh
+cd tofu
+cp terraform.tfvars.example terraform.tfvars && $EDITOR terraform.tfvars
+tofu init
+tofu plan          # READ IT. Abort on any "destroy and then create" of hcloud_server.
+tofu apply
+```
+
+`tofu` creates the server with your ssh key attached at creation, then the
+nixos-anywhere module installs `nixosConfigurations.vps-hetzner` over the
+bootstrap image: kexec into the NixOS installer, disko repartitions `/dev/sda`,
+the closure is copied in, GRUB is installed, reboot. Nothing of the bootstrap
+image survives.
+
+### Installing onto a server that already exists
+
+nixos-anywhere does not need tofu. Any reachable machine works:
+
+```sh
+mkdir -p /tmp/extra/var/lib/sops-nix
+install -m 0600 ~/.sops-nix/key.txt /tmp/extra/var/lib/sops-nix/key.txt
+
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#vps-hetzner \
+  --target-host root@<ip> \
+  --extra-files /tmp/extra
+```
+
+**`--extra-files` is not optional.** Without the age key at
+`/var/lib/sops-nix/key.txt`, `sops-install-secrets` fails during activation and
+the machine boots with no credentials at all — including its own root and user
+passwords. Check the key decrypts *before* installing:
+
+```sh
+SOPS_AGE_KEY_FILE=~/.sops-nix/key.txt sops -d --extract '["email"]["postmaster"]' secrets.yaml
+```
+
+If the target only accepts a key you do not hold, Hetzner rescue mode is the way
+in — `enable_rescue` accepts an `ssh_keys` list, unlike `rebuild`, which
+re-injects whatever was attached at creation:
+
+```sh
+curl -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"type":"linux64","ssh_keys":[<key-id>]}' \
+  https://api.hetzner.cloud/v1/servers/<id>/actions/enable_rescue
+curl -X POST -H "Authorization: Bearer $HCLOUD_TOKEN" \
+  https://api.hetzner.cloud/v1/servers/<id>/actions/reset
+```
+
+Rescue is a normal Linux with the disk unmounted, which is exactly what
+nixos-anywhere wants.
+
+### Which configuration to install
+
+| Attr | Disk | Use |
+|---|---|---|
+| `.#vps` | `/dev/vda` | the local QEMU VM (`nix run .#default`) |
+| `.#vps-hetzner` | `/dev/sda` | **anything on Hetzner Cloud** |
+
+They are the same closure; only the disk device differs, and `boot.loader.grub.device`
+is derived from disko so the two can never disagree. Installing `.#vps` on
+Hetzner fails at disko because `/dev/vda` does not exist there.
+
+---
+
+## What makes this automatic (and what used to break it)
+
+Every item below is now in the config. They are listed because each one, when
+missing, produces a machine that installs with no error and then does not work —
+the worst failure shape there is.
+
+| Setting | Where | Without it |
+|---|---|---|
+| `boot.initrd.availableKernelModules` with **virtio** | `modules/hardware.nix` | NixOS's default set is bare-metal only. The initrd cannot see `/dev/sda`, root never mounts, and the box sits in an emergency shell while the provider still reports it `running`. |
+| **GRUB**, not systemd-boot | `modules/boot.nix` | Hetzner Cloud boots legacy BIOS — there is no `/sys/firmware/efi`. systemd-boot installs cleanly and leaves an unbootable machine. |
+| `efiInstallAsRemovable`, `canTouchEfiVariables = false` | `modules/boot.nix` | There is no efivarfs in BIOS mode; bootloader installation fails outright if it tries to write NVRAM. |
+| `time.timeZone` | `modules/boot.nix` | Unset means NixOS does not manage `/etc/localtime`, so docker creates a *directory* there and every container that bind-mounts it dies with "not a directory". |
+| `nix.settings.trusted-users = @wheel` | `modules/nix.nix` | `deploy-rs` cannot push: "lacks a signature by a trusted key". |
+| ssh on **2222** | `modules/services.nix` | Port 22 is forgejo's. Also needs a matching rule in the **Hetzner edge firewall**, which is separate from the host's nftables. |
+
+**The VM test cannot catch any of these.** `nixos-anywhere --flake .#vps
+--vm-test` validates disko, GRUB and that the system boots — genuinely useful,
+and it is what proved GRUB-on-BIOS works. But the NixOS test harness injects its
+own virtio modules and its own networking, so a config that boots in the test can
+still be unbootable on real hardware. Treat a passing VM test as "the layout and
+bootloader are sane", never as "this will boot on the server".
+
+---
+
+## Verifying a machine is actually healthy
+
+Not "the deploy said success" — these:
+
+```sh
+ssh -p 2222 hutao@hu-tao '
+  systemctl is-system-running          # want: running
+  systemctl --failed                   # want: empty
+  sudo ls /run/secrets | wc -l         # want: 17
+  sudo docker ps --format "{{.Names}} {{.Status}}"
+  for u in caddy forgejo mailserver webmail kuma navidrome minecraft grafana tempo dozzle cloudflared; do
+    echo "$u restarts=$(systemctl show -p NRestarts --value docker-$u)"
+  done'
+```
+
+Non-zero `NRestarts` means a crashloop that `systemctl is-active` will happily
+report as `active`, because systemd restarts it fast enough to look healthy.
+
+And confirm the certificate is real rather than the self-signed placeholder that
+`security.acme` installs when issuance fails — services start either way, so
+nothing looks wrong until you check the issuer:
+
+```sh
+ssh -p 2222 hutao@hu-tao 'sudo cat /var/lib/acme/hu-tao.dev/cert.pem' \
+  | openssl x509 -noout -issuer -enddate
+# want: issuer=C=US, O=Let's Encrypt, ...
+# bad:  issuer=CN=minica root ca ...   <- placeholder, DNS-01 failed
+```
+
+Before triggering ACME, test the Cloudflare token directly — Let's Encrypt caps
+failed validations at 5 per hour and lego spends one per attempt:
+
+```sh
+ssh -p 2222 hutao@hu-tao 'sudo bash -c "
+  T=\$(cat /run/secrets/cloudflare_api_token)
+  curl -sS -H \"Authorization: Bearer \$T\" \
+    https://api.cloudflare.com/client/v4/zones?name=hu-tao.dev"'
+```
+
+An empty `result` array with `success: true` means the token cannot see the zone
+— which reads as success if you only check `.success`.

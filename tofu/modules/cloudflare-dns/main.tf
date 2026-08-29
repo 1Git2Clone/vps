@@ -1,0 +1,64 @@
+# Provider v5. Three things changed from the v4 resources this was ported from,
+# and all three are silent if missed: the resource is cloudflare_dns_record (not
+# cloudflare_record), `name` must be the full FQDN rather than a bare label, and
+# `allow_overwrite` no longer exists — a record the provider does not already
+# manage has to be imported instead of quietly adopted.
+#
+# ttl = 1 is Cloudflare's "automatic".
+
+resource "cloudflare_dns_record" "a" {
+  for_each = var.subdomains
+
+  zone_id = var.zone_id
+  name    = "${each.key}.${var.domain}"
+  type    = "A"
+  content = var.vps_ip
+  ttl     = 1
+  proxied = false
+}
+
+# MX must point at a name that resolves to the host itself, which is why smtp is
+# in var.subdomains.
+resource "cloudflare_dns_record" "mx" {
+  zone_id  = var.zone_id
+  name     = var.domain
+  type     = "MX"
+  content  = "smtp.${var.domain}"
+  priority = 10
+  ttl      = 1
+}
+
+# -all, not ~all: nothing but this host is authorised to send for the domain.
+resource "cloudflare_dns_record" "spf" {
+  zone_id = var.zone_id
+  name    = var.domain
+  type    = "TXT"
+  content = "v=spf1 ip4:${var.vps_ip} -all"
+  ttl     = 1
+}
+
+resource "cloudflare_dns_record" "dkim_cloudflare" {
+  zone_id = var.zone_id
+  name    = "cf2024-1._domainkey.${var.domain}"
+  type    = "TXT"
+  content = var.dkim_cloudflare_key
+  ttl     = 1
+}
+
+# The private half of this one is in secrets.yaml and mounted into DMS. Changing
+# one without the other breaks DKIM at every recipient.
+resource "cloudflare_dns_record" "dkim_default" {
+  zone_id = var.zone_id
+  name    = "default._domainkey.${var.domain}"
+  type    = "TXT"
+  content = var.dkim_default_key
+  ttl     = 1
+}
+
+resource "cloudflare_dns_record" "dmarc" {
+  zone_id = var.zone_id
+  name    = "_dmarc.${var.domain}"
+  type    = "TXT"
+  content = "v=DMARC1; p=quarantine; rua=${var.dmarc_rua}"
+  ttl     = 1
+}
