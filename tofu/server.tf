@@ -55,6 +55,16 @@ resource "hcloud_primary_ip" "main_v6" {
   type        = "ipv6"
   location    = var.location
   auto_delete = true
+
+  # Declared because it is set live. An attribute you protect by hand but leave
+  # out of the config does not stay protected — it becomes a silent
+  # "true -> false" on the next plan, and a plan full of cosmetic noise is
+  # exactly where that line gets skimmed past.
+  #
+  # Same omission cost the v4 address earlier: a stale plan detached
+  # 167.233.24.58 and then tried to DELETE it. This flag is the only thing that
+  # refused. It is worth more than it looks.
+  delete_protection = true
 }
 
 resource "hcloud_server" "vps" {
