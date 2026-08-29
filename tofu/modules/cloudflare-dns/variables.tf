@@ -20,7 +20,15 @@ variable "subdomains" {
     routes none of this.
   EOT
   type        = set(string)
-  default     = ["mail", "git", "minecraft", "music", "status", "smtp"]
+  # "mc" is an alias for "minecraft": same A record, same address. Minecraft
+  # needs nothing more, because the server is on the default 25565 and clients
+  # connect with a bare hostname.
+  #
+  # If it ever moves off 25565, Minecraft — unlike ssh — DOES read SRV records
+  # (_minecraft._tcp.<host>), which is the supported way to hide a port from
+  # players. That is exactly the trick forgejo could not use, which is why it
+  # owns port 22 and this host's sshd sits on 2222.
+  default = ["mail", "git", "minecraft", "mc", "music", "status", "smtp"]
 }
 
 variable "dkim_cloudflare_key" {
