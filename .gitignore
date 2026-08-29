@@ -1,2 +1,10 @@
 result
 nixos-efi-vars.fd
+
+# OpenTofu: state holds every value tofu has ever read, secrets included.
+tofu/.terraform/
+tofu/*.tfstate
+tofu/*.tfstate.*
+tofu/terraform.tfvars
+tofu/*.auto.tfvars
+tofu/.terraform.tfstate.lock.info

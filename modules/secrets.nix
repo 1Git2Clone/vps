@@ -38,10 +38,10 @@
         key = "backups/healthcheck_url";
       };
 
-      # === Certs ===
-      acme_email = { };
-
       # === Cloudflare ===
+      # Used by lego for the ACME DNS-01 challenge (modules/acme.nix). The ACME
+      # contact address is NOT here: security.acme needs it at evaluation time,
+      # and a registration contact is not a credential — see infra.acmeEmail.
       cloudflare_api_token = {
         key = "cloudflare/api_token";
       };
@@ -55,6 +55,26 @@
       };
       dozzle_admin_password_hash = {
         key = "dozzle/admin_password_hash";
+      };
+
+      # === Grafana ===
+      grafana_admin_user = {
+        key = "grafana/admin_user";
+      };
+      grafana_admin_password = {
+        key = "grafana/admin_password";
+      };
+
+      # === Kuma ===
+      # Only the out-of-band probe. uptime-kuma itself has no way to seed its
+      # admin account — that is a one-time first-visit setup.
+      kuma_healthcheck_url = {
+        key = "kuma/healthcheck_url";
+      };
+
+      # === Minecraft ===
+      minecraft_rcon_password = {
+        key = "minecraft/rcon_password";
       };
 
       # === Email ===

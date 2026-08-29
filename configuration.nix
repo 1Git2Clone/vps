@@ -1,11 +1,18 @@
 {
   imports = [
+    ./modules/options.nix
     ./modules/secrets.nix
     ./modules/services.nix
     ./modules/boot.nix
+    ./modules/hardware.nix
+    ./modules/nix.nix
     ./modules/users.nix
+    ./modules/networking.nix
     ./modules/firewall.nix
     ./modules/security.nix
+    ./modules/acme.nix
     ./modules/backups.nix
+    ./modules/syncthing.nix
+    ./modules/containers
   ];
 }

@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars and fill in. Never commit the real file — it is
+# gitignored, alongside .terraform/ and any *.tfstate.
+
+# Hetzner Cloud. Omit to fall back to $HCLOUD_TOKEN.
+hcloud_token = "YOUR_HETZNER_CLOUD_API_TOKEN"
+
+# Cloudflare. The token needs Zone:Read + DNS:Edit on this zone only.
+#
+# This is a DIFFERENT token from cloudflare/api_token in secrets.yaml, and they
+# are deliberately separate: this one is used by tofu from a workstation, that
+# one by lego on the VPS. Keeping them apart means an IP filter, a scope change
+# or a rotation on one cannot silently break the other — which is exactly what
+# happened once, when the VPS token was pinned to the old server's address and
+# certificate issuance failed from anywhere else.
+#
+# If you ever add an IP filter, remember there are two tokens and two callers.
+cloudflare_api_token = "YOUR_CLOUDFLARE_API_TOKEN"
+cloudflare_zone_id   = "YOUR_CLOUDFLARE_ZONE_ID"
+
+# Public key nixos-anywhere installs with. Must be a key you hold the private
+# half of on the machine running tofu.
+ssh_public_key = "ssh-ed25519 AAAA... you@workstation"
+
+# DKIM public keys. dkim_default_key is the public half of
+# email/dkim_private_key in secrets.yaml — publishing one without deploying the
+# other means every recipient fails the signature.
+dkim_cloudflare_key = "v=DKIM1; h=sha256; k=rsa; p=YOUR_CLOUDFLARE_DKIM_KEY"
+dkim_default_key    = "v=DKIM1; p=YOUR_DEFAULT_DKIM_KEY"
+
+# Optional overrides:
+# domain      = "hu-tao.dev"
+# server_name = "hu-tao"
+# server_type = "cx22"
+# location    = "fsn1"

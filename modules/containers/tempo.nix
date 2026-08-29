@@ -1,0 +1,66 @@
+# ==============================================================================
+# Tempo — trace storage
+# ==============================================================================
+# Host networking. The OTLP receivers bind 0.0.0.0 and the nftables input chain
+# is what keeps them private: 4317/4318 are absent from the public allow-list,
+# and `iifname tailscale0 accept` is what lets the tailnet reach them. Grafana on
+# :3000 has always been protected exactly this way.
+#
+# This used to bind a hardcoded tailnet address, which is a trap when the host is
+# replaced: a new machine is a new tailscale node with a new address, so the
+# literal goes stale and tempo dies on "cannot assign requested address" —
+# pointing at the collector rather than at the migration that caused it.
+{ pkgs, ... }:
+
+let
+  dataPath = "/var/tempo";
+
+  # From the Nix store: 0444, so uid 10001 can read it without the 0644-vs-0640
+  # dance a bind-mounted host file needed. Its store path changes with its
+  # content, so systemd recreates the container when the config changes.
+  configFile = pkgs.writeText "tempo.yaml" ''
+    server:
+      http_listen_port: 3200
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+    live_store:
+      shutdown_marker_dir: ${dataPath}/live-store/shutdown-marker
+      wal:
+        path: ${dataPath}/live-store/traces
+
+    storage:
+      trace:
+        backend: local
+        local:
+          path: ${dataPath}/blocks
+        wal:
+          path: ${dataPath}/wal
+  '';
+in
+{
+  virtualisation.oci-containers.containers.tempo = {
+    # Pinned to the 3.0.0 release, not `latest` — `latest` is a main-branch
+    # build, so the tag reports a version that was never released.
+    image = "grafana/tempo:3.0.0";
+
+    cmd = [ "-config.file=/etc/tempo.yaml" ];
+
+    volumes = [
+      "${configFile}:/etc/tempo.yaml:ro"
+      # The image creates /var/tempo owned by uid 10001, and docker copies that
+      # ownership onto a fresh named volume — so tempo can write to it without
+      # anything on the host chowning anything.
+      "tempo_data:${dataPath}"
+    ];
+
+    extraOptions = [ "--network=host" ];
+  };
+}
