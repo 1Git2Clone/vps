@@ -14,7 +14,7 @@
 # — tofu would build a new one and the DNS records would follow it.
 
 resource "hcloud_ssh_key" "main" {
-  name = "${var.server_name}-install"
+  name = var.ssh_key_name
 
   # Type and base64 only. Hetzner stores a key WITHOUT its trailing comment, so
   # passing "ssh-ed25519 AAAA... user@host" verbatim makes every plan see a
@@ -27,7 +27,7 @@ resource "hcloud_ssh_key" "main" {
 # address and every A record points at it, so it must outlive the server. With
 # auto_delete off, rebuilding the machine keeps the address and DNS never moves.
 resource "hcloud_primary_ip" "main" {
-  name        = "${var.server_name}-ipv4"
+  name        = var.primary_ip_name
   type        = "ipv4"
   location    = var.location
   auto_delete = false
@@ -42,6 +42,21 @@ resource "hcloud_primary_ip" "main" {
   }
 }
 
+# The IPv6 /64. Declared for the same reason as the v4 above: without it the
+# server's public_net.ipv6 is "known after apply", which leaves an attachment
+# attribute undetermined in every plan. It is imported, not created — the block
+# already exists and is attached.
+#
+# auto_delete stays true, matching how Hetzner created it. Unlike the v4 address
+# this one carries nothing: DNS publishes no AAAA, and docker gives containers
+# no IPv6, so postfix never presents an IPv6 address to a recipient.
+resource "hcloud_primary_ip" "main_v6" {
+  name        = var.primary_ip_v6_name
+  type        = "ipv6"
+  location    = var.location
+  auto_delete = true
+}
+
 resource "hcloud_server" "vps" {
   name        = var.server_name
   image       = var.bootstrap_image
@@ -53,6 +68,7 @@ resource "hcloud_server" "vps" {
     ipv4_enabled = true
     ipv4         = hcloud_primary_ip.main.id
     ipv6_enabled = true
+    ipv6         = hcloud_primary_ip.main_v6.id
   }
 
   # The firewall is attached by hcloud_firewall_attachment rather than listed
