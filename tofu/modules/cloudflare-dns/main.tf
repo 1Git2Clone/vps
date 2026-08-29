@@ -5,6 +5,19 @@
 # manage has to be imported instead of quietly adopted.
 #
 # ttl = 1 is Cloudflare's "automatic".
+#
+# DELIBERATELY NOT MANAGED HERE: the CNAMEs on the apex (hu-tao.dev) and www,
+# which point at Netlify. The site is a static frontend hosted there on purpose —
+# self-hosting it would mean a thirteenth container, running node, to maintain
+# forever for something a CDN does for free.
+#
+# The provider only touches records it declares, so an apply cannot disturb them.
+# The trap to avoid is "completing" this file by adding an apex record: that
+# would fight Netlify for the same name. If you ever do want the apex here, move
+# the site first, do not point it at the VPS and hope.
+#
+# The apex being a CNAME while also carrying MX, SPF and DMARC works because
+# Cloudflare flattens apex CNAMEs — mail is unaffected by the frontend.
 
 resource "cloudflare_dns_record" "a" {
   for_each = var.subdomains
