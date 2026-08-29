@@ -84,6 +84,15 @@
       email_dkim_private_key = {
         key = "email/dkim_private_key";
       };
+      # Roundcube encrypts the logged-in user's password into its session with
+      # this. The image GENERATES A RANDOM ONE when the variable is unset, so it
+      # changes every time the container is recreated — i.e. on every deploy —
+      # and every existing session silently loses the password it needs to
+      # authenticate to submission. Sending then fails with
+      # "554 5.7.1 Client host rejected: Access denied" while receiving is fine.
+      email_roundcube_des_key = {
+        key = "email/roundcube_des_key";
+      };
 
       # === Bootstrap ===
       tailscale_authkey = { };
