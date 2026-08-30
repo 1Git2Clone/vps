@@ -3,6 +3,10 @@
 # ==============================================================================
 # The world is large and the weekly quiescent backup stops the server, so the
 # stop path is the part that matters here. See modules/backups.nix.
+#
+# Individual mods are managed via MODRINTH_PROJECTS ( Modrinth project slugs ).
+# The image auto-selects the newest compatible version for the MC version + loader.
+# To switch to a modpack instead, use MODPACK_PLATFORM + MODRINTH_MODPACK or CF_SLUG.
 { config, lib, ... }:
 
 {
@@ -29,6 +33,28 @@
       DIFFICULTY = "hard";
       GAMEMODE = "survival";
       MOTD = "A Place for Gemstones to Chill";
+
+      # Individual mods via Modrinth (auto-selects newest for 26.1.2 Fabric).
+      # Remove a slug to uninstall; add a slug to install.
+      # :beta suffix needed for mods without a stable release for this MC version.
+      MODRINTH_PROJECTS = lib.concatStringsSep "," [
+        "cloth-config"
+        "config-manager:beta"
+        "dlaw-fabric"
+        "fabric-api"
+        "fabric-language-kotlin"
+        "fabric-permissions-api"
+        "fallingtree"
+        "ferrite-core"
+        "forge-config-api-port"
+        "lithium"
+        "no-chat-reports"
+        "placeholder-api"
+        "serversleep"
+        "sound-physics-remastered:beta"
+        "voxy-server-side"
+        "yacl"
+      ];
     };
 
     environmentFiles = [ config.sops.templates."minecraft.env".path ];
