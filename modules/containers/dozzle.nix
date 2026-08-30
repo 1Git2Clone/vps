@@ -62,5 +62,15 @@ in
       # on top of it — which is how a generated file gets into a named volume.
       "${usersFile}:/data/users.yml:ro"
     ];
+
+    # Hardening baseline. Still root: the docker socket is srw-rw---- root:docker
+    # and dozzle reads it as the owner, so no capability is needed for that —
+    # but dropping caps means it cannot do anything else with being root.
+    extraOptions = [
+      "--read-only"
+      "--security-opt=no-new-privileges:true"
+      "--cap-drop=ALL"
+      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m"
+    ];
   };
 }

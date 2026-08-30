@@ -47,9 +47,16 @@ in
       # can be on the certificate.
       dnsPropagationCheck = true;
 
-      # /var/lib/acme/<domain> is root:acme 0750. Both readers bind-mount the
-      # directory and run as root inside the container, which on this host IS
-      # root, so no group membership is needed on either side.
+      # The certificate directory is group-owned by `caddy`, not by `acme`.
+      #
+      # caddy no longer runs as root (see modules/containers/caddy.nix), and
+      # root's ability to read 0640 files it does not own comes from
+      # CAP_DAC_OVERRIDE — which that container drops. Group membership is what
+      # replaces it: the directory is 0750 and the files 0640, so the caddy
+      # account reads them because it IS the group, not because it is powerful.
+      #
+      # mailserver is unaffected: it still runs as root and keeps DAC_OVERRIDE.
+      group = "caddy";
       reloadServices = [
         "docker-caddy.service"
         "docker-mailserver.service"

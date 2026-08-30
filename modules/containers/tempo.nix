@@ -61,6 +61,15 @@ in
       "tempo_data:${dataPath}"
     ];
 
-    extraOptions = [ "--network=host" ];
+    extraOptions = [
+      "--network=host"
+
+      # Hardening baseline. Tempo already runs as uid 10001 from the image and
+      # writes only to its volume, so read-only costs it nothing.
+      "--read-only"
+      "--security-opt=no-new-privileges:true"
+      "--cap-drop=ALL"
+      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m"
+    ];
   };
 }
