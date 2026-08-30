@@ -24,7 +24,7 @@
       TYPE = "FABRIC";
       VERSION = "26.1.2";
 
-      MEMORY = "5G";
+      MEMORY = "6G";
 
       ONLINE_MODE = "TRUE";
       ENABLE_WHITELIST = "TRUE";
