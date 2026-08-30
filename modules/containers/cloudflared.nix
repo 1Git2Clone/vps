@@ -25,5 +25,15 @@
     ];
 
     networks = [ config.infra.proxyNetwork ];
+    # Hardening baseline. No --user here: this container still runs as root,
+    # and its writable state lives in a docker volume that root owns. Changing
+    # the account would need that volume chowned, which is a migration, not a
+    # flag. See modules/containers/caddy.nix for the full treatment.
+    extraOptions = [
+      "--read-only"
+      "--security-opt=no-new-privileges:true"
+      "--cap-drop=ALL"
+      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m"
+    ];
   };
 }

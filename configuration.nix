@@ -1,6 +1,7 @@
 {
   imports = [
     ./modules/options.nix
+    ./modules/ids.nix
     ./modules/secrets.nix
     ./modules/services.nix
     ./modules/boot.nix

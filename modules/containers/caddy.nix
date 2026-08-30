@@ -19,6 +19,9 @@
 let
   inherit (config.infra) domain proxyNetwork;
 
+  # Same number for the uid and the gid, from modules/ids.nix.
+  id = toString config.infra.serviceId.caddy;
+
   # The certificate directory as caddy sees it. NixOS names the private key
   # key.pem, NOT privkey.pem as certbot did — pointing at the wrong name here
   # fails the whole config load, so it is at least loud.
@@ -82,16 +85,37 @@ in
     volumes = [
       "${caddyfile}:/etc/caddy/Caddyfile:ro"
       "/var/lib/acme/${domain}:${certDir}:ro"
-      "caddy_data:/data"
-      "caddy_config:/config"
     ];
 
     networks = [ proxyNetwork ];
 
     extraOptions = [
+      # Not root. The certificate directory is group-owned by `caddy` (see
+      # modules/acme.nix), so this account reads exactly those files and
+      # nothing else on the host.
+      "--user=${id}:${id}"
+
       "--read-only"
       "--security-opt=no-new-privileges:true"
-      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m"
+
+      # NET_BIND_SERVICE is NOT for binding: docker sets
+      # net.ipv4.ip_unprivileged_port_start=0, so any uid may bind 80 and 443.
+      # It is here because /usr/bin/caddy carries a file capability, and the
+      # kernel refuses to exec such a binary when the bounding set is empty —
+      # `--cap-drop=ALL` alone fails with "exec: operation not permitted"
+      # before caddy runs at all.
+      "--cap-drop=ALL"
+      "--cap-add=NET_BIND_SERVICE"
+
+      # /data and /config were named volumes, which a non-root container cannot
+      # write because docker creates them root-owned. They are ephemeral here
+      # instead: with certificates supplied by acme and the admin API off, that
+      # storage holds OCSP staples and an autosave, both re-derived on start.
+      # uid/gid rather than mode=1777, so nothing in the container is
+      # world-writable.
+      "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,uid=${id},gid=${id},mode=0700"
+      "--tmpfs=/data:rw,nosuid,nodev,size=16m,uid=${id},gid=${id},mode=0700"
+      "--tmpfs=/config:rw,nosuid,nodev,size=4m,uid=${id},gid=${id},mode=0700"
     ];
   };
 
