@@ -6,10 +6,13 @@
 # `pre-commit run --all-files`. A check cannot pass locally and fail in CI
 # because of drift between two lists, because there is only one list.
 #
-# The nix tools are `language: system`, so they come from the dev shell rather
-# than from a pre-commit-managed environment — nixfmt and statix are already
-# pinned by the flake, and a second copy pinned by pre-commit could disagree
-# with it. Run these from inside `nix develop`.
+# The nix tools run through `nix develop .#ci`, NOT from bare $PATH. A bare
+# `language: system` entry resolves whatever happens to be on the PATH of the
+# process invoking git — which for an editor or lazygit is not the dev shell.
+# That is not hypothetical: statix 0.5.8 from a mason install reports two W04
+# warnings on this tree that the flake's statix does not, so the same commit
+# passed in CI and failed in the editor. Going through the flake means one
+# pinned version answers everywhere.
 #
 #   nix develop -c pre-commit install       # once, per clone
 #   nix develop -c pre-commit run --all-files
@@ -33,21 +36,21 @@ repos:
       - id: nixfmt
         name: nixfmt-rfc-style
         description: Every .nix file in this repo is formatted with nixfmt-rfc-style.
-        entry: nixfmt --check
+        entry: nix develop .#ci -c nixfmt --check
         language: system
         files: \.nix$
 
       - id: statix
         name: statix
         description: Lint for nix antipatterns.
-        entry: statix check
+        entry: nix develop .#ci -c statix check
         language: system
         files: \.nix$
         pass_filenames: false
 
       - id: tofu-fmt
         name: tofu fmt
-        entry: tofu fmt -check -recursive tofu/
+        entry: nix develop .#ci -c tofu fmt -check -recursive tofu/
         language: system
         files: \.tf$
         pass_filenames: false
@@ -62,7 +65,7 @@ repos:
       # Full-history scanning belongs in CI, where it is a separate step.
       - id: gitleaks
         name: gitleaks (staged changes)
-        entry: gitleaks git --staged --redact --no-banner
+        entry: nix develop .#ci -c gitleaks git --staged --redact --no-banner
         language: system
         pass_filenames: false
         always_run: true
