@@ -71,16 +71,31 @@ and removed. `initialScript` is not a substitute: it runs only at first
 is precisely the situation after the one-time dump restore.
 
 So a `Type = "oneshot"` unit ordered after `postgresql.service` sets it on every
-activation:
+activation, with the SQL on **stdin**:
 
 ```sh
-psql -v pw="$(cat ${passwordFile})" -c "ALTER ROLE serenity WITH PASSWORD :'pw';"
+printf '%s\n' "ALTER ROLE serenity WITH PASSWORD :'pw';" \
+  | psql -v ON_ERROR_STOP=1 -v pw="$(cat ${passwordFile})"
 ```
 
 `:'pw'` is psql's quoted-variable interpolation, which escapes the value as a
 SQL literal. Interpolating the password into the SQL string in shell instead
 would break on any password containing a quote, so this is not a stylistic
 choice.
+
+**Both details below were corrected after the first deploy failed on them.**
+
+This originally used `-c` for the statement. psql does **not** perform variable
+interpolation on a `-c` string — the server receives a literal `:'pw'` and
+answers `ERROR: syntax error at or near ":"`. The quoting claim above is
+correct, but it holds only for input read as a script, i.e. stdin or `-f`.
+Verified both forms directly rather than trusting the reading of the docs.
+
+The unit also needs an explicit `owner = "postgres"` on the sops entry. It runs
+as `postgres` so it can use peer auth, and a sops entry is `root:0400` by
+default, which failed activation with `Permission denied`. Running the unit as
+root is not an alternative: peer auth maps the OS user to a same-named role and
+there is no `root` role.
 
 `password_encryption` is set to `scram-sha-256` explicitly. Postgres 18 already
 defaults to it, but it determines what `ALTER ROLE` stores, and pgbouncer's
@@ -105,6 +120,29 @@ from under the client and the next use fails with
 backend it assigns, making this transparent. It has defaulted to 200 since 1.24,
 so this pins a value that currently works — the failure mode if the default ever
 moves back is intermittent and load-dependent, not a startup error.
+
+### `ignore_startup_parameters` is not optional
+
+pgbouncer permits exactly four startup parameters — `client_encoding`,
+`datestyle`, `timezone`, `standard_conforming_strings` — and rejects anything
+else at protocol level, *before* authentication. sqlx sends
+`extra_float_digits`, so every connection died with:
+
+```
+PgDatabaseError { severity: Fatal, code: "08P01",
+  message: "unsupported startup parameter: extra_float_digits" }
+```
+
+which surfaced as a panic on `connect_to_db().await.unwrap()` at
+`src/main.rs:162`. That call sits inside poise's `setup`, which runs *after*
+`register_globally` — so the bot was connected to Discord and looked healthy
+from Discord's side, with only the database leg dead.
+
+This section was added after the fact, and the miss is worth recording rather
+than quietly fixing: the option lives in the same set as
+`max_prepared_statements` below, which was pinned defensively against a failure
+that had not happened, while `extra_float_digits` is the literal example value
+in this option's own nixpkgs documentation.
 
 ### Two traps in the pgbouncer module
 
@@ -184,6 +222,31 @@ entirely. Taking the default therefore drops `--cfg tokio_unstable` and the
 compose file passes it.
 
 `FEATURES = "ai-deepseek opentelemetry tokio_console"`.
+
+### The bot requires a dotenv file to exist
+
+`src/main.rs:18` is `let _ = dotenv::dotenv()?;`. The `?` propagates, so the bot
+refuses to start unless a dotenv file is present on disk — even when every
+variable it needs is already in the process environment. It is the first
+fallible call in `main` and runs before tracing is initialised, so the entire
+failure is one unattributed line followed by exit 1 on a restart loop:
+
+```
+Error: Io(Custom { kind: NotFound, error: "path not found" })
+```
+
+Nothing in that output names the file it could not find.
+
+The workaround is an **empty** placeholder from the Nix store, bind-mounted
+where dotenv looks — the image's `WORKDIR` is `/app`, and dotenv searches the
+working directory upward. Empty on purpose: configuration still arrives as real
+environment variables via `environmentFiles`, dotenv does not override an
+already-set variable, and writing the credentials into that file as well would
+duplicate them somewhere sops does not manage and subject them to dotenv's
+parsing rules — an unquoted `#` in a password ends the value. An empty file in
+the world-readable store gives away nothing, which is the point.
+
+The real fix is upstream, `dotenv().ok()`, which would remove this mount.
 
 ### Container hardening
 
