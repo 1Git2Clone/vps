@@ -92,6 +92,23 @@ let
   # ============================================================================
   # Source and image
   # ============================================================================
+  # A full commit SHA, deliberately — never a branch or tag name. `main` would
+  # make the build depend on when it ran rather than on what this file says, and
+  # fetchgit's hash would then start failing on someone else's push.
+  #
+  # This is main@HEAD as of 2026-09-04. NOT the newest tag: v0.3.0 is 20 commits
+  # behind main, and the sharding, redis and ai-deepseek work this module
+  # configures all landed after it. Revisit if upstream starts cutting releases
+  # that include them.
+  #
+  # Bump with:
+  #   gh api repos/1Git2Clone/serenity-discord-bot/commits/main --jq .sha
+  #   nix run nixpkgs#nix-prefetch-git -- \
+  #     --url https://github.com/1Git2Clone/serenity-discord-bot --rev <sha> --quiet
+  #
+  # Both lines change together. A rev without its matching hash fails the fetch
+  # at build time, which is the good failure — the bad one would be a stale hash
+  # silently reusing the old source, and fetchgit does not allow that.
   rev = "1bdde3a63db3d0b56cd07bab1fe82fd38a4e5aed";
 
   src = pkgs.fetchgit {
