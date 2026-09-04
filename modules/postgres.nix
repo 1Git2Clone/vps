@@ -141,6 +141,25 @@ in
           # prevents is intermittent and load-dependent, not a startup error.
           max_prepared_statements = 200;
 
+          # THE OTHER pgbouncer TRAP, and it fires before authentication.
+          #
+          # pgbouncer permits exactly four startup parameters by default —
+          # client_encoding, datestyle, timezone, standard_conforming_strings —
+          # and rejects anything else at protocol level. sqlx sends
+          # extra_float_digits in its startup packet, so every connection died
+          # with:
+          #
+          #   PgDatabaseError { severity: Fatal, code: "08P01",
+          #     message: "unsupported startup parameter: extra_float_digits" }
+          #
+          # which surfaced as a panic on `connect_to_db().await.unwrap()` at
+          # src/main.rs:162 — after the gateway connection had already
+          # succeeded, so the bot looked healthy on Discord's side first.
+          #
+          # Add to this comma-separated list if another parameter ever shows up
+          # in that message; the failure always names the parameter.
+          ignore_startup_parameters = "extra_float_digits";
+
           auth_type = "scram-sha-256";
           # A path into /run, never an inline value — see the template above.
           auth_file = config.sops.templates."pgbouncer-userlist.txt".path;
