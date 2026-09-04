@@ -188,12 +188,18 @@ compose file passes it.
 ### Container hardening
 
 The `dozzle`/`tempo` baseline — `--read-only`,
-`--security-opt=no-new-privileges:true`, `--cap-drop=ALL`, `--tmpfs=/tmp` —
-plus `HOME=/tmp`. `ai-deepseek` pulls in `/ai-review`, which shells out to `git`
-and `gh` (upstream's Dockerfile installs both for exactly this reason) and needs
-writable scratch. This is the one item to verify after first deploy rather than
-assume; if `/ai-review` turns out to need more than `/tmp`, the fix is a larger
-tmpfs, not dropping `--read-only`.
+`--security-opt=no-new-privileges:true`, `--cap-drop=ALL`,
+`--tmpfs=/tmp:...,size=16m` — plus `HOME=/tmp` and `TMPDIR=/tmp`, so a library
+that caches into `$HOME` hits the tmpfs rather than `EROFS` on `/root`.
+
+16m matches every other hardened container here because nothing known writes
+anything large. `ai-deepseek` does pull in `/ai-review`, which shells out to
+`git` and `gh` (upstream's Dockerfile installs both for exactly that reason),
+but that command is dead — upstream has a `chore/remove-ai-review-issue-40`
+branch — so it is not worth sizing for. `tempfile` is only reachable through
+`util-download`, which is not in `FEATURES`; enabling it would want a bigger
+tmpfs, since it writes media there. A token for `gh` is therefore not needed,
+which is what keeps the credential set at three.
 
 `tokio_console` gets `TOKIO_CONSOLE_BIND=0.0.0.0:6669` and a host-loopback
 publish. Without the bind override the console listens on container loopback and
