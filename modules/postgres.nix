@@ -191,7 +191,7 @@ in
     # restore brings the accounts back with the data. The rest of a service's
     # environment is already in git as encrypted secrets.yaml.
     #
-    # Restore: zstd -d < /var/backup/postgresql/all.sql.zst | psql -U postgres
+    # Restore: zstd -d < /var/backup/postgresql/all.sql.zstd | psql -U postgres
     postgresqlBackup = {
       enable = true;
       compression = "zstd";
