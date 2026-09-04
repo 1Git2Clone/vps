@@ -107,7 +107,31 @@
           # Long enough for every container to be recreated on a config change,
           # short enough that a hung activation is not an outage.
           confirmTimeout = 120;
-          activationTimeout = 300;
+
+          # 35 minutes, and it is the serenity-bot image build that needs it.
+          #
+          # That build runs INSIDE activation: serenity-bot-image.service is a
+          # Type=oneshot wanted by multi-user.target, so switch-to-configuration
+          # starts it and blocks on a Rust release build of serenity + sqlx +
+          # llm. On this shared vCPU that is tens of minutes, and upstream's
+          # Dockerfile has no cargo-chef layer — it does `COPY . .` then
+          # `cargo build`, so EVERY rev bump invalidates the whole build rather
+          # than just the first one. At the old 300s this deploy did not fail
+          # halfway: it hit the timeout and auto-rolled back with the build
+          # killed underneath it.
+          #
+          # Deliberately LONGER than the build unit's own TimeoutStartSec
+          # (30min, in modules/containers/serenity-bot.nix). The unit therefore
+          # gives up first, and a build overrun reads as
+          # "serenity-bot-image.service: Start operation timed out" instead of
+          # an unexplained rollback. Keep that ordering if either number moves.
+          #
+          # This weakens the "a hung activation is not an outage" property for
+          # every other deploy, which is the real cost. The durable fix is to
+          # build the image off-box — same architecture, so it is a native build
+          # here and a pushed closure there, not a cross-compile — and ship it
+          # as an imageFile so activation only does `docker load`.
+          activationTimeout = 2100;
         };
       };
 

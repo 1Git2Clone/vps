@@ -321,7 +321,12 @@ in
       RemainAfterExit = true;
       # A Rust release build of serenity + sqlx + llm on a Hetzner shared vCPU
       # is not quick, and systemd's default would kill it partway.
-      TimeoutStartSec = "90min";
+      #
+      # Kept BELOW deploy-rs's activationTimeout (2100s in flake.nix), because
+      # this build runs inside activation. This unit therefore gives up first
+      # and says so, rather than deploy-rs timing out and rolling back with the
+      # build killed underneath it. Raise both together or not at all.
+      TimeoutStartSec = "30min";
     };
 
     # The guard is what keeps a routine redeploy from spending 20 minutes
