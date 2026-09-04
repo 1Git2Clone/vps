@@ -140,6 +140,26 @@ let
   rustflags = "--cfg tokio_unstable";
 
   names = lib.genList (i: "serenity-bot-${toString i}") instances;
+
+  # src/main.rs:18 is `let _ = dotenv::dotenv()?;`. The `?` propagates, so the
+  # bot REFUSES TO START unless a dotenv file exists on disk — even though every
+  # variable it needs is already in the process environment. It is the FIRST
+  # fallible call in main, before tracing is initialised, so the entire failure
+  # is one unattributed line followed by exit 1 on a five-second restart loop:
+  #
+  #   Error: Io(Custom { kind: NotFound, error: "path not found" })
+  #
+  # Nothing names the file, which is what makes it a bad half hour. Upstream
+  # wants `dotenv().ok()`; until then this file is the workaround.
+  #
+  # Deliberately EMPTY. Configuration still arrives as real environment
+  # variables from environmentFiles and `environment` below, and dotenv does not
+  # override an already-set variable — so writing the credentials in here too
+  # would be redundant, would put them somewhere sops does not manage, and would
+  # subject them to dotenv's parsing rules (an unquoted `#` in a password ends
+  # the value). An empty file in the world-readable Nix store gives away
+  # nothing, which is the point.
+  dotenvPlaceholder = pkgs.writeText "serenity-dotenv-placeholder" "";
 in
 {
   assertions = [
@@ -248,8 +268,15 @@ in
 
           networks = [ botNetwork ];
 
-          # No volume. Everything durable is in postgres, which is backed up as
-          # a dump rather than as a directory — see modules/postgres.nix.
+          # The image's WORKDIR is /app, and dotenv searches the working
+          # directory upward — so this is where it looks. See the comment on
+          # dotenvPlaceholder: the file is empty and exists only so that
+          # `dotenv::dotenv()?` returns Ok.
+          #
+          # This is the ONLY mount. No data volume: everything durable lives in
+          # postgres, which is backed up as a dump rather than as a directory
+          # (modules/postgres.nix). A bind mount is unaffected by --read-only.
+          volumes = [ "${dotenvPlaceholder}:/app/.env:ro" ];
 
           extraOptions = [
             "--read-only"
