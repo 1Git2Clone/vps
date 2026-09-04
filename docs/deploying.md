@@ -214,11 +214,11 @@ bootloader are sane", never as "this will boot on the server".
 ## Restoring a postgres dump into a new service
 
 `services.postgresqlBackup` writes a `pg_dumpall` to
-`/var/backup/postgresql/all.sql.zst` nightly, and restic carries it — so the
+`/var/backup/postgresql/all.sql.zstd` nightly, and restic carries it — so the
 usual restore is one command:
 
 ```sh
-zstd -d < /var/backup/postgresql/all.sql.zst | sudo -u postgres psql
+zstd -d < /var/backup/postgresql/all.sql.zstd | sudo -u postgres psql
 ```
 
 **Seeding a service from a dump made elsewhere is different, and the ordering

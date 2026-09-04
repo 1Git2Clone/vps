@@ -385,7 +385,7 @@ covering this service's data. And a file-level copy of a live `PGDATA` is not
 restore-safe regardless, so dumps are the correct artifact here rather than a
 compromise.
 
-Restore is `zstd -d < all.sql.zst | psql -U postgres`.
+Restore is `zstd -d < all.sql.zstd | psql -U postgres`.
 
 ### 23:15 is load-bearing
 
