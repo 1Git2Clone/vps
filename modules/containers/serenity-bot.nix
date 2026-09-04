@@ -319,14 +319,15 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      # A Rust release build of serenity + sqlx + llm on a Hetzner shared vCPU
-      # is not quick, and systemd's default would kill it partway.
+      # MEASURED at 3m28s on this host from a cold cache (2026-09-04), base
+      # image pulls included. 10min is ~3x that; systemd's default would kill
+      # it partway.
       #
-      # Kept BELOW deploy-rs's activationTimeout (2100s in flake.nix), because
+      # Kept BELOW deploy-rs's activationTimeout (900s in flake.nix), because
       # this build runs inside activation. This unit therefore gives up first
       # and says so, rather than deploy-rs timing out and rolling back with the
       # build killed underneath it. Raise both together or not at all.
-      TimeoutStartSec = "30min";
+      TimeoutStartSec = "10min";
     };
 
     # The guard is what keeps a routine redeploy from spending 20 minutes

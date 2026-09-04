@@ -32,7 +32,17 @@ in
   # Declared here rather than in modules/secrets.nix because this module owns
   # the database identity; the bot's own token and API key live next to the
   # container that reads them. Nested key to match the layout of secrets.yaml.
-  sops.secrets.serenity_db_password.key = "serenity/db_password";
+  sops.secrets.serenity_db_password = {
+    key = "serenity/db_password";
+    # owner matters: the setup unit below runs as `postgres` so it can use peer
+    # auth, and a sops secret defaults to root:0400 — which made the first
+    # deploy of this module fail with
+    #   cat: /run/secrets/serenity_db_password: Permission denied
+    # The alternative, running the unit as root, does not work: peer auth maps
+    # the OS user to a same-named role and there is no `root` role.
+    owner = "postgres";
+    mode = "0400";
+  };
 
   # pgbouncer authenticates BOTH legs from this file: SCRAM to the client, SCRAM
   # to postgres. A template rather than a fourth secret so the password has one
@@ -204,18 +214,23 @@ in
         Group = "postgres";
       };
       # :'pw' is psql's QUOTED variable interpolation — it escapes the value as
-      # a SQL literal. Interpolating $pw into the statement in shell instead
-      # would break on any password containing a quote, so this is not a style
-      # choice.
+      # a SQL literal, so a password containing a quote cannot break the
+      # statement or inject into it. Interpolating $pw in shell instead would.
+      #
+      # THE SQL GOES OVER STDIN, NOT -c. psql does not perform variable
+      # interpolation on a -c string: the server receives a literal :'pw' and
+      # answers `ERROR: syntax error at or near ":"`, which is exactly how the
+      # first deploy of this module failed. Interpolation only happens for
+      # input read as a script — stdin or -f. Verified both ways before
+      # settling on this.
+      #
+      # The second statement is here because ensureDBOwnership cannot be used
+      # when the role and database names differ. Both are idempotent.
       script = ''
-        psql -v ON_ERROR_STOP=1 \
-          -v pw="$(cat ${passwordFile})" \
-          -c "ALTER ROLE ${role} WITH PASSWORD :'pw';"
-
-        # ensureDatabases creates it owned by postgres. Idempotent, and a no-op
-        # once a dump restore has already been done as ${role}.
-        psql -v ON_ERROR_STOP=1 \
-          -c "ALTER DATABASE ${db} OWNER TO ${role};"
+        printf '%s\n' \
+          "ALTER ROLE ${role} WITH PASSWORD :'pw';" \
+          "ALTER DATABASE ${db} OWNER TO ${role};" \
+          | psql -v ON_ERROR_STOP=1 -v pw="$(cat ${passwordFile})"
       '';
     };
 
