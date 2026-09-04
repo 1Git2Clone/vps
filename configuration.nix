@@ -12,6 +12,7 @@
     ./modules/firewall.nix
     ./modules/security.nix
     ./modules/acme.nix
+    ./modules/postgres.nix
     ./modules/backups.nix
     ./modules/vuln-scan.nix
     ./modules/syncthing.nix

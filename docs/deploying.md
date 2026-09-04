@@ -93,7 +93,7 @@ Same as a redeploy, with two one-time steps:
 ssh-keyscan -p 2222 -H hu-tao >> ~/.ssh/known_hosts
 
 # 2. Confirm the box can decrypt its own secrets before relying on it.
-ssh -p 2222 hutao@hu-tao 'sudo ls /run/secrets/ | wc -l'   # expect 17
+ssh -p 2222 hutao@hu-tao 'sudo ls /run/secrets/ | wc -l'   # expect 20
 ```
 
 Then `deploy .#vps`.
@@ -211,6 +211,56 @@ bootloader are sane", never as "this will boot on the server".
 
 ---
 
+## Restoring a postgres dump into a new service
+
+`services.postgresqlBackup` writes a `pg_dumpall` to
+`/var/backup/postgresql/all.sql.zst` nightly, and restic carries it — so the
+usual restore is one command:
+
+```sh
+zstd -d < /var/backup/postgresql/all.sql.zst | sudo -u postgres psql
+```
+
+**Seeding a service from a dump made elsewhere is different, and the ordering
+gets one shot.** The bot runs its sqlx migrations automatically on startup, so if
+it reaches an empty database first, its migrations create the schema and the
+dump's `CREATE TABLE`s then collide with it. Restore before the container's first
+start.
+
+Read the dump before running anything — two of its properties decide the
+commands, and guessing either one wrong fails halfway through:
+
+```sh
+head -40 ~/serenity-bot-db.sql          # pg_dump (needs a target db) or pg_dumpall (has its own CREATE DATABASE)?
+grep -m5 'OWNER TO' ~/serenity-bot-db.sql   # which role does it expect to exist?
+```
+
+A plain-SQL dump emits `ALTER TABLE … OWNER TO <role>`, which hard-fails under
+`ON_ERROR_STOP=1` if that role is absent. The cheap fix is to make the config
+match the dump — `role` and `db` at the top of `modules/postgres.nix` — rather
+than to rewrite the dump.
+
+Then, for a `pg_dump` of a single database:
+
+```sh
+sudo systemctl stop 'docker-serenity-bot-*'
+sudo -u postgres psql -c 'DROP DATABASE IF EXISTS serenity_bot;'
+sudo -u postgres psql -c 'CREATE DATABASE serenity_bot OWNER serenity;'
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d serenity_bot -f ~/serenity-bot-db.sql
+sudo systemctl start docker-serenity-bot-0
+```
+
+`ON_ERROR_STOP=1` is not optional: without it `psql` reports success after
+skipping every statement it could not apply, which leaves a half-populated
+database that looks restored.
+
+Confirm the bot treats the schema as current rather than migrating it:
+
+```sh
+journalctl -u docker-serenity-bot-0 -n 50
+sudo -u postgres psql -d serenity_bot -c 'table _sqlx_migrations order by version desc limit 5;'
+```
+
 ## Verifying a machine is actually healthy
 
 Not "the deploy said success" — these:
@@ -219,11 +269,13 @@ Not "the deploy said success" — these:
 ssh -p 2222 hutao@hu-tao '
   systemctl is-system-running          # want: running
   systemctl --failed                   # want: empty
-  sudo ls /run/secrets | wc -l         # want: 17
+  sudo ls /run/secrets | wc -l         # want: 20
   sudo docker ps --format "{{.Names}} {{.Status}}"
-  for u in caddy forgejo mailserver webmail kuma navidrome minecraft grafana tempo dozzle cloudflared; do
+  for u in caddy forgejo mailserver webmail kuma navidrome minecraft grafana tempo dozzle cloudflared \
+           serenity-bot-0 serenity-redis; do
     echo "$u restarts=$(systemctl show -p NRestarts --value docker-$u)"
-  done'
+  done
+  systemctl is-active postgresql pgbouncer serenity-bot-image'
 ```
 
 Non-zero `NRestarts` means a crashloop that `systemctl is-active` will happily

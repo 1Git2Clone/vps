@@ -17,8 +17,21 @@
     # all of them — including a service added later, which is the point. A
     # backup that has to be told about each new service is a backup that
     # eventually stops covering one.
+    #
+    # The second path is the same trick for databases. postgres runs on the host
+    # (modules/postgres.nix), so its data is NOT under docker/volumes and would
+    # have silently fallen out of this backup. services.postgresqlBackup writes
+    # a pg_dumpall there — every database on the host, globals included — so a
+    # future service is covered the moment it declares one. A file-level copy of
+    # a live PGDATA would not restore cleanly anyway.
+    #
+    # ORDERING: this job is OnCalendar=daily with RandomizedDelaySec=1h, so it
+    # fires in 00:00-01:00. postgresqlBackup therefore runs at 23:15, BEFORE it.
+    # Moving that past midnight would have restic archive a dump up to 23 hours
+    # stale every night while both units report success.
     paths = [
       "/var/lib/docker/volumes"
+      "/var/backup/postgresql"
     ];
 
     # The minecraft world is snapshotted separately, with the server stopped —

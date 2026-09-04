@@ -24,6 +24,7 @@ nothing to remember to run.
 │   ├── firewall.nix      # nftables, including the container forward path
 │   ├── services.nix      # sshd, tailscale, fail2ban, docker
 │   ├── security.nix      # auditd rules
+│   ├── postgres.nix      # host postgres + pgbouncer, pg_dumpall backups
 │   ├── backups.nix       # restic → B2, daily + weekly quiescent minecraft
 │   ├── vuln-scan.nix     # weekly CVE report, every image + the system closure
 │   ├── syncthing.nix     # tailnet-only, /home/hutao/syncthing
@@ -47,6 +48,10 @@ nothing to remember to run.
 | `grafana` | host networking, :3000, tailnet only |
 | `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
 | `minecraft` | 25565; RCON on loopback only |
+| `serenity-bot-0` | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669` |
+| `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback |
+| `postgres` | not a container — a host service; unix socket + loopback only, never on `botnet` |
+| `pgbouncer` | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain |
 | `syncthing` | not a container — a host service; GUI on 8384, tailnet only |
 
 Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is over
@@ -159,6 +164,8 @@ Beyond what the Ansible vault held, this port needs:
 | `grafana/admin_user`, `grafana/admin_password` | anonymous Admin is off, so this is the only way in |
 | `kuma/healthcheck_url` | the out-of-band status-page probe; a separate check from the backup one because they fail for different reasons |
 | `minecraft/rcon_password` | RCON is loopback-only but it is still a remote console |
+| `serenity/bot_token`, `serenity/ai_api_key` | the Discord bot's gateway token and its DeepSeek key |
+| `serenity/db_password` | one password, two consumers: `ALTER ROLE` in postgres and the pgbouncer userlist, both rendered from this key |
 
 `acme_email` is **gone** from the secret set: `security.acme` needs it at
 evaluation time and a registration contact is not a credential. It is
@@ -383,6 +390,7 @@ Restore or regenerate these. Without them a clone will not deploy.
 | DKIM private key | `email/dkim_private_key` | Its public half is published from `tofu/`. Cannot be regenerated without republishing DNS, and a mismatch fails DKIM at every recipient |
 | `tofu/terraform.tfvars` | gitignored | Template is `tofu/terraform.tfvars.example` |
 | Mail store, forgejo repos, minecraft world | docker volumes under `/var/lib/docker/volumes` | Restore before the first boot of a rebuilt host, or the services initialise blank |
+| Every postgres database | `pg_dumpall` under `/var/backup/postgresql`, inside the same restic repository | `zstd -d < all.sql.zst \| psql -U postgres`. Restore **before** the bot's first start, or its sqlx migrations initialise an empty schema and the dump then collides |
 
 ## Operations
 
@@ -395,6 +403,10 @@ systemctl start acme-hu-tao.dev.service   # force a renewal check
 
 systemctl status restic-backups-b2.timer restic-backups-minecraft.timer
 restic-b2 snapshots                       # wrapper with the repo and password wired in
+
+systemctl status postgresqlBackup.timer   # 23:15, deliberately BEFORE restic's 00:00-01:00 window
+systemctl start postgresqlBackup          # dump every database now
+psql -h 127.0.0.1 -p 6432 -U serenity serenity_bot   # through pgbouncer, from the tailnet
 
 fail2ban-client status forgejo-ssh
 nft list table inet f2b-table             # where the bans actually are
