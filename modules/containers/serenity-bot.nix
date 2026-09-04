@@ -207,9 +207,10 @@ in
 
             RUST_LOG = "warn,serenity_discord_bot=warn,serenity=warn,poise=warn,tokio::task=off";
 
-            # --read-only means / is not writable, and /ai-review shells out to
-            # git and gh (which is why upstream's Dockerfile installs both).
-            # Both want a writable HOME; /tmp is the tmpfs below.
+            # --read-only leaves nothing writable but the tmpfs below, and a
+            # library that caches into $HOME would otherwise try /root and get
+            # EROFS. Pointing both at the tmpfs costs nothing and keeps the
+            # read-only root honest.
             HOME = "/tmp";
             TMPDIR = "/tmp";
 
@@ -254,9 +255,12 @@ in
             "--read-only"
             "--security-opt=no-new-privileges:true"
             "--cap-drop=ALL"
-            # 64m rather than the 16m the other services get: this is HOME for
-            # the git/gh invocations /ai-review makes, not just scratch.
-            "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m"
+            # 16m, the same as every other hardened container here. Nothing
+            # known writes anything large: /ai-review is dead upstream (see the
+            # chore/remove-ai-review-issue-40 branch), and `tempfile` is only
+            # pulled in by util-download, which is not in FEATURES. Enabling
+            # util-download would want a bigger tmpfs — it writes media here.
+            "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m"
           ];
         }
       ) instances
