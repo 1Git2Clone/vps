@@ -57,5 +57,41 @@
         this network, which is why the Caddyfile names no IP addresses.
       '';
     };
+
+    botNetwork = lib.mkOption {
+      type = lib.types.str;
+      default = "botnet";
+      description = ''
+        Docker network for the discord bot and the redis it caches in. Separate
+        from `proxyNetwork` because the bot serves nothing and has no business
+        being reachable from caddy — it is an outbound gateway client.
+      '';
+    };
+
+    botSubnet = lib.mkOption {
+      type = lib.types.str;
+      default = "172.30.0.0/24";
+      description = ''
+        Subnet pinned onto `botNetwork` at creation, rather than left to
+        docker's address pool. Two things depend on it being fixed: the
+        firewall's input rule names it as a source, and `botGateway` is a
+        literal that would go stale if docker were free to renumber the bridge.
+      '';
+    };
+
+    botGateway = lib.mkOption {
+      type = lib.types.str;
+      default = "172.30.0.1";
+      description = ''
+        The host's address on `botNetwork`, i.e. how a container on it reaches
+        services in the host's own network namespace — postgres via pgbouncer,
+        and tempo's OTLP receiver.
+
+        MUST be the first usable address of `botSubnet`. It is passed to
+        `docker network create --gateway` explicitly rather than relying on
+        docker picking the first address, so the two can only disagree if this
+        pair is edited inconsistently.
+      '';
+    };
   };
 }

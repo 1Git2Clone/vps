@@ -17,6 +17,8 @@
 # The consequence to keep in mind when adding a service: a published port needs
 # to be in the forward allow-list below, not the input one. Getting that backwards
 # gives you a container the internet can reach but the firewall never authorised.
+{ config, ... }:
+
 {
   networking.nftables = {
     enable = true;
@@ -95,6 +97,24 @@
 
           # HTTP/3, matching caddy's published 443/udp.
           udp dport 443 ct state new accept
+
+          # THE DISCORD BOT REACHING THE HOST. Input, not forward: a container
+          # talking to a service in the host's own netns is addressing the host
+          # itself, so it arrives at this hook rather than being forwarded.
+          #
+          # 6432 is pgbouncer (postgres itself never leaves the unix socket and
+          # loopback) and 4317 is tempo's OTLP receiver. Both bind 0.0.0.0 and
+          # are kept private by their ABSENCE from the public lists above — this
+          # rule is what makes them reachable from the bot's network alone.
+          #
+          # Without it the failure is the half-broken shape this file warns
+          # about twice over: postgres healthy, pgbouncer healthy, systemctl
+          # clean, and the bot unable to connect. Check with:
+          #   journalctl -k | grep DROP_in | grep -oE 'DPT=(6432|4317)'
+          iifname "br-*" ip saddr ${config.infra.botSubnet} tcp dport {
+            4317,
+            6432
+          } ct state new accept
 
           log prefix "DROP_in: " counter drop
         }

@@ -27,8 +27,29 @@
 }:
 
 let
-  net = config.infra.proxyNetwork;
   cfg = config.virtualisation.oci-containers;
+
+  # Network name -> extra `docker network create` arguments.
+  #
+  # An attrset rather than two near-identical units, because the per-container
+  # ordering below has to be derived from the SAME set of names. When this was a
+  # single hardcoded unit for `proxy`, the ordering was a `lib.elem net
+  # container.networks` special case — and a container joining any second
+  # network would have started with no dependency on the unit that creates it.
+  # That race fails intermittently at boot, which is the worst shape a bug can
+  # take here.
+  networks = {
+    # Left to docker's address pool: nothing names an address on it, because
+    # caddy resolves its upstreams by container name over the embedded DNS.
+    ${config.infra.proxyNetwork} = [ ];
+
+    # Pinned, because `infra.botGateway` is a literal in the bot's DATABASE_URL
+    # and OTLP endpoint and in the firewall's input rule. See modules/options.nix.
+    ${config.infra.botNetwork} = [
+      "--subnet=${config.infra.botSubnet}"
+      "--gateway=${config.infra.botGateway}"
+    ];
+  };
 in
 {
   imports = [
@@ -41,6 +62,7 @@ in
     ./mailserver.nix
     ./minecraft.nix
     ./navidrome.nix
+    ./serenity-bot.nix
     ./tempo.nix
   ];
 
@@ -62,34 +84,45 @@ in
     };
   };
 
-  systemd.services = {
-    # Every container that talks to caddy joins this network, and nothing
-    # else creates it. compose declared it `external: true` and
-    # docker-services.sh made it; here it is a unit the containers require,
+  systemd.services =
+    # Nothing else creates these networks. compose declared `external: true` and
+    # docker-services.sh made them; here each is a unit the containers require,
     # so a container can never start onto a network that does not exist yet.
-    "docker-network-${net}" = {
-      description = "Create the ${net} docker network";
-      wantedBy = [ "multi-user.target" ];
-      after = [
-        "docker.service"
-        "docker.socket"
-      ];
-      requires = [ "docker.service" ];
-      path = [ config.virtualisation.docker.package ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-      };
-      script = ''
-        docker network inspect ${net} >/dev/null 2>&1 \
-          || docker network create ${net}
-      '';
-    };
-  }
-  // lib.mapAttrs' (
-    name: container:
-    lib.nameValuePair "docker-${name}" (
-      {
+    lib.mapAttrs' (
+      net: createArgs:
+      lib.nameValuePair "docker-network-${net}" {
+        description = "Create the ${net} docker network";
+        wantedBy = [ "multi-user.target" ];
+        after = [
+          "docker.service"
+          "docker.socket"
+        ];
+        requires = [ "docker.service" ];
+        path = [ config.virtualisation.docker.package ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        # Create-if-missing, so this is a no-op on every boot after the first.
+        # An existing network is NOT reconciled against createArgs — changing a
+        # pinned subnet means removing the network by hand, which is deliberate:
+        # silently recreating it would detach every running container on it.
+        script = ''
+          docker network inspect ${net} >/dev/null 2>&1 \
+            || docker network create ${lib.escapeShellArgs createArgs} ${net}
+        '';
+      }
+    ) networks
+    // lib.mapAttrs' (
+      name: container:
+      let
+        # Only the networks THIS module creates. A container declaring some
+        # other network (or none) gets no ordering, rather than a dependency on
+        # a unit that does not exist.
+        joined = lib.intersectLists (lib.attrNames networks) container.networks;
+        units = map (net: "docker-network-${net}.service") joined;
+      in
+      lib.nameValuePair "docker-${name}" {
         serviceConfig = {
           # The module defaults to on-failure, which leaves a container that
           # exited 0 stopped until someone notices. compose's
@@ -97,11 +130,8 @@ in
           Restart = lib.mkForce "always";
           RestartSec = 5;
         };
+        after = units;
+        requires = units;
       }
-      // lib.optionalAttrs (lib.elem net container.networks) {
-        after = [ "docker-network-${net}.service" ];
-        requires = [ "docker-network-${net}.service" ];
-      }
-    )
-  ) cfg.containers;
+    ) cfg.containers;
 }
