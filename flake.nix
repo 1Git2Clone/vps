@@ -108,30 +108,36 @@
           # short enough that a hung activation is not an outage.
           confirmTimeout = 120;
 
-          # 35 minutes, and it is the serenity-bot image build that needs it.
+          # 15 minutes, raised from 300s for the serenity-bot image build.
           #
           # That build runs INSIDE activation: serenity-bot-image.service is a
           # Type=oneshot wanted by multi-user.target, so switch-to-configuration
-          # starts it and blocks on a Rust release build of serenity + sqlx +
-          # llm. On this shared vCPU that is tens of minutes, and upstream's
-          # Dockerfile has no cargo-chef layer — it does `COPY . .` then
-          # `cargo build`, so EVERY rev bump invalidates the whole build rather
-          # than just the first one. At the old 300s this deploy did not fail
-          # halfway: it hit the timeout and auto-rolled back with the build
-          # killed underneath it.
+          # starts it and blocks on a Rust release build. Upstream's Dockerfile
+          # has no cargo-chef layer — `COPY . .` then `cargo build` — so EVERY
+          # rev bump invalidates the whole build, not just the first one.
+          #
+          # MEASURED on this host, 2026-09-04, cold cache including the
+          # rust:1.94-bullseye and debian:bullseye-slim pulls: 3m28s
+          # (cargo itself 3m03s). 900s is ~4x that.
+          #
+          # An earlier version of this comment guessed "tens of minutes" and set
+          # 2100s. That was wrong by an order of magnitude, and the guess is why
+          # the number is now written down with a date next to it: 300s would
+          # have very nearly worked, at about 17% headroom, which is too thin
+          # for a slower network or a loaded box but nowhere near needing 35
+          # minutes. Re-measure rather than re-guess if the build grows.
           #
           # Deliberately LONGER than the build unit's own TimeoutStartSec
-          # (30min, in modules/containers/serenity-bot.nix). The unit therefore
-          # gives up first, and a build overrun reads as
+          # (10min, in modules/containers/serenity-bot.nix). The unit therefore
+          # gives up first, and an overrun reads as
           # "serenity-bot-image.service: Start operation timed out" instead of
           # an unexplained rollback. Keep that ordering if either number moves.
           #
-          # This weakens the "a hung activation is not an outage" property for
-          # every other deploy, which is the real cost. The durable fix is to
-          # build the image off-box — same architecture, so it is a native build
-          # here and a pushed closure there, not a cross-compile — and ship it
-          # as an imageFile so activation only does `docker load`.
-          activationTimeout = 2100;
+          # The cost is still borne by every deploy, so the durable fix stands:
+          # build the image off-box — same architecture, so a native build here
+          # and a pushed closure there, not a cross-compile — and ship it as an
+          # imageFile so activation only does `docker load`.
+          activationTimeout = 900;
         };
       };
 
