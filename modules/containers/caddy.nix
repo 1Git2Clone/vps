@@ -22,6 +22,46 @@ let
   # Same number for the uid and the gid, from modules/ids.nix.
   id = toString config.infra.serviceId.caddy;
 
+  # Stock caddy has no rate limiting, so this is a caddy built with the
+  # caddy-ratelimit module compiled in — the ONLY departure from the official
+  # image. Version tracks nixpkgs' caddy, which is 2.11.4, the same tag the
+  # official image was pinned to, so nothing about caddy's own behaviour moves.
+  #
+  # withPlugins runs xcaddy and vendors the module's Go deps; `hash` is the
+  # fixed-output hash of that vendor tree. Bump the plugin or caddy and the
+  # hash changes — set it to lib.fakeHash, build once, and copy the value the
+  # error prints.
+  caddyWithRateLimit = pkgs.caddy.withPlugins {
+    plugins = [ "github.com/mholt/caddy-ratelimit@v0.1.0" ];
+    hash = "sha256-u/cMyier+OMIyNnr8QbodVn+lgK35H82lGn6N8k+g+A=";
+  };
+
+  # A minimal image around that binary, matching the two things the official
+  # image does that caddy depends on: XDG_*_HOME point at the writable tmpfs
+  # mounts (a read-only rootfs otherwise sends caddy to $HOME/.local and it
+  # exits), and the same entrypoint/args. cacert is for outbound TLS trust —
+  # unused today (acme is external, upstreams are plaintext) but cheap
+  # insurance against a future directive that dials out.
+  caddyImage = pkgs.dockerTools.buildLayeredImage {
+    name = "caddy-ratelimit";
+    tag = pkgs.caddy.version;
+    contents = [ pkgs.cacert ];
+    config = {
+      Entrypoint = [ "${caddyWithRateLimit}/bin/caddy" ];
+      Cmd = [
+        "run"
+        "--config"
+        "/etc/caddy/Caddyfile"
+        "--adapter"
+        "caddyfile"
+      ];
+      Env = [
+        "XDG_CONFIG_HOME=/config"
+        "XDG_DATA_HOME=/data"
+      ];
+    };
+  };
+
   # The certificate directory as caddy sees it. NixOS names the private key
   # key.pem, NOT privkey.pem as certbot did — pointing at the wrong name here
   # fails the whole config load, so it is at least loud.
@@ -60,8 +100,28 @@ let
         user = "{$SEARXNG_USER}";
         hash = "{$SEARXNG_PASSWORD_HASH}";
       };
+
+      # Caps repeated hits per client IP, returning 429 BEFORE basic_auth runs
+      # its bcrypt (see the global `order` below) — so a password flood cannot
+      # turn cost-14 verifications into CPU exhaustion. In-process: a misconfig
+      # throttles requests, it cannot take the box down the way the
+      # forward-chain fail2ban jail did.
+      #
+      # events/window is a KNOB, not a law. It counts EVERY request to the
+      # site, and image_proxy means one results page pulls many thumbnails
+      # through caddy, so this has to sit well above a human's page-load burst
+      # while still being far under a flood. Caddy caches a successful
+      # verification, so a logged-in user rarely re-pays bcrypt anyway; the
+      # thing being limited is mostly the attacker who never authenticates.
+      # Tune against real 429s in the access log if browsing ever trips it.
+      rateLimit = {
+        events = 120;
+        window = "1m";
+      };
     }
   ];
+
+  anyRateLimit = lib.any (s: s ? rateLimit) sites;
 
   # Tabs and this exact shape are what `caddy fmt` produces, so `caddy validate`
   # on the generated file is clean rather than warning about formatting every
@@ -74,6 +134,16 @@ let
         "\t# Certificates come from security.acme on the host."
         "\t# See the `tls` directive on each site below."
         "\t admin off"
+      ]
+      # rate_limit is an ordered HTTP handler from a plugin; caddy has no
+      # default position for it, so it must be told to run before basic_auth or
+      # the 429 would come only after the bcrypt it exists to save. Emitted only
+      # when a site actually uses it, so a build without the plugin still
+      # validates.
+      ++ lib.optionals anyRateLimit [
+        "\torder rate_limit before basic_auth"
+      ]
+      ++ [
         "}"
       ]
       ++ lib.concatMap (
@@ -82,6 +152,18 @@ let
           ""
           "${site.host} {"
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
+        ]
+        # Zone keyed on {remote_host} — the client IP — so one address's flood
+        # cannot exhaust the budget for everyone. The zone name is the host, so
+        # two rate-limited sites keep separate counters.
+        ++ lib.optionals (site ? rateLimit) [
+          "\trate_limit {"
+          "\t\tzone ${site.host} {"
+          "\t\t\tkey {remote_host}"
+          "\t\t\tevents ${toString site.rateLimit.events}"
+          "\t\t\twindow ${site.rateLimit.window}"
+          "\t\t}"
+          "\t}"
         ]
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
@@ -111,7 +193,10 @@ in
   '';
 
   virtualisation.oci-containers.containers.caddy = {
-    image = "caddy:2.11.4-alpine";
+    # Built locally rather than pulled — caddy 2.11.4 plus the rate-limit
+    # module. imageFile loads the tarball; image just names what it loaded.
+    image = "caddy-ratelimit:${pkgs.caddy.version}";
+    imageFile = caddyImage;
 
     environmentFiles = [ config.sops.templates."caddy.env".path ];
 
