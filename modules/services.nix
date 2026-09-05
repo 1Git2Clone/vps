@@ -37,6 +37,12 @@
         "127.0.0.1/8"
         "::1"
         "100.64.0.0/10" # tailscale CGNAT
+        # Docker's address pools. Never an internet source, so excluding them
+        # costs nothing — and it matters for the caddy-auth jail: traffic that
+        # reaches a container through docker-proxy rather than DNAT (hairpin
+        # from the host, for one) is logged with a bridge gateway as its
+        # remote_ip, and banning a gateway would cut caddy off for everyone.
+        "172.16.0.0/12"
       ];
 
       jails = {
@@ -118,6 +124,59 @@
             maxretry = 3;
             findtime = "15m";
             bantime = "24h";
+          };
+        };
+
+        # search.<domain> is the one public site behind caddy basic_auth, and
+        # caddy has no rate limiting of its own. Every wrong password costs a
+        # full bcrypt cost-14 verification — the same cost factor that makes
+        # the hash useless to crack offline makes each online guess ~1s of CPU
+        # for THIS box, so a few dozen requests a second from one address is a
+        # denial of service for every site caddy fronts, before it is a
+        # credential risk. This jail is what caps that.
+        #
+        # Same forward-chain arrangement as forgejo-ssh: 80/443 are published
+        # container ports, so a ban has to land where forwarded traffic goes.
+        # "tcp, udp" because caddy serves HTTP/3 on udp/443 too, and a tcp-only
+        # ban would leave QUIC as the way around it.
+        #
+        # maxretry 5, not 3: a browser's FIRST request to a basic_auth site is
+        # always a 401 (that is how it learns to prompt), so every fresh
+        # session costs one legitimate hit, and a typo or two on the prompt
+        # must not ban the person who owns the box.
+        #
+        # Verify, never assume:
+        #   fail2ban-regex systemd-journal \
+        #     /etc/fail2ban/filter.d/caddy-auth.conf \
+        #     --journalmatch CONTAINER_TAG=caddy
+        caddy-auth = {
+          enabled = true;
+          filter.Definition =
+            let
+              # The regex has to name the host: `log` is enabled only on the
+              # search site today, but a 401 caddy relays from forgejo would be
+              # a legitimate git-credential exchange, and this is what keeps
+              # that from ever counting if someone turns on logging for git.
+              host = "search\\.${lib.escapeRegex config.infra.domain}(?::\\d+)?";
+            in
+            {
+              _prefix = "^(?:\\S+ )*\\S+\\[\\d+\\]:\\s+";
+              # One caddy access-log line is one JSON object. remote_ip is the
+              # TCP peer — not client_ip, which honours X-Forwarded-For and is
+              # attacker-controlled without trusted_proxies configured.
+              failregex = "%(_prefix)s\\{.*\"remote_ip\":\"<HOST>\".*\"host\":\"${host}\".*\"status\":401[,}]";
+              ignoreregex = "";
+            };
+          settings = {
+            port = "80,443";
+            backend = "systemd";
+            journalmatch = "CONTAINER_TAG=caddy";
+
+            action = "nftables-allports[name=caddy-auth, protocol=\"tcp, udp\", chain=\"f2b-forward\", chain_hook=\"forward\"]";
+
+            maxretry = 5;
+            findtime = "10m";
+            bantime = "1h";
           };
         };
       };
