@@ -44,6 +44,23 @@ let
       host = "status.${domain}";
       upstream = "kuma:3001";
     }
+    {
+      host = "search.${domain}";
+      upstream = "searxng:8080";
+
+      # searxng has no accounts of its own, so this is the ONLY thing standing
+      # between the instance and the open internet — see
+      # modules/containers/searxng.nix.
+      #
+      # `{$VAR}` is caddy's own environment substitution, done when it loads
+      # this file. The values are deliberately not Nix strings: this Caddyfile
+      # becomes a world-readable store path, and a bcrypt hash in the store is
+      # a bcrypt hash anyone with shell on the box can start cracking.
+      basicAuth = {
+        user = "{$SEARXNG_USER}";
+        hash = "{$SEARXNG_PASSWORD_HASH}";
+      };
+    }
   ];
 
   # Tabs and this exact shape are what `caddy fmt` produces, so `caddy validate`
@@ -59,20 +76,44 @@ let
         "\t admin off"
         "}"
       ]
-      ++ lib.concatMap (site: [
-        ""
-        "${site.host} {"
-        "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
-        "\treverse_proxy ${site.upstream}"
-        "}"
-      ]) sites
+      ++ lib.concatMap (
+        site:
+        [
+          ""
+          "${site.host} {"
+          "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
+        ]
+        # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
+        # spelling is a hard config-load error rather than a warning.
+        ++ lib.optionals (site ? basicAuth) [
+          "\tbasic_auth {"
+          "\t\t${site.basicAuth.user} ${site.basicAuth.hash}"
+          "\t}"
+        ]
+        ++ [
+          "\treverse_proxy ${site.upstream}"
+          "}"
+        ]
+      ) sites
     )
     + "\n"
   );
 in
 {
+  # The credential for the basic_auth site above. An environment file rather
+  # than a mounted one on purpose: docker reads --env-file at container START
+  # and copies the values in, so it resolves the sops generation symlink each
+  # time. A *mounted* template would be resolved once and then pinned to a
+  # stale inode — the problem dozzle-users.service exists to work around.
+  sops.templates."caddy.env".content = ''
+    SEARXNG_USER=${config.sops.placeholder.searxng_admin_user}
+    SEARXNG_PASSWORD_HASH=${config.sops.placeholder.searxng_admin_password_hash}
+  '';
+
   virtualisation.oci-containers.containers.caddy = {
     image = "caddy:2.11.4-alpine";
+
+    environmentFiles = [ config.sops.templates."caddy.env".path ];
 
     ports = [
       "80:80"

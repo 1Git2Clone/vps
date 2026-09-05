@@ -77,6 +77,23 @@
         key = "kuma/healthcheck_url";
       };
 
+      # === SearXNG ===
+      # Signs session cookies. Upstream's default is the literal string
+      # "ultrasecretkey", so an unset one is not an empty key — it is a
+      # published key.
+      searxng_secret_key = {
+        key = "searxng/secret_key";
+      };
+      # Read by CADDY, not by searxng: the service has no accounts of its own,
+      # so basic_auth on the site is the entire access control. See
+      # modules/containers/caddy.nix.
+      searxng_admin_user = {
+        key = "searxng/admin_user";
+      };
+      searxng_admin_password_hash = {
+        key = "searxng/admin_password_hash";
+      };
+
       # === Minecraft ===
       minecraft_rcon_password = {
         key = "minecraft/rcon_password";

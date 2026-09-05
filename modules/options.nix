@@ -29,6 +29,7 @@
         "mail"
         "music"
         "status"
+        "search"
       ];
       description = ''
         Subdomains carried as SANs on the apex certificate. Order is
