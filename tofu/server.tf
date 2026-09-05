@@ -6,12 +6,11 @@
 # repartition with disko and install this flake's closure over it. The bootstrap
 # image does not survive.
 #
-# Adopting the EXISTING server instead of creating a second one:
-#   tofu import hcloud_primary_ip.main <primary-ip-id>
-#   tofu import hcloud_server.vps 137766340
-#   tofu import hcloud_ssh_key.main <ssh-key-id>
-# then `tofu plan` and reconcile. Do NOT run apply against an unimported server
-# — tofu would build a new one and the DNS records would follow it.
+# Adopting the EXISTING server instead of creating a second one is not done by
+# hand: imports.tf carries an import block for every live resource, so a plan
+# from empty state imports rather than creates. Do NOT run apply against an
+# unimported server — tofu would build a new one and the DNS records would
+# follow it — and read imports.tf for what a correct recovery plan looks like.
 
 resource "hcloud_ssh_key" "main" {
   name = var.ssh_key_name
@@ -96,7 +95,19 @@ resource "hcloud_server" "vps" {
   lifecycle {
     # Hetzner injects ssh_keys only at creation. Without this, rotating the
     # install key would destroy and recreate the machine.
-    ignore_changes = [ssh_keys, image]
+    #
+    # public_net is ignored for a different reason. The provider's importer and
+    # its Read both leave public_net OUT of state, so any plan made after an
+    # import — a fresh clone, a lost state file, the import blocks in
+    # imports.tf — shows the block as an ADDITION. On this resource that is
+    # not a metadata edit: the provider detaches the current primary IPs before
+    # attaching what the config names. On 2026-09-05 that detached
+    # 167.233.24.58 from the running mail server. ignore_changes does not apply
+    # at creation, so a new server is still built with these IPs attached; it
+    # only stops "state does not know about the block" from ever becoming an
+    # action. The IPs themselves are their own resources, with their own
+    # protection, and are where an attachment change should be made anyway.
+    ignore_changes = [ssh_keys, image, public_net]
   }
 }
 

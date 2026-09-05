@@ -362,21 +362,35 @@ Three things worth knowing before the first apply:
   it, so it has to outlive the server: rebuilding the machine then keeps the
   address and DNS never moves. `tofu destroy` will refuse on it, by design.
 
-### Adopting the existing server
+### State recovery — a fresh clone, or a lost state file
 
-`apply` against an unimported server builds a *second* one and moves DNS to it.
-Import first:
+The state file is gitignored, so a clone has none. `apply` from no state builds a
+*second* server and moves DNS to it. Nothing is typed by hand to prevent that:
+`tofu/imports.tf` carries an `import` block for every live resource, inert while
+state already tracks them, active when it does not.
 
 ```sh
-tofu -chdir=tofu import hcloud_primary_ip.main <primary-ip-id>
-tofu -chdir=tofu import hcloud_server.vps 137766340
-tofu -chdir=tofu import hcloud_ssh_key.main <ssh-key-id>
-tofu -chdir=tofu plan       # reconcile before applying anything
+tofu -chdir=tofu init
+tofu -chdir=tofu plan
 ```
 
-The Cloudflare records need importing too, or the provider will try to create
-records that already exist — v5 removed `allow_overwrite`, so there is no
-quiet-adoption path any more.
+A correct recovery plan reads **exactly**
+
+```
+Plan: 20 to import, 0 to add, 1 to change, 0 to destroy.
+```
+
+where the one change is `hcloud_server.vps` gaining three provider-side booleans
+(`ignore_remote_firewall_ids`, `keep_disk`, `shutdown_before_deletion`) that the
+importer never sets and the provider's Update never sends — applying them is a
+state write and one GET. Anything else in that plan means stop and read
+`tofu/imports.tf`.
+
+**A non-zero plan against infrastructure you know is unchanged means the state
+is wrong, not the infrastructure.** Never resolve an unexpected diff with a plain
+`apply`. On 2026-09-05 a plan after import showed `public_net` as an addition on
+the server; applying it detached the mail IP from a running host. `server.tf`
+now ignores that block for exactly this reason.
 
 ## Not in this repo
 
