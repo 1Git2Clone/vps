@@ -37,14 +37,14 @@ nothing to remember to run.
 
 | Service | Exposure |
 |---|---|
-| `caddy` | 80/443 (+443/udp); TLS terminator for the five sites below |
+| `caddy` | 80/443 (+443/udp); TLS terminator for the five sites below. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
 | `cloudflared` | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly |
 | `mailserver` | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host |
 | `webmail` | roundcube, proxied at `mail.` |
 | `forgejo` | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.` |
 | `navidrome` | `127.0.0.1:4533`, reached only through caddy at `music.` |
 | `kuma` | proxy network only, reached at `status.` |
-| `searxng` | proxy network only, reached at `search.`; the only public site behind `basic_auth` |
+| `searxng` | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt |
 | `dozzle` | 8080, tailnet only |
 | `grafana` | host networking, :3000, tailnet only |
 | `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
@@ -133,7 +133,12 @@ Not a 1:1 translation. The deliberate departures:
   prompted to create one and the route then closes. Create it immediately after
   the first deploy. **searxng is the other exception, for the opposite reason**:
   it has no concept of a user at all, so there is nothing to seed — caddy's
-  `basic_auth` is the entire access control and the hash lives in sops.
+  `basic_auth` is the entire access control and the hash lives in sops. Because
+  `basic_auth` runs a cost-14 bcrypt on every request, caddy's `rate_limit`
+  (a compiled-in module) sits in front of it and returns 429 before the hash
+  runs, so a password flood cannot become CPU exhaustion. It is in-process on
+  purpose — see the fail2ban row in [ARCHITECTURE.md](ARCHITECTURE.md#12-failure-modes-and-recovery)
+  for the forward-chain ban whose blast radius it avoids.
 
   Generate that hash with `mkpasswd`, which is already on the host:
 
@@ -259,6 +264,7 @@ Three mitigations, in order of effort:
 
 | Doc | For |
 |---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the box fits together and why: trust boundaries, the two firewalls, TLS/DNS/mail chain, data flow, the deploy and state model, and the failure modes that shaped it |
 | [docs/deploying.md](docs/deploying.md) | The three paths: redeploy, first deploy, bare metal — and the settings that make a bare-metal install actually automatic |
 | [docs/migration.md](docs/migration.md) | Moving this stack from the old Ubuntu/Ansible box: data mapping, ordering, the primary-IP cutover, rollback |
 
