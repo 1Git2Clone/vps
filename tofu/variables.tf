@@ -98,9 +98,14 @@ variable "legacy_server_ids" {
     applied_to list, so leaving the old server out of it does not "not manage"
     it, it DETACHES the firewall from a live mail server. Empty this only once
     the old box is retired.
+
+    EMPTY NOW. The CX33 (137766340) was deleted after the migration settled —
+    `GET /v1/servers/137766340` is a 404 — and an id in this list is not
+    inert once the server is gone: the attachment sends the whole applied_to
+    list to the API, so a dead id fails the apply rather than being ignored.
   EOT
   type        = list(number)
-  default     = [137766340]
+  default     = []
 }
 
 variable "dkim_cloudflare_key" {
