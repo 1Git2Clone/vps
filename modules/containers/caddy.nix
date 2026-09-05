@@ -60,6 +60,12 @@ let
         user = "{$SEARXNG_USER}";
         hash = "{$SEARXNG_PASSWORD_HASH}";
       };
+
+      # Access log for this site only, so fail2ban can see the 401s. Every
+      # wrong password costs a full bcrypt cost-14 verification on this box,
+      # so unthrottled guessing is a CPU denial of service before it is a
+      # credential risk — see the caddy-auth jail in modules/services.nix.
+      accessLog = true;
     }
   ];
 
@@ -82,6 +88,15 @@ let
           ""
           "${site.host} {"
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
+        ]
+        # JSON explicitly: caddy picks `console` when stderr is a terminal and
+        # `json` when it is not, and the fail2ban filter matches the JSON keys.
+        # Pinning it means a debugging session with a tty cannot change what
+        # the jail sees.
+        ++ lib.optionals (site.accessLog or false) [
+          "\tlog {"
+          "\t\tformat json"
+          "\t}"
         ]
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
@@ -131,6 +146,13 @@ in
     networks = [ proxyNetwork ];
 
     extraOptions = [
+      # A fixed journal identifier, for the same reason forgejo has one: the
+      # caddy-auth jail's journalmatch is CONTAINER_TAG=caddy, and without the
+      # tag the identifier is the container ID, which changes on every recreate
+      # and would leave the jail matching nothing without saying so.
+      "--log-opt"
+      "tag=caddy"
+
       # Not root. The certificate directory is group-owned by `caddy` (see
       # modules/acme.nix), so this account reads exactly those files and
       # nothing else on the host.
