@@ -37,13 +37,14 @@ nothing to remember to run.
 
 | Service | Exposure |
 |---|---|
-| `caddy` | 80/443 (+443/udp); TLS terminator for the four sites below |
+| `caddy` | 80/443 (+443/udp); TLS terminator for the five sites below |
 | `cloudflared` | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly |
 | `mailserver` | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host |
 | `webmail` | roundcube, proxied at `mail.` |
 | `forgejo` | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.` |
 | `navidrome` | `127.0.0.1:4533`, reached only through caddy at `music.` |
 | `kuma` | proxy network only, reached at `status.` |
+| `searxng` | proxy network only, reached at `search.`; the only public site behind `basic_auth` |
 | `dozzle` | 8080, tailnet only |
 | `grafana` | host networking, :3000, tailnet only |
 | `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
@@ -130,7 +131,22 @@ Not a 1:1 translation. The deliberate departures:
   password. **uptime-kuma is the exception, unavoidably**: it has no environment
   variable or config file that seeds an admin account — the first visitor is
   prompted to create one and the route then closes. Create it immediately after
-  the first deploy.
+  the first deploy. **searxng is the other exception, for the opposite reason**:
+  it has no concept of a user at all, so there is nothing to seed — caddy's
+  `basic_auth` is the entire access control and the hash lives in sops.
+
+  Generate that hash with `mkpasswd`, which is already on the host:
+
+  ```sh
+  mkpasswd -m bcrypt -R 14
+  ```
+
+  **`-R 14` is not optional.** mkpasswd defaults to cost 05 and caddy's own
+  `hash-password` uses 14, so the default silently produces a hash 512x cheaper
+  to attack than the one caddy would have made. The `$2b$` prefix mkpasswd emits
+  is fine — caddy verifies through golang.org/x/crypto/bcrypt, which records the
+  minor version without validating it, so `$2a$`, `$2b$` and `$2y$` are
+  interchangeable.
 
 - **Not ported: `camofox` and `serenity-bot`.** They are host systemd units for
   an npm project and a Rust binary checked out under `/home`, not container
@@ -165,6 +181,8 @@ Beyond what the Ansible vault held, this port needs:
 | `kuma/healthcheck_url` | the out-of-band status-page probe; a separate check from the backup one because they fail for different reasons |
 | `minecraft/rcon_password` | RCON is loopback-only but it is still a remote console |
 | `serenity/bot_token`, `serenity/ai_api_key` | the Discord bot's gateway token and its DeepSeek key |
+| `searxng/secret_key` | signs searxng's session cookies; upstream's default is the literal `ultrasecretkey` |
+| `searxng/admin_user`, `searxng/admin_password_hash` | searxng has no accounts, so caddy's `basic_auth` is the whole access control. bcrypt, same shape as dozzle's |
 | `serenity/db_password` | one password, two consumers: `ALTER ROLE` in postgres and the pgbouncer userlist, both rendered from this key |
 
 `acme_email` is **gone** from the secret set: `security.acme` needs it at

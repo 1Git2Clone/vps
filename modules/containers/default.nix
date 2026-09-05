@@ -62,6 +62,7 @@ in
     ./mailserver.nix
     ./minecraft.nix
     ./navidrome.nix
+    ./searxng.nix
     ./serenity-bot.nix
     ./tempo.nix
   ];
