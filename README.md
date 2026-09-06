@@ -42,6 +42,7 @@ nothing to remember to run.
 | `mailserver` | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host |
 | `webmail` | roundcube, proxied at `mail.` |
 | `forgejo` | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.` |
+| `forgejo-runner` | **nothing published**; polls forgejo for Actions jobs and asks the host's docker for a container per job |
 | `navidrome` | `127.0.0.1:4533`, reached only through caddy at `music.` |
 | `kuma` | proxy network only, reached at `status.` |
 | `searxng` | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt |
@@ -182,6 +183,7 @@ Beyond what the Ansible vault held, this port needs:
 
 | Key | Why |
 |---|---|
+| `forgejo/runner_token` | one-time Actions runner registration token; the runner trades it for its own secret on first start |
 | `grafana/admin_user`, `grafana/admin_password` | anonymous Admin is off, so this is the only way in |
 | `kuma/healthcheck_url` | the out-of-band status-page probe; a separate check from the backup one because they fail for different reasons |
 | `minecraft/rcon_password` | RCON is loopback-only but it is still a remote console |
@@ -193,6 +195,92 @@ Beyond what the Ansible vault held, this port needs:
 `acme_email` is **gone** from the secret set: `security.acme` needs it at
 evaluation time and a registration contact is not a credential. It is
 `infra.acmeEmail` in `modules/options.nix`.
+
+## Actions and Pages
+
+`FORGEJO__actions__ENABLED` was true from the start and nothing ran the jobs.
+`modules/containers/forgejo-runner.nix` is the runner half, and
+`pages.<domain>` is a static site caddy serves out of one docker volume that
+workflows write into.
+
+The URL layout is the directory layout, with no rewriting anywhere:
+
+```
+/srv/pages/<owner>/<repo>/index.html   →   https://pages.hu-tao.dev/<owner>/<repo>/
+```
+
+A repo publishes by mounting that volume in its job and writing into
+`$GITHUB_REPOSITORY`, which is already `<owner>/<repo>`:
+
+```yaml
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    container:
+      image: node:22-bookworm
+      volumes:
+        - pages_data:/pages
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          dest="/pages/$GITHUB_REPOSITORY"
+          rm -rf "$dest" && mkdir -p "$dest"
+          cp public/index.html "$dest/"
+```
+
+**The runner mounts the host's docker socket**, which is root on this box. What
+makes that acceptable is written out at the top of the module: registration is
+disabled on the instance, `container.valid_volumes` is an allow-list holding
+only `pages_data`, and job containers are unprivileged. The socket is there
+rather than a docker-in-docker sidecar because dind has its own storage — a
+job inside it could not write a volume caddy can read.
+
+Two manual steps, both once:
+
+1. **Create the runner record** and copy its two values: Site Administration →
+   Actions → Runners → **Create new runner**. The uuid goes in
+   `modules/containers/forgejo-runner.nix` as `runnerUuid`, the secret goes in
+   `forgejo/runner_token`:
+
+   ```sh
+   nix develop -c sops secrets.yaml     # forgejo: runner_token: <token>
+   ```
+
+   Do this **before** the deploy: `sops-install-secrets` validates the manifest
+   at *build* time, so a missing key fails `nix build`, not just activation.
+
+2. **Point `pages.<domain>` at the box** — an unproxied A record to the same
+   address as `git.`, like the other seven.
+
+   The A records come from `var.subdomains` in
+   `tofu/modules/cloudflare-dns/variables.tf`, which drives
+   `cloudflare_dns_record.a`. `pages` is in that list, so the record is tofu's.
+
+   A correct plan for it reads **1 to add, 1 to change, 0 to destroy**, and the
+   change is `hcloud_server.vps` in place, setting `ignore_remote_firewall_ids`,
+   `keep_disk` and `shutdown_before_deletion` — all three absent from state
+   because the importer never wrote them, none of them an API call against the
+   running machine. What makes the plan wrong is a `public_net` block appearing
+   anywhere in it: that is the diff that detached 167.233.24.58 on 2026-09-05.
+   See the lifecycle comment in `tofu/server.tf`.
+
+   The certificate does not wait for the record: `pages` is in
+   `infra.certSubdomains` and the challenge is DNS-01, so the SAN is issued
+   whether or not the name resolves.
+
+After the deploy, the runner appears under Site Administration → Actions →
+Runners — which is the whole check, and it needs no shell on the box either.
+
+The identity is declared, so there is no registration step and no `.runner`
+state file. A wrong uuid or secret shows up as an authentication error in
+`journalctl -u docker-forgejo-runner` and nowhere else — it cannot fail a
+deploy. If a `.runner` file survives from an older, registered setup, the
+daemon refuses to start at all: "server connection conflict … only one config
+file can provide server connections". Empty `forgejo_runner_data` in that
+case.
+
+If the runner comes up and no job ever starts, the usual cause is the job
+image failing to pull, which shows in the same journal.
 
 ## Deploying
 

@@ -28,7 +28,7 @@ variable "subdomains" {
   # (_minecraft._tcp.<host>), which is the supported way to hide a port from
   # players. That is exactly the trick forgejo could not use, which is why it
   # owns port 22 and this host's sshd sits on 2222.
-  default = ["mail", "git", "minecraft", "mc", "music", "status", "smtp", "search"]
+  default = ["mail", "git", "minecraft", "mc", "music", "status", "smtp", "search", "pages"]
 }
 
 variable "dkim_cloudflare_key" {

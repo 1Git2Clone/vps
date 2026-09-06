@@ -30,12 +30,26 @@
         "music"
         "status"
         "search"
+        "pages"
       ];
       description = ''
         Subdomains carried as SANs on the apex certificate. Order is
         irrelevant here, unlike certbot: the certificate is named
         `infra.domain` explicitly, so reordering this list cannot silently
         issue a second lineage under a new name.
+      '';
+    };
+
+    pagesVolume = lib.mkOption {
+      type = lib.types.str;
+      default = "pages_data";
+      description = ''
+        Docker volume holding the static sites served at `pages.<domain>`.
+        Named here because three places must agree on it: caddy mounts it
+        read-only, the Actions runner allows it as the ONE volume a workflow
+        may mount, and a workflow names it in `jobs.<id>.container.volumes`.
+        Being a docker volume also means restic already backs it up, since
+        `services.restic` takes /var/lib/docker/volumes wholesale.
       '';
     };
 

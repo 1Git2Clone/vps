@@ -17,7 +17,7 @@
 }:
 
 let
-  inherit (config.infra) domain proxyNetwork;
+  inherit (config.infra) domain pagesVolume proxyNetwork;
 
   # Same number for the uid and the gid, from modules/ids.nix.
   id = toString config.infra.serviceId.caddy;
@@ -67,6 +67,9 @@ let
   # fails the whole config load, so it is at least loud.
   certDir = "/etc/caddy/certs";
 
+  # Where the pages volume is mounted inside this container.
+  pagesRoot = "/srv/pages";
+
   sites = [
     {
       host = "music.${domain}";
@@ -83,6 +86,19 @@ let
     {
       host = "status.${domain}";
       upstream = "kuma:3001";
+    }
+    {
+      host = "pages.${domain}";
+
+      # A document root rather than an upstream: the only site here caddy
+      # serves itself. Everything under it is written by an Actions workflow
+      # (see modules/containers/forgejo-runner.nix) into the ONE volume a
+      # workflow is allowed to mount, and caddy reads it read-only.
+      #
+      # The layout IS the URL: /srv/pages/<owner>/<repo>/index.html answers
+      # pages.<domain>/<owner>/<repo>/. Nothing maps or rewrites, so a page
+      # that 404s is a directory that was never written.
+      root = pagesRoot;
     }
     {
       host = "search.${domain}";
@@ -172,10 +188,18 @@ let
           "\t\t${site.basicAuth.user} ${site.basicAuth.hash}"
           "\t}"
         ]
-        ++ [
-          "\treverse_proxy ${site.upstream}"
-          "}"
-        ]
+        ++ (
+          if site ? root then
+            [
+              "\troot * ${site.root}"
+              # No `browse`: a missing index.html is a 404, not a listing of
+              # whatever else the workflow put there.
+              "\tfile_server"
+            ]
+          else
+            [ "\treverse_proxy ${site.upstream}" ]
+        )
+        ++ [ "}" ]
       ) sites
     )
     + "\n"
@@ -211,6 +235,9 @@ in
     volumes = [
       "${caddyfile}:/etc/caddy/Caddyfile:ro"
       "/var/lib/acme/${domain}:${certDir}:ro"
+      # Read-only, and written only by workflow jobs. Docker creates the volume
+      # empty on first start, so every pages URL 404s until something publishes.
+      "${pagesVolume}:${pagesRoot}:ro"
     ];
 
     networks = [ proxyNetwork ];
