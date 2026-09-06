@@ -57,6 +57,7 @@ in
     ./cloudflared.nix
     ./dozzle.nix
     ./forgejo.nix
+    ./forgejo-runner.nix
     ./grafana.nix
     ./kuma.nix
     ./mailserver.nix

@@ -57,6 +57,22 @@
         key = "dozzle/admin_password_hash";
       };
 
+      # === Forgejo ===
+      # The Actions runner's own secret, from Site Administration -> Actions ->
+      # Runners -> Create new runner, which creates the runner record and shows
+      # its uuid and secret. The uuid is not secret and is in
+      # modules/containers/forgejo-runner.nix; this is the half that is.
+      #
+      # NOT a registration token: `forgejo-runner register` and the .runner file
+      # it writes are the legacy path, and a declared server.connections entry
+      # and a .runner file cannot coexist.
+      #
+      # A missing key here fails sops-install-secrets, which fails the BUILD —
+      # so add the value before the deploy that first imports this module.
+      forgejo_runner_token = {
+        key = "forgejo/runner_token";
+      };
+
       # === Grafana ===
       grafana_admin_user = {
         key = "grafana/admin_user";
