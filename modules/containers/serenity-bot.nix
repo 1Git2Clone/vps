@@ -109,12 +109,12 @@ let
   # Both lines change together. A rev without its matching hash fails the fetch
   # at build time, which is the good failure — the bad one would be a stale hash
   # silently reusing the old source, and fetchgit does not allow that.
-  rev = "1bdde3a63db3d0b56cd07bab1fe82fd38a4e5aed";
+  rev = "4cd0fbfcaa2519f3dbd671cd9bc966148b219bac";
 
   src = pkgs.fetchgit {
     url = "https://github.com/1Git2Clone/serenity-discord-bot";
     inherit rev;
-    hash = "sha256-BH81Uv2njcqLX2GQGsPvpjbnF9zwMpu9DlI4u1tFnbs=";
+    hash = "sha256-oDlTbAj9OWynkNZg3ZkfTA5ZlMqXOvRT0gVOVfoDplU=";
     # build.rs is only a `cargo:rerun-if-changed=migrations`, so nothing in the
     # build reads git metadata.
     leaveDotGit = false;
@@ -125,9 +125,16 @@ let
   # which is what makes systemd recreate them. Same
   # store-path-changes-recreate-the-container trick default.nix relies on for
   # config files.
-  tag = "serenity-discord-bot:${builtins.substring 0 12 rev}";
+  # Build args are part of the identity, not just the rev: the builder unit's
+  # `docker image inspect ${tag}` guard short-circuits on an existing tag, so a
+  # tag keyed on rev alone silently keeps a binary compiled with the OLD
+  # FEATURES. That fails quietly - env vars still update, only the compiled-in
+  # provider does not.
+  tag = "serenity-discord-bot:${builtins.substring 0 12 rev}-${
+    builtins.substring 0 8 (builtins.hashString "sha256" "${features} ${rustflags}")
+  }";
 
-  features = "ai-deepseek opentelemetry tokio_console";
+  features = "ai-openrouter opentelemetry tokio_console";
 
   # MUST be passed explicitly, and it is not obvious why.
   #
@@ -223,7 +230,19 @@ in
             # same way caddy reaches its upstreams.
             REDIS_URL = "redis://serenity-redis:6379";
 
-            AI_MODEL = "deepseek-chat";
+            AI_MODEL = "deepseek/deepseek-v4-flash-0731";
+
+            # Here rather than in the sops env FILE: docker's --env-file takes
+            # everything after `=` literally, so `AI_MAX_TOKENS="1000"` there
+            # reaches the bot as the 6-character string `"1000"` and its
+            # `parse::<u32>()` fails on the leading quote (it then falls back to
+            # 150, which is the cap that produces empty replies). Nix strings in
+            # `environment` become real `-e` values with no literal quotes.
+            #
+            # 1000 is above the ~320-450 reasoning tokens deepseek-v4-flash
+            # spends before emitting content at this prompt size; at 150 it
+            # returned empty 2/2, at 800 it was clean 2/2.
+            AI_MAX_TOKENS = "1000";
 
             RUST_LOG = "warn,serenity_discord_bot=warn,serenity=warn,poise=warn,tokio::task=off";
 
