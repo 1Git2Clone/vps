@@ -445,24 +445,52 @@ never accept. History scanning is a CI step instead.
 
 ## CI
 
-`.github/workflows/ci.yml`, running on the GitHub mirror rather than on a Forgejo
-runner. Forgejo Actions is enabled server-side (`FORGEJO__actions__ENABLED`), but
-a runner would put nix builds and a polling daemon on the box that serves mail.
+Two workflows, one per forge. **Forgejo reads `.forgejo/workflows` and falls
+back to `.github/workflows` only when that directory is absent** — a fallback,
+not a union — so the presence of `.forgejo/workflows/ci.yml` is what keeps
+Forgejo off the GitHub file. Delete it and Forgejo silently starts running a
+workflow written for GitHub, which is how this repo ended up with a red run
+on git.hu-tao.dev.
 
-| Job | What |
+| File | Runs on | Jobs |
+|---|---|---|
+| `.forgejo/workflows/ci.yml` | the VPS runner | one: `check` — the same checks, in a single job |
+| `.github/workflows/ci.yml` | the GitHub mirror | two: `lint` and `evaluate` |
+
+| Check | What |
 |---|---|
-| `lint` | `pre-commit run --all-files`, then gitleaks across the full history |
-| `evaluate` | evaluates both `nixosConfigurations`, then `nix flake check --no-build`, then builds deploy-rs's `deploy-schema` |
+| lint | `pre-commit run --all-files`, then gitleaks across the full history |
+| evaluate | evaluates both `nixosConfigurations`, then `nix flake check --no-build`, then builds deploy-rs's `deploy-schema` |
 
-Evaluation, not a build: it catches what actually breaks this repo — a typo'd
-option, a missing module argument, an infinite recursion — without asking a CI
-runner to realise a multi-gigabyte closure.
+The two differ in exactly two ways, both forced:
+
+- **Job layout.** The runner's `cache:` is off and its `valid_volumes`
+  allow-list has no nix store entry, so nothing survives between runs and every
+  job re-downloads Nix and rebuilds the `.#ci` shell. One job pays that once;
+  the mirror's two jobs pay it twice, which is free on GitHub and is not free
+  here.
+- **How actions are addressed.** A bare `uses: owner/repo` resolves against
+  `[actions] DEFAULT_ACTIONS_URL`, which defaults to `https://data.forgejo.org`
+  — that host mirrors `actions/*` and nothing third-party, so a bare
+  `cachix/install-nix-action` fails with `remote: Not found`. The Forgejo file
+  names the host on each `uses:`. Setting `DEFAULT_ACTIONS_URL` to
+  `https://github.com` instead would fix it instance-wide, at the cost of
+  making every bare `uses:` resolve to whoever holds that name on an
+  open-registration forge.
+
+`permissions:` is a GitHub-only field: Forgejo ignores it with a workflow
+warning, which is why the Forgejo file omits it rather than carrying a line
+that does nothing.
+
+Evaluation, not a build, in both: it catches what actually breaks this repo —
+a typo'd option, a missing module argument, an infinite recursion — without
+asking a CI runner to realise a multi-gigabyte closure.
 
 `--no-build` is load-bearing. deploy-rs's `deploy-activate` check references the
 system closure, so a plain `nix flake check` builds the whole system, and since
 deploy-rs `follows` our nixpkgs its binary is a cache miss and is compiled from
-source — 5+ minutes on *every* run, because a GitHub runner starts with an empty
-nix store each time. `deploy-schema` is built separately: it is the half that
+source — 5+ minutes on *every* run, on both forges, because neither runner
+keeps a nix store between runs. `deploy-schema` is built separately: it is the half that
 validates `deploy.json` and it needs only check-jsonschema.
 
 **The mirror is push-only.** Commit here and let it flow across; anything edited

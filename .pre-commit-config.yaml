@@ -1,10 +1,11 @@
 # ==============================================================================
 # pre-commit — the checks that run before a commit, and again in CI
 # ==============================================================================
-# One definition, two consumers: `pre-commit install` wires these to the local
-# commit hook, and .github/workflows/ci.yml runs the very same file with
+# One definition, three consumers: `pre-commit install` wires these to the local
+# commit hook, and both CI workflows — .forgejo/workflows/ci.yml and
+# .github/workflows/ci.yml — run the very same file with
 # `pre-commit run --all-files`. A check cannot pass locally and fail in CI
-# because of drift between two lists, because there is only one list.
+# because of drift between lists, because there is only one list.
 #
 # The nix tools run through `nix develop .#ci`, NOT from bare $PATH. A bare
 # `language: system` entry resolves whatever happens to be on the PATH of the

@@ -1,0 +1,101 @@
+# ==============================================================================
+# CI — Forgejo
+# ==============================================================================
+# The existence of THIS DIRECTORY is what stops Forgejo running
+# .github/workflows/ci.yml. Forgejo looks for .forgejo/workflows first and only
+# falls back to .github/workflows when it is absent — a fallback, not a union.
+# Before this file existed, the GitHub workflow ran on both forges, and on this
+# one it failed: see the `uses:` note below.
+#
+# So the two files are not duplicates to keep in sync for tidiness. They are one
+# per forge, and deleting this one silently hands Forgejo the GitHub file again.
+#
+# git.hu-tao.dev is the source of truth and GitHub is a push-only mirror, so
+# this is the run that actually gates the repo; the mirror's run is the
+# redundant one. Both exist because the mirror should stand on its own.
+#
+# COST. Every job here runs on the VPS that also serves mail, git and the
+# minecraft server. The runner's `cache:` is disabled and its `valid_volumes`
+# allow-list has no entry for a nix store, so nothing is reused between runs:
+# each one downloads Nix and rebuilds the `.#ci` shell from the binary cache.
+# That is the reason for a single job rather than the two the GitHub file uses
+# — two jobs would pay that cost twice, in parallel, on `capacity: 2`.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Format, lint and evaluate
+    # Declared in modules/containers/forgejo-runner.nix as
+    # `ubuntu-latest:docker://node:22-bookworm`. It must carry node: every
+    # JavaScript action is executed by the node binary inside the job container.
+    runs-on: ubuntu-latest
+    steps:
+      # Fully-qualified on purpose. A bare `uses: owner/repo` resolves against
+      # the server's `[actions] DEFAULT_ACTIONS_URL`, which is
+      # https://data.forgejo.org — that host mirrors `actions/*` but no
+      # third-party namespace, so a bare `cachix/install-nix-action` 404s with
+      #
+      #   remote: Not found.
+      #   fatal: repository 'https://data.forgejo.org/cachix/install-nix-action/' not found
+      #
+      # Naming the host per action fixes it here without pointing the whole
+      # instance at an open-registration forge, where a typo'd action name
+      # resolves to whoever registered it.
+      - uses: https://data.forgejo.org/actions/checkout@v7.0.1
+        with:
+          # gitleaks scans commits; a shallow clone would scan almost nothing.
+          fetch-depth: 0
+
+      - uses: https://github.com/cachix/install-nix-action@v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # The same file the local commit hook uses, so a green CI means a clean
+      # `pre-commit run --all-files` on the developer's machine and vice versa.
+      - name: pre-commit
+        run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
+
+      # The pre-commit hook scans the STAGED diff, which is empty in CI, so the
+      # history scan lives here instead. fetch-depth 0 above is what makes it a
+      # real scan rather than a scan of one commit.
+      - name: gitleaks (full history)
+        run: nix develop .#ci -c gitleaks git --redact --no-banner .
+
+      # Evaluation only — deliberately not a build. This catches the failure
+      # that actually happens in this repo (a module that does not evaluate:
+      # a typo'd option, a missing argument, an infinite recursion) without
+      # asking this box to realise a multi-gigabyte system closure.
+      - name: Evaluate vps-hetzner
+        run: |
+          nix eval --raw \
+            .#nixosConfigurations.vps-hetzner.config.system.build.toplevel.drvPath
+
+      - name: Evaluate vps (local VM variant)
+        run: |
+          nix eval --raw \
+            .#nixosConfigurations.vps.config.system.build.toplevel.drvPath
+
+      # --no-build, and the reason matters: deploy-rs contributes a
+      # `deploy-activate` check that references the whole system closure, so a
+      # plain `nix flake check` builds the entire NixOS system — and because
+      # deploy-rs `follows` our nixpkgs, its binary is a cache miss and gets
+      # compiled from source.
+      - name: nix flake check (evaluate)
+        run: nix flake check --no-build --print-build-logs
+
+      # The half of deployChecks worth actually building: it validates
+      # deploy.json against deploy-rs's schema and pulls in check-jsonschema
+      # alone, no Rust toolchain and no system closure.
+      - name: Validate the deploy schema
+        run: nix build --print-build-logs .#checks.x86_64-linux.deploy-schema
