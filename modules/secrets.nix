@@ -115,6 +115,19 @@
         key = "minecraft/rcon_password";
       };
 
+      # === Navidrome ===
+      # One Last.fm application registration, from
+      # https://www.last.fm/api/account/create. Reaches the container as
+      # ND_LASTFM_APIKEY / ND_LASTFM_SECRET — see
+      # modules/containers/navidrome.nix, which also carries the restartUnits
+      # that make a rotation actually take effect.
+      navidrome_lastfm_api_key = {
+        key = "navidrome/lastfm/api_key";
+      };
+      navidrome_lastfm_secret = {
+        key = "navidrome/lastfm/secret";
+      };
+
       # === Email ===
       email_postmaster = {
         key = "email/postmaster";
