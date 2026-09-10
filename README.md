@@ -389,10 +389,28 @@ and an `aarch64-linux` workstation is the wrong architecture. Deploys work, but
 only if the build happens somewhere else:
 
 ```sh
-deploy --remote-build .#vps            # build on the VPS itself
+deploy -s --remote-build .#vps         # build on the VPS itself
 nixos-rebuild switch --flake .#vps-hetzner \
   --target-host hutao@vps --build-host hutao@vps --use-remote-sudo
 ```
+
+`-s` is not optional here. deploy-rs runs `nix flake check` first, and every
+check in this flake reaches `nixosConfigurations.*.system.build.toplevel`, so
+the check itself is an `x86_64-linux` build:
+
+```
+error: build of '…-10-acme.conf.drv^*' failed: platform mismatch
+       Required system: 'x86_64-linux'   Current system: 'aarch64-darwin'
+```
+
+There is nothing to keep by skipping selectively — `checks.aarch64-darwin`
+exists but both entries depend on the same Linux closure, so none of them
+build here either.
+
+`--remote-build` then evaluates locally (which darwin does fine), copies the
+`.drv` with `nix copy --to ssh-ng://hutao@vps --derivation`, and realises it on
+the box. That copy needs the ssh user to be a trusted nix user; `hutao` is in
+`wheel` and `modules/nix.nix` trusts `@wheel`, so it already is.
 
 The alternative is a Linux remote builder in `/etc/nix/machines` (or
 `nix-darwin`'s `nix.linux-builder`), after which the plain commands above work
