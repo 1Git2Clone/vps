@@ -1,10 +1,16 @@
 # ==============================================================================
 # CI
 # ==============================================================================
-# Runs on GitHub rather than on a Forgejo runner: git.hu-tao.dev is the source
-# of truth and this repo is mirrored to GitHub, so CI costs the VPS nothing —
-# no runner process competing with the mail server for CPU, and no nix store
-# churn on a disk that is already 63% full.
+# The MIRROR's copy. Its twin is .forgejo/workflows/ci.yml, and the split is
+# not cosmetic: Forgejo reads .forgejo/workflows and falls back to
+# .github/workflows only when that directory is absent. So this file runs on
+# GitHub alone — but delete .forgejo/workflows and Forgejo picks THIS file up
+# again, where `permissions:` below is ignored with a warning and a bare
+# `uses: cachix/...` cannot resolve at all.
+#
+# Keep the two in step by intent rather than by copy-paste. They check the same
+# things; they differ in job layout and in how actions are addressed, for
+# reasons written down in the Forgejo one.
 #
 # Because the mirror is push-only, everything here must be committed on the
 # Forgejo side and allowed to flow across. Editing these files on GitHub would
