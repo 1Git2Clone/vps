@@ -364,6 +364,31 @@ nix develop
 
 Or `nix develop -c zsh` if you're on zshell.
 
+### From a Mac
+
+The devShell is built for all four mainstream systems — `x86_64-linux`,
+`aarch64-linux`, `aarch64-darwin`, `x86_64-darwin`. Every tool in it,
+`nixos-anywhere`, `nixos-rebuild` and `deploy-rs` included, exists on each.
+Secrets, formatting, `statix` and the hooks work unchanged.
+
+What does *not* carry over is building the system closure. The outputs that
+describe the box — `nixosConfigurations`, `packages`, `apps` — are
+`x86_64-linux` only, so `nix build .`, `nix run .` (the QEMU VM) and
+`nix run .#install` fail on anything else: a Mac has no Linux builder at all,
+and an `aarch64-linux` workstation is the wrong architecture. Deploys work, but
+only if the build happens somewhere else:
+
+```sh
+deploy --remote-build .#vps            # build on the VPS itself
+nixos-rebuild switch --flake .#vps-hetzner \
+  --target-host hutao@vps --build-host hutao@vps --use-remote-sudo
+```
+
+The alternative is a Linux remote builder in `/etc/nix/machines` (or
+`nix-darwin`'s `nix.linux-builder`), after which the plain commands above work
+as written — including `nix run .#install`, which is otherwise Linux-only and so
+still the reason a first install is done from a Linux machine.
+
 Formatting is **nixfmt**, not nixpkgs-fmt — every `.nix` file here conforms to
 it and the two disagree on multi-argument lambdas, so the wrong one reformats the
 whole tree.

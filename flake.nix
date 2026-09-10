@@ -29,6 +29,24 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
+      # Which systems get a dev shell. `system` above is the DEPLOY TARGET; the
+      # shell is entered on a workstation, which is routinely a Mac. Every tool
+      # in the shell below is available on all four — including nixos-anywhere,
+      # nixos-rebuild and deploy-rs — so one list serves them all. Everything
+      # that describes the box itself (nixosConfigurations, packages, apps)
+      # stays pinned to `system`.
+      #
+      # These are nixpkgs' four mainstream systems. Listing one costs nothing
+      # until someone actually enters that shell — the attribute is lazy and
+      # nothing is fetched or built for a system nobody uses — so the list is
+      # the full set rather than only the ones known to be in use today.
+      devSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
+
       mkVps =
         extraModules:
         nixpkgs.lib.nixosSystem {
@@ -143,47 +161,53 @@
 
       checks = builtins.mapAttrs (_system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib;
 
-      devShells.${system} = {
-        default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            nixd
-            # nixfmt, not nixpkgs-fmt: every .nix file in this repo is formatted
-            # with it and the two disagree on multi-argument lambdas, so the wrong
-            # one here reformats the whole tree on first use.
-            nixfmt-rfc-style
-            statix
-            sops
-            age
-            ssh-to-age
-            nixos-anywhere
-            # The deploy fallback. nixos-rebuild ships with NixOS, so it is NOT on
-            # a non-NixOS workstation unless it is here — and the fallback is
-            # worthless if it cannot be run on the machine you deploy from.
-            nixos-rebuild
-            opentofu
-            deploy-rs.packages.${system}.default
-            # The hook runner. `pre-commit install` once per clone, after which
-            # .pre-commit-config.yaml is enforced on every commit; the same file
-            # is what CI runs, so the two cannot drift.
-            pre-commit
-            gitleaks
-          ];
-        };
+      devShells = nixpkgs.lib.genAttrs devSystems (
+        devSystem:
+        let
+          pkgs = nixpkgs.legacyPackages.${devSystem};
+        in
+        {
+          default = pkgs.mkShell {
+            buildInputs = with pkgs; [
+              nixd
+              # nixfmt, not nixpkgs-fmt: every .nix file in this repo is formatted
+              # with it and the two disagree on multi-argument lambdas, so the wrong
+              # one here reformats the whole tree on first use.
+              nixfmt-rfc-style
+              statix
+              sops
+              age
+              ssh-to-age
+              nixos-anywhere
+              # The deploy fallback. nixos-rebuild ships with NixOS, so it is NOT on
+              # a non-NixOS workstation unless it is here — and the fallback is
+              # worthless if it cannot be run on the machine you deploy from.
+              nixos-rebuild
+              opentofu
+              deploy-rs.packages.${devSystem}.default
+              # The hook runner. `pre-commit install` once per clone, after which
+              # .pre-commit-config.yaml is enforced on every commit; the same file
+              # is what CI runs, so the two cannot drift.
+              pre-commit
+              gitleaks
+            ];
+          };
 
-        # What CI enters. Deliberately NOT the full dev shell: that one pulls
-        # nixos-anywhere, nixos-rebuild, opentofu and deploy-rs, none of which a
-        # formatting check needs, and all of which CI would download every run.
-        ci = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            pre-commit
-            nixfmt-rfc-style
-            statix
-            opentofu # tofu fmt
-            git
-            gitleaks
-          ];
-        };
-      };
+          # What CI enters. Deliberately NOT the full dev shell: that one pulls
+          # nixos-anywhere, nixos-rebuild, opentofu and deploy-rs, none of which a
+          # formatting check needs, and all of which CI would download every run.
+          ci = pkgs.mkShell {
+            buildInputs = with pkgs; [
+              pre-commit
+              nixfmt-rfc-style
+              statix
+              opentofu # tofu fmt
+              git
+              gitleaks
+            ];
+          };
+        }
+      );
 
       packages.${system}.default = vps.config.system.build.toplevel;
 
