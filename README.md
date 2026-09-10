@@ -63,7 +63,7 @@ out in every clone URL or every client's `~/.ssh/config`.
 
 ## The things that will bite you
 
-Five, all of them load-bearing, all of them silent when wrong.
+Six, all of them load-bearing, all of them silent when wrong.
 
 **A published container port lives in the forward chain, not input.** It is
 DNAT'd in prerouting and then forwarded, so it never touches the input hook.
@@ -91,6 +91,15 @@ nothing.
 a generation directory and `path` only symlinks to it; docker resolves the
 symlink at mount time and holds that inode forever. `dozzle-users.service` and
 `mailserver-dkim.service` copy to a stable path first, which is why they exist.
+
+**A sops env file changes without restarting anything.** `sops.templates.<n>.path`
+is a stable path, so rotating a value changes the file's *content* and nothing
+else — the unit text is byte-identical and `switch-to-configuration` finds no
+unit to restart. The container keeps the old value in its environment until
+something unrelated recreates it, which can be weeks. `restartUnits` on the
+template is the fix: sops-nix diffs the rendered file and restarts only on a
+real change, so no-op deploys still don't bounce the service. `navidrome.env`
+does this; the older env templates predate it.
 
 **The two firewalls must both allow a port.** `tofu/modules/hetzner-firewall` is
 the edge and `modules/firewall.nix` is the host. Each is what survives a
@@ -191,6 +200,7 @@ Beyond what the Ansible vault held, this port needs:
 | `searxng/secret_key` | signs searxng's session cookies; upstream's default is the literal `ultrasecretkey` |
 | `searxng/admin_user`, `searxng/admin_password_hash` | searxng has no accounts, so caddy's `basic_auth` is the whole access control. bcrypt, same shape as dozzle's |
 | `serenity/db_password` | one password, two consumers: `ALTER ROLE` in postgres and the pgbouncer userlist, both rendered from this key |
+| `navidrome/lastfm/api_key`, `navidrome/lastfm/secret` | one Last.fm application registration, reaching the container as `ND_LASTFM_APIKEY` / `ND_LASTFM_SECRET`. Enables scrobbling server-side; each user still links their own account under Personal Settings |
 
 `acme_email` is **gone** from the secret set: `security.acme` needs it at
 evaluation time and a registration contact is not a credential. It is
