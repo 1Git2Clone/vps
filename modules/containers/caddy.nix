@@ -99,6 +99,25 @@ let
       # pages.<domain>/<owner>/<repo>/. Nothing maps or rewrites, so a page
       # that 404s is a directory that was never written.
       root = pagesRoot;
+
+      # compress does its work in the browser with a MULTITHREADED ffmpeg
+      # build, and a browser hands out SharedArrayBuffer only to a
+      # cross-origin-isolated document. Without these two the page loads and
+      # then fails on `SharedArrayBuffer is not defined`.
+      #
+      # Path-scoped, not host-wide, on purpose: require-corp makes every
+      # cross-origin subresource opt in with its own CORP header, so a future
+      # page here that hotlinks an image or a CDN script would silently stop
+      # rendering it. One repo asks for isolation, one repo gets it.
+      headers = [
+        {
+          path = "/hutao/compress/*";
+          values = {
+            "Cross-Origin-Embedder-Policy" = "require-corp";
+            "Cross-Origin-Opener-Policy" = "same-origin";
+          };
+        }
+      ];
     }
     {
       host = "search.${domain}";
@@ -149,7 +168,7 @@ let
         "{"
         "\t# Certificates come from security.acme on the host."
         "\t# See the `tls` directive on each site below."
-        "\t admin off"
+        "\tadmin off"
       ]
       # rate_limit is an ordered HTTP handler from a plugin; caddy has no
       # default position for it, so it must be told to run before basic_auth or
@@ -181,6 +200,15 @@ let
           "\t\t}"
           "\t}"
         ]
+        # Response headers, each entry scoped to a path matcher. `header` is an
+        # ordered handler with a default position, so unlike rate_limit it
+        # needs no `order` line in the global block.
+        ++ lib.concatMap (
+          h:
+          [ "\theader ${h.path} {" ]
+          ++ lib.mapAttrsToList (name: value: "\t\t${name} \"${value}\"") h.values
+          ++ [ "\t}" ]
+        ) (site.headers or [ ])
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
         ++ lib.optionals (site ? basicAuth) [
