@@ -5,7 +5,7 @@
 # .github/workflows/ci.yml. Forgejo looks for .forgejo/workflows first and only
 # falls back to .github/workflows when it is absent — a fallback, not a union.
 # Before this file existed, the GitHub workflow ran on both forges, and on this
-# one it failed: see the `uses:` note below.
+# one it failed: see the `runs-on` note below.
 #
 # So the two files are not duplicates to keep in sync for tidiness. They are one
 # per forge, and deleting this one silently hands Forgejo the GitHub file again.
@@ -17,9 +17,10 @@
 # COST. Every job here runs on the VPS that also serves mail, git and the
 # minecraft server. The runner's `cache:` is disabled and its `valid_volumes`
 # allow-list has no entry for a nix store, so nothing is reused between runs:
-# each one downloads Nix and rebuilds the `.#ci` shell from the binary cache.
-# That is the reason for a single job rather than the two the GitHub file uses
-# — two jobs would pay that cost twice, in parallel, on `capacity: 2`.
+# each one rebuilds the `.#ci` shell from the binary cache. Nix itself is no
+# longer part of that bill — it is in the image — but the shell still is, which
+# is the reason for a single job rather than the two the GitHub file uses: two
+# jobs would pay that cost twice, in parallel, on `capacity: 2`.
 name: CI
 
 on:
@@ -36,30 +37,47 @@ jobs:
   check:
     name: Format, lint and evaluate
     # Declared in modules/containers/forgejo-runner.nix as
-    # `ubuntu-latest:docker://node:22-bookworm`. It must carry node: every
-    # JavaScript action is executed by the node binary inside the job container.
-    runs-on: ubuntu-latest
-    steps:
-      # Fully-qualified on purpose. A bare `uses: owner/repo` resolves against
-      # the server's `[actions] DEFAULT_ACTIONS_URL`, which is
-      # https://data.forgejo.org — that host mirrors `actions/*` but no
-      # third-party namespace, so a bare `cachix/install-nix-action` 404s with
-      #
-      #   remote: Not found.
-      #   fatal: repository 'https://data.forgejo.org/cachix/install-nix-action/' not found
-      #
-      # Naming the host per action fixes it here without pointing the whole
-      # instance at an open-registration forge, where a typo'd action name
-      # resolves to whoever registered it.
-      - uses: https://data.forgejo.org/actions/checkout@v7.0.1
-        with:
-          # gitleaks scans commits; a shallow clone would scan almost nothing.
-          fetch-depth: 0
+    # `nix:docker://nixos/nix:2.35.2`, and NOT ubuntu-latest. That label is
+    # node:22-bookworm, which has no `sudo` — and cachix/install-nix-action
+    # shells out to sudo unconditionally when it takes its non-systemd branch
+    # (install-nix.sh lines 91-93), so every run died at exit 127 before a
+    # single check ran. An image that already contains Nix removes the action,
+    # the sudo, and a ~50MB download per run all at once.
+    #
+    # The trade: nixos/nix carries nix, bash, gitMinimal, curl and coreutils and
+    # nothing else. No node — so no step below can be a `uses:`. Every
+    # JavaScript action, actions/checkout included, is executed by a node binary
+    # inside the JOB container, and there is none here.
+    runs-on: nix
 
-      - uses: https://github.com/cachix/install-nix-action@v31.11.1
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+    # The image ships no experimental features, so set them once for the job
+    # rather than repeating --extra-experimental-features on six commands.
+    # NIX_CONFIG is merged with the image's /etc/nix/nix.conf rather than
+    # replacing it, which matters: that file carries `sandbox = false`, and the
+    # runner gives jobs `privileged: false`, so an unprivileged container that
+    # tried to open a user namespace for a build sandbox would fail.
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
+
+    steps:
+      # actions/checkout's replacement — see the `runs-on` note for why it
+      # cannot be the action. Not a downgrade: the action's whole job here was a
+      # full clone (it was configured `fetch-depth: 0`), because gitleaks scans
+      # commits and a shallow clone would scan almost nothing.
+      #
+      # refs/pull/* is fetched alongside the branches so that one command serves
+      # all three triggers — on a pull_request $GITHUB_SHA is the merge commit,
+      # which no branch reaches. Anonymous: the repo is public, and the instance
+      # has registration disabled, so there is no fork whose PR would need a
+      # token.
+      - name: Checkout
+        run: |
+          git init -q -b main .
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git fetch -q --prune origin \
+            "+refs/heads/*:refs/remotes/origin/*" \
+            "+refs/pull/*:refs/pull/*"
+          git checkout -q --detach "$GITHUB_SHA"
 
       # The same file the local commit hook uses, so a green CI means a clean
       # `pre-commit run --all-files` on the developer's machine and vice versa.
@@ -67,7 +85,7 @@ jobs:
         run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
 
       # The pre-commit hook scans the STAGED diff, which is empty in CI, so the
-      # history scan lives here instead. fetch-depth 0 above is what makes it a
+      # history scan lives here instead. The full fetch above is what makes it a
       # real scan rather than a scan of one commit.
       - name: gitleaks (full history)
         run: nix develop .#ci -c gitleaks git --redact --no-banner .

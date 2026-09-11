@@ -466,17 +466,28 @@ The two differ in exactly two ways, both forced:
 
 - **Job layout.** The runner's `cache:` is off and its `valid_volumes`
   allow-list has no nix store entry, so nothing survives between runs and every
-  job re-downloads Nix and rebuilds the `.#ci` shell. One job pays that once;
+  job rebuilds the `.#ci` shell from the binary cache. One job pays that once;
   the mirror's two jobs pay it twice, which is free on GitHub and is not free
   here.
-- **How actions are addressed.** A bare `uses: owner/repo` resolves against
-  `[actions] DEFAULT_ACTIONS_URL`, which defaults to `https://data.forgejo.org`
-  — that host mirrors `actions/*` and nothing third-party, so a bare
-  `cachix/install-nix-action` fails with `remote: Not found`. The Forgejo file
-  names the host on each `uses:`. Setting `DEFAULT_ACTIONS_URL` to
-  `https://github.com` instead would fix it instance-wide, at the cost of
-  making every bare `uses:` resolve to whoever holds that name on an
-  open-registration forge.
+- **Actions, or none at all.** The Forgejo job runs on the `nix` label —
+  `nixos/nix`, which already contains Nix — so there is no
+  `cachix/install-nix-action` to run and no Nix to download per run. That image
+  carries no node, and every JavaScript action is executed by a node binary
+  inside the job container, so the Forgejo file has no `uses:` whatsoever and
+  does its own `git fetch` in place of `actions/checkout`.
+
+  The image is not only a saving, it is the fix: on `ubuntu-latest`
+  (`node:22-bookworm`) `install-nix-action` exits 127, because the branch it
+  takes without systemd runs `sudo mkdir -p /etc/nix` and that image has no
+  sudo. The job is already root, so the sudo bought nothing to begin with.
+
+  A workflow here that *does* want an action must name the host:
+  `uses: owner/repo` alone resolves against `[actions] DEFAULT_ACTIONS_URL`,
+  which defaults to `https://data.forgejo.org` — that host mirrors `actions/*`
+  and nothing third-party, so a bare `cachix/install-nix-action` fails with
+  `remote: Not found`. Setting `DEFAULT_ACTIONS_URL` to `https://github.com`
+  instead would fix it instance-wide, at the cost of making every bare `uses:`
+  resolve to whoever holds that name on an open-registration forge.
 
 `permissions:` is a GitHub-only field: Forgejo ignores it with a workflow
 warning, which is why the Forgejo file omits it rather than carrying a line

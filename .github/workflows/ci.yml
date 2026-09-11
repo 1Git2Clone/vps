@@ -5,12 +5,16 @@
 # not cosmetic: Forgejo reads .forgejo/workflows and falls back to
 # .github/workflows only when that directory is absent. So this file runs on
 # GitHub alone — but delete .forgejo/workflows and Forgejo picks THIS file up
-# again, where `permissions:` below is ignored with a warning and a bare
-# `uses: cachix/...` cannot resolve at all.
+# again, where `permissions:` below is ignored with a warning and neither
+# `uses:` below can run at all — see the Forgejo file.
 #
 # Keep the two in step by intent rather than by copy-paste. They check the same
-# things; they differ in job layout and in how actions are addressed, for
-# reasons written down in the Forgejo one.
+# things; they differ in job layout and in that the Forgejo one uses no actions
+# at all — it runs in an image that already has Nix and therefore has no node to
+# execute a JavaScript action with. The reasons are written down over there.
+#
+# install-nix-action stays HERE because a GitHub runner is a VM with systemd and
+# sudo, which is the branch of its installer that works.
 #
 # Because the mirror is push-only, everything here must be committed on the
 # Forgejo side and allowed to flow across. Editing these files on GitHub would
