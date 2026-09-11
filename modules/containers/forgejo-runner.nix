@@ -80,6 +80,21 @@ let
   # carry node, because every JavaScript action (actions/checkout among them) is
   # executed by the node binary inside the JOB container.
   labels = [
+    # What .forgejo/workflows/ci.yml runs on, and the reason it is not
+    # ubuntu-latest: cachix/install-nix-action calls `sudo` unconditionally on
+    # its non-systemd branch, node:22-bookworm has no sudo, and so every CI run
+    # exited 127 before the first check. Shipping Nix in the image removes the
+    # action entirely — and with it a Nix download on every run, on the box that
+    # is also serving mail and git.
+    #
+    # It carries nix, bash, gitMinimal, curl and coreutils and NOTHING else. No
+    # node, so a workflow on this label cannot use a JavaScript action —
+    # actions/checkout included; ci.yml does its own `git fetch`. Its
+    # /etc/nix/nix.conf already sets `sandbox = false`, which is what makes a
+    # build work under `privileged: false` below.
+    #
+    # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/nixos/nix/tags?page_size=5&ordering=last_updated'
+    "nix:docker://nixos/nix:2.35.2"
     "ubuntu-latest:docker://node:22-bookworm"
     "node-22:docker://node:22-bookworm"
     "alpine:docker://alpine:3.22"
