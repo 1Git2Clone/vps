@@ -143,9 +143,17 @@ jobs:
       # needs to raise the read limit on public data. Set it at
       # git.hu-tao.dev/hutao/vps/settings/actions/secrets alongside
       # RENOVATE_TOKEN. Until it exists this resolves to empty, which is exactly
-      # the behaviour of not setting it at all — so this line is safe to merge
-      # before the secret is created.
-      GITHUB_COM_TOKEN: ${{ secrets.GITHUB_COM_TOKEN }}
+      # the behaviour of not setting it at all — so this line is safe to have
+      # in place before the secret is created.
+      #
+      # RENOVATE_GITHUB_COM_TOKEN and not GITHUB_COM_TOKEN, which is what the
+      # documentation names. Forgejo REFUSES to store a secret whose name starts
+      # with GITHUB_, GITEA_ or FORGEJO_, so that spelling cannot exist here at
+      # all. Renovate reads either — `env.GITHUB_COM_TOKEN ??
+      # env.RENOVATE_GITHUB_COM_TOKEN` — so using the second one keeps the
+      # secret and the variable spelled the same and needs no mapping between
+      # them. Do not "fix" this back to the documented name.
+      RENOVATE_GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}
 
       # Renovate's default is to install its own copies of the tools a manager
       # needs, which here would mean fetching a second Nix into a container that
