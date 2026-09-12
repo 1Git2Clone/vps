@@ -159,7 +159,77 @@
         };
       };
 
-      checks = builtins.mapAttrs (_system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib;
+      # deployChecks gives two checks, and only one of them was ever meant to be
+      # built here. `deploy-activate` references the whole system closure by
+      # design, so it is evaluated and never built — that is what the
+      # `--no-build` on CI's `nix flake check` is for.
+      #
+      # `deploy-schema` LOOKS like the cheap one and is not. The check itself is
+      # a single command:
+      #
+      #   check-jsonschema --schemafile interface.json deploy.json
+      #
+      # but deploy.json carries the activation path as a CONTEXT-BEARING string
+      # — `"path": "/nix/store/...-activatable-nixos-system-hu-tao-..."` — and a
+      # string with context is a build input. So realising that 200-byte JSON
+      # realises the system closure, and deploy-rs with it FROM SOURCE: it
+      # `follows` our nixpkgs, so its binary is a cache miss and CI compiles
+      # ~200 Rust crates to validate a document it already has.
+      #
+      # MEASURED on the Forgejo runner, 2026-09-12: 4m43s and still compiling,
+      # in a step whose comment claimed "no Rust toolchain and no system
+      # closure". The derivation graph is 5367 paths; the same JSON comes out of
+      # `nix eval --json .#deploy` in 5.9s.
+      #
+      # unsafeDiscardStringContext is what cuts the link. The bytes do not
+      # change — the path is still spelled out in full and still validated
+      # against the schema — but Nix stops treating it as something to build.
+      # `unsafe` means one specific thing: the store path in the output is no
+      # longer guaranteed to exist. That is correct for a file handed to a
+      # schema validator, which reads it as a string. It would NOT be correct
+      # for anything that dereferences the path, so do not copy this idiom into
+      # a check that actually deploys.
+      checks =
+        let
+          deployJson = pkgs.writeText "deploy.json" (
+            builtins.unsafeDiscardStringContext (builtins.toJSON self.deploy)
+          );
+        in
+        nixpkgs.lib.recursiveUpdate
+          (builtins.mapAttrs (_system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib)
+          {
+            ${system} = {
+              # Same attribute name deployChecks used, so CI's
+              # `nix build .#checks.x86_64-linux.deploy-schema` is unchanged.
+              deploy-schema = pkgs.runCommand "deploy-schema" { } ''
+                ${pkgs.check-jsonschema}/bin/check-jsonschema \
+                  --schemafile ${deploy-rs}/interface.json ${deployJson}
+                touch $out
+              '';
+
+              # The guard on the check above, and the reason it is not redundant:
+              # a validator that silently does nothing passes forever. If the
+              # schemafile path ever goes stale, or check-jsonschema changes how
+              # it takes arguments, `deploy-schema` keeps exiting 0 over a
+              # document it never read — and we would not find out until a broken
+              # deploy.json reached a real deploy.
+              #
+              # So: feed the SAME invocation a node with no `hostname`, which
+              # interface.json marks required, and fail if it is accepted.
+              deploy-schema-rejects-bad-input = pkgs.runCommand "deploy-schema-rejects-bad-input" { } ''
+                if ${pkgs.check-jsonschema}/bin/check-jsonschema \
+                     --schemafile ${deploy-rs}/interface.json \
+                     ${
+                       pkgs.writeText "bad-deploy.json" (builtins.toJSON { nodes.vps.profiles.system.path = "/dev/null"; })
+                     } >/dev/null 2>&1
+                then
+                  echo "schema validation accepted a node with no hostname" >&2
+                  exit 1
+                fi
+                touch $out
+              '';
+            };
+          };
 
       devShells = nixpkgs.lib.genAttrs devSystems (
         devSystem:
