@@ -123,6 +123,26 @@ jobs:
       # someone else's and stop updating the branch. Letting it detect the
       # value cannot disagree with the account.
 
+      # NOT the Forgejo token, and not optional in practice. Renovate reads
+      # github.com for two different things: release notes for PR bodies, and
+      # the actual versions of anything sourced there. The first run warned
+      #
+      #   WARN: GitHub token is required for some dependencies
+      #   githubDeps: ["actions/checkout", "cachix/install-nix-action",
+      #                "hashicorp/terraform"]
+      #
+      # Anonymous github.com allows 60 requests per hour per IP, so without this
+      # those three are rate-limited into silence — they do not error, they just
+      # stop producing updates, which is the failure mode you never notice.
+      #
+      # A classic PAT with NO scopes ticked is correct and sufficient: it only
+      # needs to raise the read limit on public data. Set it at
+      # git.hu-tao.dev/hutao/vps/settings/actions/secrets alongside
+      # RENOVATE_TOKEN. Until it exists this resolves to empty, which is exactly
+      # the behaviour of not setting it at all — so this line is safe to merge
+      # before the secret is created.
+      GITHUB_COM_TOKEN: ${{ secrets.GITHUB_COM_TOKEN }}
+
       # Renovate's default is to install its own copies of the tools a manager
       # needs, which here would mean fetching a second Nix into a container that
       # already has one. `global` means "use what is on PATH".
