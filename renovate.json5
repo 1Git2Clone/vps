@@ -55,6 +55,19 @@
     schedule: ["* * * * *"],
   },
 
+  // Renovate's default is 2, which assumes it runs HOURLY. Against a weekly
+  // cron it is a cap of two pull requests per week, and the first real run hit
+  // it: forgejo and tempo got PRs, everything else — including the flake.lock
+  // maintenance this repo actually needs, with inputs three months stale —
+  // landed on the dashboard as "rate-limited" and stayed there. That phrase is
+  // Renovate throttling itself; Forgejo never refused anything.
+  //
+  // 0 means no hourly cap. prConcurrentLimit stays at config:recommended's 10,
+  // which is the limit that actually matters: it bounds how many branches are
+  // open at once rather than how fast they appear, so a quiet week cannot turn
+  // into thirty open pull requests.
+  prHourlyLimit: 0,
+
   // Every container tag in this repo is a Nix string literal, which no built-in
   // manager reads. One regex manager beats `# renovate:` hint comments above a
   // dozen lines: one block here, and modules/containers/*.nix stay untouched.
