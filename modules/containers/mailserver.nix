@@ -137,7 +137,7 @@ in
     };
 
     webmail = {
-      image = "roundcube/roundcubemail:1.7.3-apache";
+      image = "roundcube/roundcubemail:1.7.4-apache";
 
       environment = {
         ROUNDCUBEMAIL_DEFAULT_HOST = "ssl://${hostname}";

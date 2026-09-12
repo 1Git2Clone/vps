@@ -46,7 +46,14 @@ in
   };
 
   virtualisation.oci-containers.containers.dozzle = {
-    image = "amir20/dozzle:v10.7.1";
+    # v11, and the major carries exactly one user-visible break: sessions are
+    # now signed with a persisted random secret, so everyone is signed out ONCE
+    # on upgrade. dozzle-users.yml above is unaffected — it remains the access
+    # allow-list and password login still works, which is what makes this a
+    # safe major for this deployment specifically.
+    #
+    # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/amir20/dozzle/tags?page_size=20&ordering=last_updated'
+    image = "amir20/dozzle:v11.0.0";
 
     ports = [ "8080:8080" ];
 
