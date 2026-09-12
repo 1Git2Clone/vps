@@ -99,9 +99,23 @@ jobs:
       - name: nix flake check (evaluate)
         run: nix flake check --no-build --print-build-logs
 
-      # The half of deployChecks worth actually building: it validates deploy.json
-      # against deploy-rs's schema — the config only otherwise exercised by
-      # running a real deploy — and pulls in check-jsonschema alone, no Rust
-      # toolchain and no system closure.
+      # Validates deploy.json against deploy-rs's schema — the config only
+      # otherwise exercised by running a real deploy.
+      #
+      # This line is unchanged, but what it costs is not. Until 2026-09-12 the
+      # comment here claimed it pulled in "check-jsonschema alone, no Rust
+      # toolchain and no system closure", and that was simply false: deploy.json
+      # carries the activation path as a context-bearing string, so building it
+      # built the system closure and compiled deploy-rs from source. It ran for
+      # 4m43s on this runner. flake.nix now strips that context before the
+      # validator sees the file — see the comment on `checks` there — which took
+      # the derivation graph from 5367 paths to 1890 and the step to seconds.
+      #
+      # The second check is the guard that the first one is real: it feeds the
+      # same validator a node with no `hostname` and fails if that is accepted.
+      # Without it a validator that silently read nothing would pass forever.
       - name: Validate the deploy schema
-        run: nix build --print-build-logs .#checks.x86_64-linux.deploy-schema
+        run: |
+          nix build --print-build-logs \
+            .#checks.x86_64-linux.deploy-schema \
+            .#checks.x86_64-linux.deploy-schema-rejects-bad-input
