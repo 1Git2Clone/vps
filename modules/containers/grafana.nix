@@ -31,7 +31,15 @@ in
   '';
 
   virtualisation.oci-containers.containers.grafana = {
-    image = "grafana/grafana:13.0";
+    # Pinned to a patch, and the change is a PIN rather than an upgrade:
+    # `13.0` is a FLOATING tag. On 2026-09-12 it and `13.0.8` resolved to the
+    # same digest (sha256:a21e4b8b9cd2...), so this box has silently been
+    # tracking every 13.0.x — running each one's migrations on first start —
+    # without a line in this file ever changing. Reproducibility is the whole
+    # point of the repo, so the version is now written down.
+    #
+    # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/grafana/grafana/tags?page_size=20&ordering=last_updated'
+    image = "grafana/grafana:13.0.8";
 
     environment = {
       GF_AUTH_ANONYMOUS_ENABLED = "false";

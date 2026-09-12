@@ -16,23 +16,33 @@ let
 in
 {
   virtualisation.oci-containers.containers.forgejo = {
-    # 16.0.3, and the version choice is deliberate rather than "newest wins".
+    # 16.0.4, a PATCH release within 16.0, and the reason to take it promptly is
+    # that it is a security release. Its notes carry a Critical fix: template
+    # expansion during "generate repository from template" could plant a `.git`
+    # folder that git then adopted, giving arbitrary file read and remote code
+    # execution ON THIS HOST. Alongside it, an API access-token scope bypass via
+    # the "allow maintainer edit" path, and draft-release attachments readable
+    # by anyone including anonymous callers on public repos — the same class
+    # Gitea fixed as CVE-2026-27660.
     #
-    # A forgejo upgrade runs irreversible database migrations, so normally the
-    # right move during a data migration is to change nothing. 16.0.2 forces the
-    # issue: its tag still resolves on codeberg, but a platform manifest inside
-    # the index (sha256:398cb21d…) has been deleted, so the image is UNPULLABLE.
-    # The old box only runs it because it pulled while the blob still existed. A
-    # config that cannot rebuild from scratch is the thing this repo exists to
-    # avoid, so staying on 16.0.2 was not an option.
+    # This repo is public and this instance runs Actions, so "wait and see" was
+    # the more expensive option, not the safer one.
     #
-    # The migration risk is covered rather than accepted: the old box keeps
-    # pristine 16.0.2 data and is untouched, and the new box works from an rsync
-    # COPY. If 16.0.3's migrations go wrong the rollback is to stop using the new
-    # box — nothing is lost.
+    # The standing caution still applies to MINOR and MAJOR bumps: a forgejo
+    # upgrade runs irreversible database migrations, and deploy-rs magic
+    # rollback reverts the closure, NOT the database. It cannot save a migrated
+    # schema. The backup can — restic to B2 covers /var/lib/docker/volumes daily
+    # (modules/backups.nix), so forgejo_data has a restore point. Run
+    # `systemctl start restic-backups-b2.service` before a bump that crosses a
+    # minor, so the restore point is minutes old rather than up to a day.
+    #
+    # History worth keeping: 16.0.2 is UNPULLABLE. Its tag still resolves on
+    # codeberg but a platform manifest inside the index (sha256:398cb21d…) was
+    # deleted, so a rebuild from scratch cannot reach it. That is what forced
+    # the move to 16.0.3 during the data migration.
     #
     # Bump with: curl -sS 'https://codeberg.org/api/v1/repos/forgejo/forgejo/releases?limit=5'
-    image = "codeberg.org/forgejo/forgejo:16.0.3";
+    image = "codeberg.org/forgejo/forgejo:16.0.4";
 
     # journald, so the fail2ban jail can read the SSH auth failures at all. The
     # default json-file driver writes to a path containing the container ID and
