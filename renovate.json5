@@ -1,0 +1,90 @@
+// ==============================================================================
+// Renovate — dependency updates as pull requests
+// ==============================================================================
+// .json5 rather than .json, and not for style: Renovate accepts either, and
+// everything below needs a reason written next to it. JSON has nowhere to put
+// one — Renovate's config validator rejects unknown keys, so the usual
+// "_comment" trick fails the run rather than documenting it.
+//
+// What opens the PRs is .forgejo/workflows/renovate.yml, on a weekly cron. That
+// workflow is the BOT — it runs across every repo under hutao and skavex, not
+// just this one — and the split between the two files is by scope, not by
+// taste:
+//
+//   * the workflow holds global config (platform, endpoint, token, which
+//     namespaces to discover). It is one instance-wide setting per line and
+//     none of it describes a repository.
+//   * this file is hutao/vps's OWN repo config, read out of the clone Renovate
+//     makes of this repo like any other. Everything below describes this tree
+//     specifically — its flake, its container modules — and would be wrong
+//     applied anywhere else.
+//
+// So a sibling repo that wants Renovate gets its own renovate.json, from the
+// onboarding PR the bot opens for it. It does not inherit this one.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended"],
+  // Matches the workflow's cron, which is UTC. Nothing below is scheduled, so
+  // this only decides how a `schedule:` string would be read if one were ever
+  // added — and having the two files disagree about what "noon" means is the
+  // kind of thing found six months later.
+  timezone: "UTC",
+
+  // No `schedule` key on purpose. The workflow's cron IS the schedule, and a
+  // second one here would be a silent AND: a weekly run that lands outside a
+  // Renovate window does nothing at all, and that looks like Renovate being
+  // broken rather than like two clocks disagreeing.
+
+  // The nix manager is opt-in — still flagged beta upstream — and reads
+  // flake.nix inputs. It cannot move
+  // `nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05"` by itself: that is a
+  // branch, not a pinned rev, so there is no version for it to bump. What
+  // actually refreshes nixpkgs is lockFileMaintenance below.
+  nix: { enabled: true },
+
+  // Off by default, and its own default schedule is "before 4am on monday" —
+  // which would AND with the cron exactly as described above. `* * * * *` means
+  // "no window of my own": whenever the workflow runs, this is eligible.
+  //
+  // This is the one that matters most here. It re-runs `nix flake update` and
+  // commits the result, which is how nixpkgs, disko, sops-nix and deploy-rs
+  // move at all — and, because the runner gets Renovate itself from the flake,
+  // how Renovate updates Renovate.
+  lockFileMaintenance: {
+    enabled: true,
+    schedule: ["* * * * *"],
+  },
+
+  // Every container tag in this repo is a Nix string literal, which no built-in
+  // manager reads. One regex manager beats `# renovate:` hint comments above a
+  // dozen lines: one block here, and modules/containers/*.nix stay untouched.
+  //
+  // `[^"$:]` in depName is what keeps caddy.nix out. Its
+  // `image = "caddy-ratelimit:${pkgs.caddy.version}"` is built locally from the
+  // flake's caddy and has no registry to query, so a `$` anywhere in the match
+  // disqualifies the line rather than inventing a dependency that 404s on every
+  // run. serenity-bot.nix's `image = tag;` has no quotes and is skipped the
+  // same way.
+  //
+  // The `Bump with: curl ...` comments next to each image stay. They are the
+  // manual path for the times this job is not the one doing it.
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^modules/containers/.*\\.nix$/"],
+      matchStrings: ['image = "(?<depName>[^"$:]+):(?<currentValue>[^"$]+)";'],
+      datasourceTemplate: "docker",
+      versioningTemplate: "docker",
+    },
+  ],
+
+  packageRules: [
+    // `itzg/minecraft-server:java25` is a rolling JRE tag, not a version.
+    // Renovate would eventually offer java26, which is a runtime swap under a
+    // live world rather than a patch. Bump it deliberately.
+    {
+      matchPackageNames: ["itzg/minecraft-server"],
+      enabled: false,
+    },
+  ],
+}

@@ -206,6 +206,27 @@
               gitleaks
             ];
           };
+
+          # What .forgejo/workflows/renovate.yml enters, and separate from `ci`
+          # for the same reason `ci` is separate from `default`: Renovate is a
+          # node runtime and a large closure, and ci runs on every push and
+          # every pull request. An entry in `ci` would make all of them download
+          # it for a job that never calls it.
+          #
+          # Pinned through this flake rather than run from the registry, so the
+          # thing that proposes updates is itself a line in flake.lock —
+          # lockFileMaintenance bumps Renovate exactly like everything else.
+          renovate = pkgs.mkShell {
+            buildInputs = with pkgs; [
+              renovate
+              # Renovate shells out for lock maintenance rather than editing
+              # flake.lock itself, and its git work happens through the git on
+              # PATH. Both are in the job's image already; naming them here is
+              # what makes `nix develop .#renovate` work off a workstation too.
+              nix
+              git
+            ];
+          };
         }
       );
 

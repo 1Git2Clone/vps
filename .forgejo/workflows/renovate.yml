@@ -1,0 +1,148 @@
+# ==============================================================================
+# Renovate — Forgejo
+# ==============================================================================
+# Forgejo only, with no twin under .github/workflows. git.hu-tao.dev is the
+# source of truth and GitHub is a push-only mirror, so the PRs have to open
+# here; a second copy on the mirror would open a second set of PRs against a
+# repo whose commits are overwritten by the next mirror push.
+#
+# `schedule` runs only from the DEFAULT BRANCH — Forgejo registers the cron
+# from main and ignores this file on branches and pull requests. So a change to
+# the cron takes effect when it merges, not when it is pushed, and
+# workflow_dispatch is the only way to try a change before then.
+#
+# THE TOKEN IS NOT IN SOPS. sops-nix decrypts onto the host; this runs in a job
+# container, which cannot read the host's filesystem. `secrets.RENOVATE_TOKEN`
+# is a Forgejo Actions secret, set once at
+# git.hu-tao.dev/hutao/vps/settings/actions/secrets.
+#
+# A repo secret on hutao/vps is enough even though the run touches every repo
+# under hutao and skavex: the secret is read where the WORKFLOW lives, not where
+# the PR lands.
+#
+# ── The account it belongs to ─────────────────────────────────────────────────
+# A `renovate` bot account, NOT a personal token. Renovate takes its git author
+# from whichever account the token belongs to, so a personal token makes every
+# update commit indistinguishable from a hand-written one — in `git log`, in
+# blame, and in the PR list.
+#
+# It is created by hand, in the UI, exactly like the runner record in
+# modules/containers/forgejo-runner.nix. Forgejo has no config-file user
+# provisioning, so the only declarative-looking alternative is a oneshot running
+# `forgejo admin user create` through docker exec, and that is worse in three
+# ways at once: the command is not idempotent, so every rebuild needs a guard;
+# `--access-token` PRINTS the token, which on a `log-driver = journald`
+# container means writing a live credential into the journal; and it still
+# cannot do the two steps that actually matter — storing the token as an Actions
+# secret and granting the account access to skavex — because both are API calls,
+# not CLI ones. It would automate one step of four and leak a secret doing it.
+#
+# Registration is disabled on the instance (see forgejo.nix), so this is an
+# admin action:
+#
+#   1. Site Administration -> Identity & Access -> Accounts -> Create User
+#      Account. Username `renovate`, any mailbox that is not a real person's.
+#   2. As `renovate`: /user/settings/applications -> Generate New Token, with
+#      write on `repository` and `issue`, read on `user` and `organization`.
+#      Issue because the dependency dashboard IS an issue and the run silently
+#      produces no dashboard without it; organization because skavex is one and
+#      its repos are invisible without it.
+#   3. Paste it as RENOVATE_TOKEN, at the settings URL above.
+#   4. Grant the account write: collaborator on hutao/vps, and a skavex team
+#      with write on the repos it should touch. Autodiscover lists what the
+#      TOKEN can see, so this step is what actually scopes the bot — the
+#      namespace filter below only narrows it further.
+#
+# COST. Same bill as ci.yml: no nix store is reused between runs, so this pays
+# for Renovate's closure from the binary cache once a week on the box that also
+# serves mail, git and the minecraft server. Weekly rather than daily for that
+# reason alone — nothing here needs same-day updates.
+name: Renovate
+
+on:
+  schedule:
+    # UTC, by leaving `timezone:` off — Forgejo defaults to it. A civil zone
+    # here would move the run by an hour twice a year, and Forgejo's DST
+    # handling is not GitHub's: it SKIPS a run when the clock jumps forward and
+    # runs it TWICE when it falls back. Nothing about a dependency check wants
+    # either, and noon UTC is nowhere near a transition anyway.
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    name: Open update pull requests
+    # The Nix image, for two reasons rather than one. The obvious one is the
+    # same as ci.yml's: no node in this image, so no `uses:` — and Renovate
+    # comes from the flake instead of an action. The one that decides it is
+    # lockFileMaintenance: Renovate does not edit flake.lock itself, it shells
+    # out to `nix flake update`, so the `nix` binary must be on PATH INSIDE the
+    # job container. ghcr.io/renovatebot/renovate has no nix; this does.
+    runs-on: nix
+
+    env:
+      # Set at the job level so the `nix` that Renovate shells out to inherits
+      # it too — a subprocess with no flakes support fails lock maintenance
+      # alone, leaving the container updates working and nixpkgs frozen.
+      NIX_CONFIG: experimental-features = nix-command flakes
+
+      RENOVATE_PLATFORM: forgejo
+      RENOVATE_ENDPOINT: https://git.hu-tao.dev/api/v1/
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+
+      # Instance-wide, bounded by namespace. The token can write to every repo
+      # the account can reach, so bare autodiscover would be the whole instance;
+      # naming the two namespaces is what keeps it to ours. Filtering happens in
+      # Forgejo's API rather than client-side, so repos outside them are never
+      # even listed.
+      #
+      # Note what this does NOT do: it does not restrict scope to nix repos.
+      # Every repo under these two is in, and each one Renovate has not seen
+      # before gets an onboarding PR ("Configure Renovate") rather than
+      # immediate updates — one per repo, all at once, on the first run. Close
+      # the ones you do not want; a closed onboarding PR is remembered and not
+      # reopened.
+      #
+      # If that is the wrong shape, the alternative is autodiscoverTopics: repos
+      # opt in by carrying a topic in the Forgejo UI. It is one or the other on
+      # Forgejo — a configured autodiscoverTopics makes this key ignored.
+      RENOVATE_AUTODISCOVER: "true"
+      RENOVATE_AUTODISCOVER_NAMESPACES: hutao,skavex
+
+      # No RENOVATE_GIT_AUTHOR. On Forgejo, Renovate reads the name and commit
+      # email of whatever account the token belongs to and uses that — and it
+      # is not cosmetic. Renovate decides "did a human edit my branch?" by
+      # comparing each commit's author to gitAuthor, so an override that does
+      # not match the token's account makes Renovate read its OWN commits as
+      # someone else's and stop updating the branch. Letting it detect the
+      # value cannot disagree with the account.
+
+      # Renovate's default is to install its own copies of the tools a manager
+      # needs, which here would mean fetching a second Nix into a container that
+      # already has one. `global` means "use what is on PATH".
+      RENOVATE_BINARY_SOURCE: global
+
+    steps:
+      # Renovate clones the repo itself, from the endpoint above — this checkout
+      # is not for Renovate. It is for `nix develop .#renovate`, which needs
+      # flake.nix and flake.lock on disk to resolve to the pinned version.
+      #
+      # So, unlike ci.yml's checkout, shallow is fine: nothing here reads
+      # history.
+      - name: Checkout
+        run: |
+          git init -q -b main .
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+
+      # A shell of its own rather than an entry in `.#ci`. Renovate's closure is
+      # a node runtime and change: ci.yml runs on every push and every PR, and
+      # putting Renovate in the shell it enters would make every one of those
+      # runs download it for a job that never invokes it.
+      - name: Renovate
+        run: nix develop .#renovate -c renovate
