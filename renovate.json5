@@ -68,6 +68,20 @@
   // into thirty open pull requests.
   prHourlyLimit: 0,
 
+  // NOTHING opens a pull request on its own. Every update lands on the
+  // Dependency Dashboard issue as an unticked checkbox, and a branch is only
+  // created for the ones ticked — so the issue is the queue and the inbox is
+  // quiet. This is what makes the daily cron affordable: a run that finds ten
+  // updates edits one issue instead of opening ten pull requests.
+  //
+  // The consequence to know about: an update nobody ticks is never applied, so
+  // a security patch waits on a human exactly like a cosmetic one. The
+  // dashboard is now the thing to read, not a notification to react to.
+  //
+  // prHourlyLimit above still matters, and more than before: it is what decides
+  // how fast a batch of ticked boxes actually turns into branches.
+  dependencyDashboardApproval: true,
+
   // Every container tag in this repo is a Nix string literal, which no built-in
   // manager reads. One regex manager beats `# renovate:` hint comments above a
   // dozen lines: one block here, and modules/containers/*.nix stay untouched.

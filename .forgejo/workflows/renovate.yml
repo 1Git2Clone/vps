@@ -66,7 +66,11 @@ on:
     # handling is not GitHub's: it SKIPS a run when the clock jumps forward and
     # runs it TWICE when it falls back. Nothing about a dependency check wants
     # either, and noon UTC is nowhere near a transition anyway.
-    - cron: "0 12 * * 1"
+    # Daily, not weekly — affordable only because dependencyDashboardApproval
+    # in renovate.json5 means a run opens no pull requests. It refreshes one
+    # issue, so the cost is a Renovate closure download and about a minute of
+    # runner time, and the dashboard is never more than a day stale.
+    - cron: "0 12 * * *"
   workflow_dispatch:
 
 concurrency:
