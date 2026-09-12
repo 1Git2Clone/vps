@@ -49,7 +49,12 @@ in
   virtualisation.oci-containers.containers.tempo = {
     # Pinned to the 3.0.0 release, not `latest` — `latest` is a main-branch
     # build, so the tag reports a version that was never released.
-    image = "grafana/tempo:3.0.0";
+    #
+    # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/grafana/tempo/tags/<version>'
+    # and NOT the tag LISTING: grafana/tempo publishes enough tags that every
+    # 3.x falls outside the 100 most-recently-updated, so a listing looks like
+    # 3.x does not exist at all. Ask for the exact tag instead.
+    image = "grafana/tempo:3.0.3";
 
     cmd = [ "-config.file=/etc/tempo.yaml" ];
 
