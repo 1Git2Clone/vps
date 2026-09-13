@@ -254,13 +254,20 @@ in
 
     # The Actions cache proxy, and the ONLY port this container publishes.
     #
-    # Bound to docker0's gateway, never 0.0.0.0. Job containers reach the host
-    # here from whatever per-job network they were created on, while nothing
-    # off-box can: the address is host-local. That distinction has to be made
-    # with the bind address rather than with nftables, because docker writes
-    # its DNAT rules into nat/PREROUTING ahead of the firewall's input chain —
-    # a published 0.0.0.0 port is reachable from the internet no matter what
-    # nftables says about it.
+    # Bound to docker0's gateway rather than 0.0.0.0, as a second lock on a door
+    # modules/firewall.nix already closes. 0.0.0.0 would NOT expose this: a
+    # published port is DNAT'd and then forwarded, the forward chain there is
+    # policy-drop, and 34567 is not in its public allow-list — traffic from the
+    # internet arrives with `iifname eth0` and is dropped and logged.
+    #
+    # The bind address is still worth setting, because it does not depend on
+    # that allow-list staying correct. Adding a port to the forward chain is how
+    # a service is published on this box, so the chain is edited routinely; a
+    # host-local bind address is not something a future edit there can undo.
+    #
+    # Reachability in the other direction is already covered: the forward chain
+    # accepts `iifname "br-*"`, which is every per-job network a job container
+    # can be created on.
     ports = [ "${dockerBridgeGateway}:${toString cacheProxyPort}:${toString cacheProxyPort}" ];
 
     extraOptions = [
