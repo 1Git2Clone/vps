@@ -123,13 +123,5 @@
       };
     };
   };
-  virtualisation.docker = {
-    enable = true;
-
-    # docker0's own address, pinned to what docker would pick anyway. The
-    # Actions runner publishes its cache proxy onto this address and nothing
-    # else, so it has to be a fact rather than a default that could move under
-    # us. See `infra.dockerBridgeSubnet` in modules/options.nix.
-    daemon.settings.bip = config.infra.dockerBridgeSubnet;
-  };
+  virtualisation.docker.enable = true;
 }
