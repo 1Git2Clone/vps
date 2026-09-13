@@ -108,5 +108,31 @@
         pair is edited inconsistently.
       '';
     };
+
+    dockerBridgeGateway = lib.mkOption {
+      type = lib.types.str;
+      default = "172.17.0.1";
+      description = ''
+        The host's address on docker's DEFAULT bridge, and the one address a
+        job container can reach the host at whichever per-job network it was
+        created on — `container.network` is "" (see
+        modules/containers/forgejo-runner.nix), so that network differs every
+        run and its own gateway cannot be named ahead of time. The Actions
+        cache proxy is published here.
+
+        OBSERVED, not enforced. `ip -4 -br addr show docker0` reports
+        172.17.0.1/16 on this host, which is docker's built-in default.
+
+        Deliberately NOT pinned with the daemon's `bip` setting, even though
+        pinning is what `botSubnet`/`botGateway` do for a network this repo
+        creates itself. `bip` is daemon config, so setting it restarts
+        docker.service, which stops EVERY container — and the Actions runner
+        comes back before caddy does, cannot reach https://git.''${domain}/ to
+        declare itself, and exits 1. That is what took generation 54 down; see
+        the revert of #9. A wrong value here costs one failed container start
+        and a rollback. Pinning it costs a full container restart on the box,
+        every deploy that touches this line.
+      '';
+    };
   };
 }
