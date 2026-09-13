@@ -137,9 +137,11 @@
         run and its own gateway cannot be named ahead of time.
 
         MUST be the address part of `dockerBridgeSubnet`. The Actions cache
-        proxy is published here and nowhere else: binding it to 0.0.0.0 would
-        put the cache proxy on the public interface, and docker's DNAT rules
-        run ahead of nftables, so the firewall could not take that back.
+        proxy is published here and nowhere else — not because 0.0.0.0 would
+        expose it (modules/firewall.nix drops it: the forward chain is
+        policy-drop and 34567 is not in its public allow-list) but because a
+        host-local bind does not depend on that allow-list staying correct.
+        That chain is edited whenever a service is published; this is not.
       '';
     };
   };
