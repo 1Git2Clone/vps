@@ -108,5 +108,39 @@
         pair is edited inconsistently.
       '';
     };
+
+    dockerBridgeSubnet = lib.mkOption {
+      type = lib.types.str;
+      default = "172.17.0.1/16";
+      description = ''
+        Docker's DEFAULT bridge (docker0), pinned through the daemon's `bip`
+        setting rather than left implicit. This is already docker's built-in
+        default, so pinning it renumbers nothing — it only stops the value
+        being an assumption.
+
+        It has to stop being an assumption because the Actions runner publishes
+        its cache proxy onto `dockerBridgeGateway`. A published port bound to
+        an address the host does not own fails at container start, so a silent
+        change in docker's default would take the runner down rather than
+        merely mis-route it.
+      '';
+    };
+
+    dockerBridgeGateway = lib.mkOption {
+      type = lib.types.str;
+      default = "172.17.0.1";
+      description = ''
+        The host's address on docker's default bridge, and the one address a
+        job container can reach the host at whichever per-job network it was
+        created on — `container.network` is "" (see
+        modules/containers/forgejo-runner.nix), so that network differs every
+        run and its own gateway cannot be named ahead of time.
+
+        MUST be the address part of `dockerBridgeSubnet`. The Actions cache
+        proxy is published here and nowhere else: binding it to 0.0.0.0 would
+        put the cache proxy on the public interface, and docker's DNAT rules
+        run ahead of nftables, so the firewall could not take that back.
+      '';
+    };
   };
 }
