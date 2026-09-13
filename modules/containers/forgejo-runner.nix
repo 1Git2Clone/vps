@@ -40,9 +40,14 @@
 }:
 
 let
-  inherit (config.infra) domain pagesVolume;
+  inherit (config.infra) domain pagesVolume dockerBridgeGateway;
 
   fqdn = "git.${domain}";
+
+  # The port job containers reach the Actions cache proxy on. Fixed rather than
+  # random (the runner's default) because it is published below, and a `ports`
+  # entry cannot name a port the runner picks at startup.
+  cacheProxyPort = 34567;
 
   # The public URL, not `http://forgejo:4242` over the proxy network. Two
   # reasons: the runner hands this URL to every job container, and a job is on
@@ -139,11 +144,31 @@ let
         "  timeout: 30m"
         ""
         "cache:"
-        # actions/cache needs a cache server reachable FROM the job container,
-        # which means the runner advertising an address that resolves there.
-        # Off until something needs it, so a wrong guess at that address cannot
-        # fail every job with a confusing network error.
-        "  enabled: false"
+        # Something needs it now. serenity-discord-bot runs six compile jobs
+        # per push, and with no cache each one rebuilds the whole dependency
+        # graph from scratch: measured locally, a clean `cargo build
+        # --all-features` is 375s against 15s with a warm target directory.
+        # `Swatinem/rust-cache@v2` has been in that workflow the whole time,
+        # silently doing nothing, because a runner with the cache disabled
+        # sets no ACTIONS_CACHE_URL and the action then no-ops without a word.
+        "  enabled: true"
+        # Inside the runner's existing data volume, so the cache survives a
+        # container replacement and restic already backs it up along with
+        # everything else under /var/lib/docker/volumes.
+        "  dir: /data/cache"
+        # Two ports, and only this one matters here. `port` is the internal
+        # cache SERVER, which only the proxy in the same container talks to —
+        # left random on purpose. `proxy_port` is what job containers actually
+        # connect to via ACTIONS_CACHE_URL, so it has to be fixed for the
+        # `ports` entry below to name it.
+        "  proxy_port: ${toString cacheProxyPort}"
+        # The address written into ACTIONS_CACHE_URL. It must be reachable
+        # FROM a job container, and a job container is on a per-job network
+        # (see container.network) which docker isolates from the bridge this
+        # runner sits on — so container-to-container is out, and it has to be
+        # an address on the HOST. docker0's gateway is the only one that is
+        # both stable and not the public interface.
+        "  host: \"${dockerBridgeGateway}\""
         ""
         "container:"
         # Empty, NOT "bridge". This is the one setting that decides whether a
@@ -222,9 +247,21 @@ in
       "/var/run/docker.sock:/var/run/docker.sock"
     ];
 
-    # No `networks`: the default bridge is what job containers get, and the
-    # runner has no reason to sit anywhere its jobs cannot reach. It talks to
-    # the instance over the public address like any other client.
+    # No `networks`: the runner has no reason to sit on any of the named ones,
+    # and it talks to the instance over the public address like any other
+    # client. It therefore lands on docker's default bridge, which is also the
+    # one bridge whose gateway a job container can name — see `ports` below.
+
+    # The Actions cache proxy, and the ONLY port this container publishes.
+    #
+    # Bound to docker0's gateway, never 0.0.0.0. Job containers reach the host
+    # here from whatever per-job network they were created on, while nothing
+    # off-box can: the address is host-local. That distinction has to be made
+    # with the bind address rather than with nftables, because docker writes
+    # its DNAT rules into nat/PREROUTING ahead of the firewall's input chain —
+    # a published 0.0.0.0 port is reachable from the internet no matter what
+    # nftables says about it.
+    ports = [ "${dockerBridgeGateway}:${toString cacheProxyPort}:${toString cacheProxyPort}" ];
 
     extraOptions = [
       # The image runs as uid 1000, and /var/run/docker.sock is root:docker
