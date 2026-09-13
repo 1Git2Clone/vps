@@ -40,9 +40,14 @@
 }:
 
 let
-  inherit (config.infra) domain pagesVolume;
+  inherit (config.infra) domain pagesVolume dockerBridgeGateway;
 
   fqdn = "git.${domain}";
+
+  # The port job containers reach the Actions cache proxy on. Fixed rather than
+  # random (the runner's default) because it is published below, and a `ports`
+  # entry cannot name a port the runner picks at startup.
+  cacheProxyPort = 34567;
 
   # The public URL, not `http://forgejo:4242` over the proxy network. Two
   # reasons: the runner hands this URL to every job container, and a job is on
@@ -139,11 +144,31 @@ let
         "  timeout: 30m"
         ""
         "cache:"
-        # actions/cache needs a cache server reachable FROM the job container,
-        # which means the runner advertising an address that resolves there.
-        # Off until something needs it, so a wrong guess at that address cannot
-        # fail every job with a confusing network error.
-        "  enabled: false"
+        # Something needs it now. serenity-discord-bot runs six compile jobs
+        # per push, and with no cache each one rebuilds the whole dependency
+        # graph from scratch: measured locally, a clean `cargo build
+        # --all-features` is 375s against 15s with a warm target directory.
+        # `Swatinem/rust-cache@v2` has been in that workflow the whole time,
+        # silently doing nothing, because a runner with the cache disabled
+        # sets no ACTIONS_CACHE_URL and the action then no-ops without a word.
+        "  enabled: true"
+        # Inside the runner's existing data volume, so the cache survives a
+        # container replacement and restic already backs it up along with
+        # everything else under /var/lib/docker/volumes.
+        "  dir: /data/cache"
+        # Two ports, and only this one matters here. `port` is the internal
+        # cache SERVER, which only the proxy in the same container talks to —
+        # left random on purpose. `proxy_port` is what job containers actually
+        # connect to via ACTIONS_CACHE_URL, so it has to be fixed for the
+        # `ports` entry below to name it.
+        "  proxy_port: ${toString cacheProxyPort}"
+        # The address written into ACTIONS_CACHE_URL. It must be reachable
+        # FROM a job container, and a job container is on a per-job network
+        # (see container.network) which docker isolates from the bridge this
+        # runner sits on — so container-to-container is out, and it has to be
+        # an address on the HOST. docker0's gateway is the only one that is
+        # both stable and not the public interface.
+        "  host: \"${dockerBridgeGateway}\""
         ""
         "container:"
         # Empty, NOT "bridge". This is the one setting that decides whether a
@@ -222,9 +247,28 @@ in
       "/var/run/docker.sock:/var/run/docker.sock"
     ];
 
-    # No `networks`: the default bridge is what job containers get, and the
-    # runner has no reason to sit anywhere its jobs cannot reach. It talks to
-    # the instance over the public address like any other client.
+    # No `networks`: the runner has no reason to sit on any of the named ones,
+    # and it talks to the instance over the public address like any other
+    # client. It therefore lands on docker's default bridge, which is also the
+    # one bridge whose gateway a job container can name — see `ports` below.
+
+    # The Actions cache proxy, and the ONLY port this container publishes.
+    #
+    # Bound to docker0's gateway rather than 0.0.0.0, as a second lock on a door
+    # modules/firewall.nix already closes. 0.0.0.0 would NOT expose this: a
+    # published port is DNAT'd and then forwarded, the forward chain there is
+    # policy-drop, and 34567 is not in its public allow-list — traffic from the
+    # internet arrives with `iifname eth0` and is dropped and logged.
+    #
+    # The bind address is still worth setting, because it does not depend on
+    # that allow-list staying correct. Adding a port to the forward chain is how
+    # a service is published on this box, so the chain is edited routinely; a
+    # host-local bind address is not something a future edit there can undo.
+    #
+    # Reachability in the other direction is already covered: the forward chain
+    # accepts `iifname "br-*"`, which is every per-job network a job container
+    # can be created on.
+    ports = [ "${dockerBridgeGateway}:${toString cacheProxyPort}:${toString cacheProxyPort}" ];
 
     extraOptions = [
       # The image runs as uid 1000, and /var/run/docker.sock is root:docker
