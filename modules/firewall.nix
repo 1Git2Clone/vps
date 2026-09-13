@@ -203,4 +203,15 @@
       }
     '';
   };
+  assertions = [
+    {
+      assertion = !config.networking.nftables.flushRuleset;
+      message = ''
+        networking.nftables.flushRuleset must stay false. The flush wipes the
+        tables docker owns, and docker only rebuilds them when dockerd starts —
+        running containers survive, and the NEXT container start fails with
+        "iptables: No chain/target/match by that name". See the comment above.
+      '';
+    }
+  ];
 }
