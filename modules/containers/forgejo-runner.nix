@@ -45,10 +45,11 @@ let
   fqdn = "git.${domain}";
 
   # The public URL, not `http://forgejo:4242` over the proxy network. Two
-  # reasons: the runner hands this URL to every job container, which is on the
-  # default bridge and could not resolve a proxy-network container name; and
-  # putting jobs on the proxy network would let a workflow reach kuma, navidrome
-  # and searxng directly, behind the caddy that is supposed to be their door.
+  # reasons: the runner hands this URL to every job container, and a job is on
+  # its own per-job network (see `container.network` below) where a
+  # proxy-network container name does not resolve; and putting jobs on the proxy
+  # network would let a workflow reach kuma, navidrome and searxng directly,
+  # behind the caddy that is supposed to be their door.
   instanceUrl = "https://${fqdn}/";
 
   # 13.1.0, released 2026-08-31. The tag carries no `v`, unlike the git tag —
@@ -145,7 +146,30 @@ let
         "  enabled: false"
         ""
         "container:"
-        "  network: bridge"
+        # Empty, NOT "bridge". This is the one setting that decides whether a
+        # workflow's `services:` work at all.
+        #
+        # "bridge" is docker's DEFAULT bridge, and the default bridge is the one
+        # network with no embedded DNS — containers on it are reachable by IP and
+        # by nothing else. A job that does
+        #
+        #     services:
+        #       postgres: { image: postgres:18.2 }
+        #     env:
+        #       DATABASE_URL: postgres://…@postgres:5432/…
+        #
+        # then fails with "failed to lookup address information: Name or service
+        # not known", after its wait loop has burned the full timeout. That is
+        # what every run of serenity-discord-bot's test job did.
+        #
+        # Empty is the runner's own default: a network created per job, torn down
+        # with it, on which the runner registers each service under its workflow
+        # name. DNS works, so `postgres` and `redis` resolve.
+        #
+        # Per-job, not one shared network, matters at capacity 2 — two concurrent
+        # jobs both aliasing `postgres` on a shared network would round-robin
+        # between each other's databases.
+        "  network: \"\""
         "  privileged: false"
         # The allow-list, and the whole reason a workflow can publish a page.
         # Any other `volumes:` entry in a workflow is refused by the runner.
