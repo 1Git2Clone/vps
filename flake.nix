@@ -295,6 +295,24 @@
               # what makes `nix develop .#renovate` work off a workstation too.
               nix
               git
+              # Same reason as `nix`, for a different manager. RENOVATE_BINARY_SOURCE
+              # is `global`, so Renovate never installs a toolchain of its own — it
+              # spawns whatever is on PATH. With no pnpm there, every npm-manager
+              # repo the bot discovers dies on
+              #
+              #   spawn pnpm ENOENT  (unhandledRejection, exit 1)
+              #
+              # and — because the crash happens in the lockfile step, after the
+              # branch is pushed — it opens the pull request anyway, with the
+              # lockfile untouched and an `artifactErrors` comment on it. hutao/vps
+              # has no package.json and was never affected; skavex/skavex is.
+              #
+              # pnpm_10 and not pnpm: skavex's pnpm-lock.yaml is lockfileVersion
+              # '9.0' and it declares no `packageManager` field, so nothing tells
+              # Renovate which major to use. nixpkgs' unversioned `pnpm` is 11, and
+              # a major that rewrites the lockfile format would turn every update
+              # into a whole-file diff. Pin it to the major that wrote the lock.
+              pnpm_10
             ];
           };
         }
