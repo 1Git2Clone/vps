@@ -151,6 +151,8 @@ in
       GAMEMODE = "survival";
       MOTD = "A Place for Gemstones to Chill";
 
+      SPAWN_PROTECTION = "0";
+
       # Individual mods via Modrinth (auto-selects newest for 26.1.2 Fabric).
       # Remove a slug to uninstall; add a slug to install.
       # :beta suffix needed for mods without a stable release for this MC version.
@@ -203,6 +205,12 @@ in
       DIFFICULTY = "hard";
       GAMEMODE = "survival";
       MOTD = "A Second Place for Gemstones to Chill";
+
+      # Vanilla defaults this to 16, which stops NON-OPS breaking any block
+      # within 16 of world spawn — ops are exempt, so the symptom is "you have
+      # to be op to build", not an error message. A whitelisted server has no
+      # griefers to protect spawn from.
+      SPAWN_PROTECTION = "0";
 
       # Auto-selects newest compatible for 1.21.1 Fabric — a DIFFERENT set of
       # builds from world 1's, which is why this list is its own.
