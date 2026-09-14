@@ -24,11 +24,14 @@ variable "subdomains" {
   # needs nothing more, because the server is on the default 25565 and clients
   # connect with a bare hostname.
   #
-  # If it ever moves off 25565, Minecraft — unlike ssh — DOES read SRV records
-  # (_minecraft._tcp.<host>), which is the supported way to hide a port from
-  # players. That is exactly the trick forgejo could not use, which is why it
+  # "mc2" is the SECOND world, which is on 25566 and therefore does need more:
+  # Minecraft — unlike ssh — DOES read SRV records (_minecraft._tcp.<host>),
+  # which is the supported way to hide a port from players. See the SRV record
+  # in main.tf. That is exactly the trick forgejo could not use, which is why it
   # owns port 22 and this host's sshd sits on 2222.
-  default = ["mail", "git", "minecraft", "mc", "music", "status", "smtp", "search", "pages"]
+  #
+  # The A record for mc2 is still required: an SRV target has to resolve.
+  default = ["mail", "git", "minecraft", "mc", "mc2", "music", "status", "smtp", "search", "pages"]
 }
 
 variable "dkim_cloudflare_key" {

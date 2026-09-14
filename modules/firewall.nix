@@ -92,7 +92,8 @@
             465,
             587,
             993,
-            25565
+            25565,
+            25566
           } ct state new accept
 
           # HTTP/3, matching caddy's published 443/udp.
@@ -183,7 +184,7 @@
           #   25    smtp          465  smtps
           #   587   submission    993  imaps
           #   80    http          443  https
-          #   25565 minecraft
+          #   25565 minecraft      25566 minecraft (second world)
           tcp dport {
             22,
             25,
@@ -192,7 +193,8 @@
             465,
             587,
             993,
-            25565
+            25565,
+            25566
           } ct state new accept
 
           # HTTP/3, which caddy publishes on 443/udp.

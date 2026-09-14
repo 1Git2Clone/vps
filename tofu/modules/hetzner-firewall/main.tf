@@ -22,6 +22,7 @@ locals {
     { protocol = "tcp", port = "443", description = "HTTPS" },
     { protocol = "udp", port = "443", description = "HTTP/3" },
     { protocol = "tcp", port = "25565", description = "Minecraft" },
+    { protocol = "tcp", port = "25566", description = "Minecraft (second world)" },
   ]
 
   outbound = [

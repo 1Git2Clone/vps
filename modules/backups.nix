@@ -34,11 +34,13 @@
       "/var/backup/postgresql"
     ];
 
-    # The minecraft world is snapshotted separately, with the server stopped —
-    # see the `minecraft` backup below. Copying a live world is exactly what
-    # that job exists to avoid.
+    # The minecraft worlds are snapshotted separately, with the servers stopped
+    # — see the `minecraft` backup below. Copying a live world is exactly what
+    # that job exists to avoid, and that applies to every world, not just the
+    # first: a volume missing from this list is backed up hot by the daily job.
     exclude = [
       "/var/lib/docker/volumes/minecraft_data"
+      "/var/lib/docker/volumes/minecraft2_data"
     ];
 
     timerConfig = {
@@ -64,6 +66,9 @@
   };
 
   # The weekly quiescent minecraft snapshot, ported from scripts/mc-backup.sh.
+  # ONE job for BOTH worlds: they share a window, so world 1 is down while
+  # world 2 is archived. Splitting them into two jobs would mean two stop/start
+  # cycles and two restic runs against the same repository for no gain.
   # Same repository, same password — restic deduplicates against the daily
   # snapshots, so the overlap costs almost nothing.
   #
@@ -78,7 +83,10 @@
     passwordFile = config.sops.secrets.backups_restic_password.path;
     environmentFile = config.sops.templates."restic-b2.env".path;
 
-    paths = [ "/var/lib/docker/volumes/minecraft_data" ];
+    paths = [
+      "/var/lib/docker/volumes/minecraft_data"
+      "/var/lib/docker/volumes/minecraft2_data"
+    ];
 
     timerConfig = {
       OnCalendar = "Sun 04:00";
@@ -90,14 +98,14 @@
     # repository on their own retention policies fight over each other's
     # snapshots.
     backupPrepareCommand = ''
-      ${config.systemd.package}/bin/systemctl stop docker-minecraft.service
+      ${config.systemd.package}/bin/systemctl stop docker-minecraft.service docker-minecraft2.service
     '';
 
     # Runs from ExecStopPost, so unlike the healthcheck ping in the daily job
     # it is unconditional: the server must come back whether restic succeeded
     # or not.
     backupCleanupCommand = ''
-      ${config.systemd.package}/bin/systemctl start docker-minecraft.service
+      ${config.systemd.package}/bin/systemctl start docker-minecraft.service docker-minecraft2.service
     '';
   };
 }

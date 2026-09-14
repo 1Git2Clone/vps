@@ -30,6 +30,30 @@ resource "cloudflare_dns_record" "a" {
   proxied = false
 }
 
+# The second minecraft world is published on 25566, not the default 25565, so a
+# bare A record is not enough — the client would have to be told the port. This
+# is what lets players type "mc2.<domain>" and nothing else.
+#
+# The name carries the service and protocol in v5 (_minecraft._tcp.<host>);
+# priority/weight/port/target live in `data`. Target is the A record above, not
+# the IP: an SRV target must be a name.
+resource "cloudflare_dns_record" "minecraft2_srv" {
+  zone_id = var.zone_id
+  name    = "_minecraft._tcp.mc2.${var.domain}"
+  type    = "SRV"
+  ttl     = 1
+
+  data = {
+    priority = 0
+    weight   = 0
+    port     = 25566
+    target   = "mc2.${var.domain}"
+  }
+
+  # The A record has to exist before anything resolves the target.
+  depends_on = [cloudflare_dns_record.a]
+}
+
 # MX must point at a name that resolves to the host itself, which is why smtp is
 # in var.subdomains.
 resource "cloudflare_dns_record" "mx" {

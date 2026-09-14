@@ -244,7 +244,7 @@ supports:
 |---|---|
 | grafana | real login from sops; anonymous-Admin off, sign-up off |
 | dozzle | bcrypt hash from sops, in a `users.yml` copied to a stable path |
-| minecraft RCON | password from sops, loopback only |
+| minecraft RCON | password from sops, loopback only; one password per world (25575 / 25576) |
 | serenity bot | discord token + AI key + db password, all sops |
 | **kuma** | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy. |
 | **searxng** | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file |
@@ -279,7 +279,8 @@ generation symlink each time — a *mounted* template would pin a stale inode (�
   /var/backup/postgresql ──────┘
        ▲ (23:15, BEFORE restic)
 
-  minecraft_data ──▶ restic (weekly, server STOPPED)   ── excluded from the daily job
+  minecraft_data  ─┬▶ restic (weekly, servers STOPPED) ── excluded from the daily job
+  minecraft2_data ─┘
 ```
 
 `services.restic` backs up `/var/lib/docker/volumes` **wholesale**, so a service
@@ -289,11 +290,17 @@ host, so its data is not under docker/volumes; `services.postgresqlBackup` write
 a `pg_dumpall` there (every DB + globals) at **23:15**, deliberately before
 restic's window, so the archived dump is never up to 23 h stale.
 
-The minecraft world is snapshotted **separately, with the server stopped** —
+The minecraft worlds are snapshotted **separately, with the servers stopped** —
 a live world holds region files open and is not consistent on disk. That job
-stops the container in `backupPrepareCommand` and restarts it from
-`backupCleanupCommand` (an `ExecStopPost`), so the server returns whether restic
-succeeded or not. It is excluded from the daily job.
+stops the containers in `backupPrepareCommand` and restarts them from
+`backupCleanupCommand` (an `ExecStopPost`), so the servers return whether restic
+succeeded or not. They are excluded from the daily job.
+
+Both worlds share **one** job and therefore one downtime window: a second job
+would mean a second stop/start cycle and a second restic run against the same
+repository. Every world volume must be in this job's `paths` **and** in the
+daily job's `exclude` — a volume missing from the exclude list is archived hot
+by the daily run, which is the corruption this job exists to prevent.
 
 The restic **password is the encryption key**: lose it and every snapshot is
 unrecoverable. It, and the other things not in this repo, are catalogued in

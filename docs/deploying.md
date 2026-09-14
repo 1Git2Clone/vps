@@ -368,10 +368,10 @@ Not "the deploy said success" — these:
 ssh -p 2222 hutao@hu-tao '
   systemctl is-system-running          # want: running
   systemctl --failed                   # want: empty
-  sudo ls /run/secrets | wc -l         # want: 20
+  sudo ls /run/secrets | wc -l         # want: 21
   sudo docker ps --format "{{.Names}} {{.Status}}"
-  for u in caddy forgejo mailserver webmail kuma navidrome minecraft grafana tempo dozzle cloudflared \
-           serenity-bot-0 serenity-redis; do
+  for u in caddy forgejo mailserver webmail kuma navidrome minecraft minecraft2 grafana tempo dozzle \
+           cloudflared serenity-bot-0 serenity-redis; do
     echo "$u restarts=$(systemctl show -p NRestarts --value docker-$u)"
   done
   systemctl is-active postgresql pgbouncer serenity-bot-image'

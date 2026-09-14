@@ -49,7 +49,8 @@ nothing to remember to run.
 | `dozzle` | 8080, tailnet only |
 | `grafana` | host networking, :3000, tailnet only |
 | `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
-| `minecraft` | 25565; RCON on loopback only |
+| `minecraft` | 25565; RCON on loopback only (25575) |
+| `minecraft2` | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576) |
 | `serenity-bot-0` | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669` |
 | `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback |
 | `postgres` | not a container — a host service; unix socket + loopback only, never on `botnet` |
@@ -196,6 +197,7 @@ Beyond what the Ansible vault held, this port needs:
 | `grafana/admin_user`, `grafana/admin_password` | anonymous Admin is off, so this is the only way in |
 | `kuma/healthcheck_url` | the out-of-band status-page probe; a separate check from the backup one because they fail for different reasons |
 | `minecraft/rcon_password` | RCON is loopback-only but it is still a remote console |
+| `minecraft2/rcon_password` | the second world's console. A separate password on purpose — one leak should not reach both worlds |
 | `serenity/bot_token`, `serenity/ai_api_key` | the Discord bot's gateway token and its DeepSeek key |
 | `searxng/secret_key` | signs searxng's session cookies; upstream's default is the literal `ultrasecretkey` |
 | `searxng/admin_user`, `searxng/admin_password_hash` | searxng has no accounts, so caddy's `basic_auth` is the whole access control. bcrypt, same shape as dozzle's |
@@ -653,8 +655,8 @@ A scan that cannot run reports a failure — it never degrades into an all-clear
 If a run dies before reporting, an exit trap posts an ABORTED notice, because
 silence and "no findings" must not look the same.
 
-The weekly minecraft job stops the server, snapshots, and starts it again from
-`ExecStopPost` — so the server comes back whether restic succeeded or not. A live
+The weekly minecraft job stops both worlds' servers, snapshots, and starts them
+again from `ExecStopPost` — so they come back whether restic succeeded or not. A live
 world is not consistent on disk: the server holds region files open and writes
 them in place, which is why the daily backup excludes that volume and this job
 exists.
