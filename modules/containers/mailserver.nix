@@ -73,22 +73,52 @@ in
     # later". Receiving keeps working, so the failure looks like anything
     # except a file mode. The key itself is valid and matches DNS throughout.
     #
-    # 102:104 are opendkim's uid:gid inside the DMS image, which has no
+    # 102:102 are opendkim's uid:gid inside the DMS image, which has no
     # counterpart on this host — hence numeric. Verify after an image bump with:
     #   docker exec mailserver id opendkim
+    #
+    # THAT VERIFY STEP IS NOT DECORATIVE. It caught a real break on the
+    # 15.1.0 -> 16.0.1 bump: the gid moved 104 -> 102 while the uid stayed put,
+    # because v16 rebases onto Debian 13 and the package install order that
+    # allocates it changed. Installing the key -g 104 under v16 hands it to a
+    # group opendkim is not in, RequireSafeKeys refuses to load it, and
+    # submissions get 451 4.7.1 while RECEIVING still works — the exact silent
+    # half-failure described above. Check the IMAGE before deploying it, which
+    # needs no running container and no downtime:
+    #   docker run --rm --entrypoint id <image> opendkim
     #
     # The mount is read-only, so DMS cannot correct the mode itself the way it
     # does for keys it manages in its own config volume.
     script = ''
       install -d -m 0700 -o root -g root /var/lib/mailserver/dkim
-      install -m 0600 -o 102 -g 104 \
+      install -m 0600 -o 102 -g 102 \
         ${config.sops.secrets.email_dkim_private_key.path} ${dkimKey}
     '';
   };
 
   virtualisation.oci-containers.containers = {
     mailserver = {
-      image = "ghcr.io/docker-mailserver/docker-mailserver:15.1.0";
+      # v16.0.1, a MAJOR: Debian 12 -> 13, and with it Postfix 3.7.11 ->
+      # 3.10.13 and Dovecot 2.3.19.1 -> 2.4.1-4.
+      #
+      # What makes it safe for THIS deployment is mostly what dms_config does
+      # not contain. There is no custom dovecot.cf — 2.3 syntax does not load
+      # under 2.4 — and no dhparams.pem, which v16 stopped applying when it
+      # dropped DHE from 465/587/993. The volume holds exactly three things:
+      # postfix-accounts.cf, an empty dovecot-quotas.cf, and user-patches.sh.
+      #
+      # user-patches.sh writes the OpenDKIM KeyTable/SigningTable/TrustedHosts,
+      # which is also why v16's Rspamd DKIM key rename to
+      # <domain>-<selector>.private does not apply: signing here is OpenDKIM
+      # and the key path is pinned by that KeyTable, not discovered.
+      #
+      # SA_SPAM_SUBJECT was removed in favour of SPAM_SUBJECT; neither is set
+      # below, so there is nothing to migrate. The gid change this bump carries
+      # is handled in mailserver-dkim above — read that comment before touching
+      # the tag again.
+      #
+      # Bump with: curl -sS 'https://api.github.com/repos/docker-mailserver/docker-mailserver/releases?per_page=5'
+      image = "ghcr.io/docker-mailserver/docker-mailserver:16.0.1";
       inherit hostname;
 
       environment = {
