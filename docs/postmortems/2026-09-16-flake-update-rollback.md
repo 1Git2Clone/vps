@@ -187,18 +187,3 @@ last."**
 | 3 | Decide whether a failed activation should de-activate at all. `magicRollback` protects against losing SSH; it is not obviously the right tool for one crashlooping non-critical unit, and its abort is more destructive than the failure it responds to. | §7. |
 | 4 | Confirm the healthchecks.io grace period is short enough that two missed pings actually page. The probe failed correctly; whether that produced an alert is configured outside this repo. | §6 is only half-verified. |
 | 5 | Create `postmaster@hu-tao.dev`. See §10. | RFC 5321 §4.5.1. |
-
-## 10. Unrelated finding
-
-While checking for bounces, the only ones in the log turned out to be from
-2026-09-13 and nothing to do with this incident:
-
-```
-550 5.1.1 <postmaster@hu-tao.dev> User doesn't exist
-```
-
-`postmaster@` is required to be deliverable, and ours is not — so mail from
-other operators' systems, including automated delivery and reputation reports,
-bounces. `root@smtp.hu-tao.dev` aliases to it and bounces too, which means the
-box's own system mail is going nowhere. Worth fixing independently of everything
-above.
