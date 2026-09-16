@@ -105,6 +105,6 @@ resource "cloudflare_dns_record" "bsky" {
   zone_id = var.zone_id
   name    = "_atproto"
   type    = "TXT"
-  content = "${var.bsky_record}"
+  content = var.bsky_record
   ttl     = 1
 }
