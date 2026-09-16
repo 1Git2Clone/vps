@@ -20,7 +20,7 @@
 }:
 
 let
-  inherit (config.infra) domain proxyNetwork;
+  inherit (config.infra) domain proxyNetwork publicIPv4;
   pingUrlFile = config.sops.secrets.kuma_healthcheck_url.path;
 
   # /api/entry-page rather than the site root: the root answers 302 and only
@@ -52,6 +52,30 @@ in
     image = "louislam/uptime-kuma:2.5.4";
     volumes = [ "kuma_data:/app/data" ];
     networks = [ proxyNetwork ];
+
+    # The SMTP monitor has to leave the box and come back.
+    #
+    # mailserver.nix sets that container's hostname to smtp.<domain>, which it
+    # must — PTR, HELO and the MX target all have to agree (§4). Docker then
+    # registers that name on the proxy network's embedded DNS, where it
+    # SHADOWS public DNS for every container on the network. kuma is one of
+    # them, so its SMTP check was resolving to a bridge address and testing
+    # the container directly: never the edge firewall, never host nftables,
+    # never the DNAT, never the published port. It would have stayed green
+    # through a firewall change that hid the MX from the entire internet.
+    #
+    # It also produced a four-minute false outage on 2026-09-16. Recreating
+    # the mailserver moved it to a new bridge IP, kuma held the old one, and
+    # docker had meanwhile handed that address to webmail — which listens on
+    # 80, hence ECONNREFUSED rather than a timeout. Real downtime was 16s.
+    #
+    # Pinning the NAME to the public IP fixes both without touching the
+    # monitor: the hostname still matches a certificate SAN, so the monitor
+    # keeps verifying the cert under STARTTLS. Setting the monitor's hostname
+    # to the literal IP instead would have broken exactly that — the cert
+    # carries eight DNS SANs and no IP SAN, so verification would fail and the
+    # only way out would be turning TLS checking off.
+    extraOptions = [ "--add-host=smtp.${domain}:${publicIPv4}" ];
   };
 
   systemd.services.kuma-check = {
