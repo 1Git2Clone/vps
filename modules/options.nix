@@ -53,6 +53,22 @@
       '';
     };
 
+    publicIPv4 = lib.mkOption {
+      type = lib.types.str;
+      default = "167.233.24.58";
+      description = ''
+        The primary IPv4, as seen from the internet. Owned by tofu — it is an
+        `hcloud_primary_ip` with delete protection, deliberately separate from
+        the server so an IP handover carries mail reputation to a new box with
+        no DNS change. This is a COPY of that value for the things NixOS needs
+        it for, not the source of truth; if it ever changes, tofu changes it
+        first and this follows.
+
+        Public by definition, so a plain string is right — the reasoning on
+        `acmeEmail` applies here too.
+      '';
+    };
+
     acmeEmail = lib.mkOption {
       type = lib.types.str;
       default = "ivan@hu-tao.org";
