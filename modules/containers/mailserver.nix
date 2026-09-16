@@ -22,6 +22,40 @@ let
   dkimKey = "/var/lib/mailserver/dkim/default.private";
   dkimKeyInContainer = "/etc/opendkim/keys/${domain}/default.private";
 
+  # RFC 5321 §4.5.1 requires postmaster@ to be deliverable, and until now it was
+  # not: the domain is a virtual mailbox domain with no alias map at all, so
+  # postfix accepted the recipient, handed it to dovecot, and dovecot answered
+  # `550 5.1.1 User doesn't exist`. That also silently swallowed this box's own
+  # system mail, because POSTMASTER_ADDRESS points /etc/aliases' `root:` at the
+  # very address that was bouncing. Found on 2026-09-16 while checking whether
+  # an outage had lost any mail; the oldest bounce in the log was 2026-09-13.
+  #
+  # abuse@ is not required the way postmaster@ is, but RFC 2142 asks for it and
+  # it is the address an operator reaches for before reaching for a blocklist.
+  #
+  # A plain string, not a sops secret, on the same reasoning infra.acmeEmail is
+  # written down: a contact address is not a credential. The target is the one
+  # real mailbox on the domain.
+  aliasTarget = "ivan@${domain}";
+
+  # DMS reads this out of its config volume and compiles it into
+  # /etc/postfix/virtual. Declared here rather than created with
+  # `setup alias add`, which writes into the dms_config VOLUME — an alias that
+  # lives only there is state this repo does not describe, and it does not
+  # survive the volume being lost.
+  #
+  # Mounted nested inside that volume, the same way dozzle's users.yml and
+  # roundcube's managesieve.php are: docker orders bind mounts by destination
+  # depth, so the volume is mounted first and this file lands on top of it.
+  #
+  # The trade, stated plainly: the mount is read-only, so `setup alias add` will
+  # fail from now on. Aliases are a git change. That is the intent, not a
+  # side effect.
+  virtualAliases = pkgs.writeText "postfix-virtual.cf" ''
+    postmaster@${domain} ${aliasTarget}
+    abuse@${domain} ${aliasTarget}
+  '';
+
   # Roundcube's managesieve plugin defaults to a plaintext localhost connection,
   # which is wrong on a container network: the host is the mailserver container
   # and the TLS peer name must match the certificate, not the container name.
@@ -154,6 +188,8 @@ in
         "dms_state:/var/mail-state"
         "dms_logs:/var/log/mail"
         "dms_config:/tmp/docker-mailserver"
+        # Nested inside the volume above; see the comment on virtualAliases.
+        "${virtualAliases}:/tmp/docker-mailserver/postfix-virtual.cf:ro"
         "/var/lib/acme/${domain}:${certDir}:ro"
         "/etc/localtime:/etc/localtime:ro"
         "${dkimKey}:${dkimKeyInContainer}:ro"
