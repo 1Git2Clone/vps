@@ -48,3 +48,7 @@ variable "dmarc_rua" {
   description = "DMARC aggregate-report address."
   type        = string
 }
+
+variable "bsky_record" {
+  type = string
+}

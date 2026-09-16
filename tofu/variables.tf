@@ -127,3 +127,8 @@ variable "dmarc_rua" {
   type        = string
   default     = "mailto:ae711fd0810a4ba289bb16ca5458799d@dmarc-reports.cloudflare.net"
 }
+
+variable "bsky_record" {
+  type        = string
+  description = "Bluesky AT Protocol DID."
+}
