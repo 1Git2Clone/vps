@@ -426,12 +426,23 @@ The design is shaped by which failures roll back automatically and which do not.
 | a rotated sops secret didn't reach a container | nothing — the container holds a stale inode | copy-to-stable-path or env-file pattern (§9) |
 | tofu plan shows an unexpected diff on unchanged infra | you, reading the plan | **the state is wrong, not the infra** — never `apply`; `refresh`/`import`, verify on the box |
 | a fail2ban jail bans a docker/bridge address | nothing — a forward-chain `reject` on an internal IP downs **every** container | `systemctl stop fail2ban`; keep private ranges in `ignoreIP`, or don't ban on the forward chain for low-value targets |
+| a deploy restarts every container at once (any `nix flake update`) and one racy unit exits non-zero | **deploy-rs aborts** — and its de-activation stops every container while the rollback restores the old *configuration*, not the old *running state* | `systemctl restart docker`, then start the container units by hand — `switch-to-configuration` will refuse with `Could not acquire lock` while deploy-rs still holds it. Order fragile units behind a readiness gate, as `forgejo-runner-ready` does |
 
-The last two rows are recent scars. A forward-chain fail2ban jail has a blast
-radius the size of the whole box: if it ever bans an internal source it rejects
-all forwarded traffic, not one attacker. That is why `search.` is rate-limited
-**in caddy** (§7) rather than banned in nftables — an in-process limiter can only
-throttle, it cannot take the forward plane down.
+The last three rows are recent scars.
+
+A forward-chain fail2ban jail has a blast radius the size of the whole box: if
+it ever bans an internal source it rejects all forwarded traffic, not one
+attacker. That is why `search.` is rate-limited **in caddy** (§7) rather than
+banned in nftables — an in-process limiter can only throttle, it cannot take the
+forward plane down.
+
+The newest row is the widest of the three, and the least intuitive: a failed
+activation does not leave the box on the previous generation *running*. It
+leaves it on the previous generation's *configuration*, with nothing started. On
+2026-09-16 a three-second transient in one non-critical container therefore cost
+fifteen healthy services, mail included, for six minutes — the abort was more
+destructive than the failure it was responding to. Full writeup in
+[docs/postmortems/2026-09-16-flake-update-rollback.md](docs/postmortems/2026-09-16-flake-update-rollback.md).
 
 ---
 
