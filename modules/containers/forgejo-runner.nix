@@ -225,6 +225,65 @@ in
     '';
   };
 
+  # The ordering dependency ddf6f98 said was "worth an ordering dependency, as
+  # its own change", left undone then and paid for on 2026-09-16.
+  #
+  # The runner's FIRST action on start is declaring itself against instanceUrl,
+  # which is the public https address (see the comment on it above, and the
+  # reasons it cannot be http://forgejo:4242). That call leaves the box and
+  # comes back in through caddy. So the runner does not merely depend on
+  # forgejo — it depends on CADDY LISTENING, and it exits 1 if the connect is
+  # refused rather than retrying in-process.
+  #
+  # Because it declares no `networks`, containers/default.nix gives it no
+  # after/requires at all, so nothing ever ordered it behind caddy. Any deploy
+  # that restarts every container at once reproduces this: #9 did it by pinning
+  # the docker daemon's `bip`, and a plain `nix flake update` does it too,
+  # because a new nixpkgs changes every unit. Restart=always always recovered it
+  # seconds later, but deploy-rs samples unit state right after activation, sees
+  # one failed unit, and rolls the WHOLE deploy back — which is how a kernel
+  # bump turned into every container being stopped and not restarted.
+  #
+  # Ordering alone does not fix it: a docker-* unit is "started" when the
+  # container is created, not when the service inside it answers. Hence a gate
+  # that actually probes, in the same oneshot shape as forgejo-runner-token.
+  #
+  # It exits 0 on timeout ON PURPOSE. Its job is to close the race, not to
+  # become a new way for the deploy to fail: if the instance is genuinely down
+  # the runner still starts, still exits 1, and Restart=always still handles it,
+  # which is exactly today's behaviour and no worse.
+  systemd.services.forgejo-runner-ready = {
+    description = "Wait for the Forgejo instance to answer before the runner declares";
+    requiredBy = [ "docker-forgejo-runner.service" ];
+    before = [ "docker-forgejo-runner.service" ];
+    after = [
+      "docker-caddy.service"
+      "docker-forgejo.service"
+    ];
+    wants = [
+      "docker-caddy.service"
+      "docker-forgejo.service"
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      # NOT RemainAfterExit: this has to run again on every runner restart, not
+      # just the first one after a boot.
+      RemainAfterExit = false;
+      TimeoutStartSec = 150;
+    };
+    script = ''
+      for i in $(seq 1 60); do
+        if ${pkgs.curl}/bin/curl -fsS -o /dev/null --max-time 5 ${instanceUrl}api/v1/version; then
+          echo "forgejo answered after $i attempt(s)"
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "forgejo did not answer in 120s; starting the runner anyway" >&2
+      exit 0
+    '';
+  };
+
   virtualisation.oci-containers.containers.forgejo-runner = {
     inherit image;
 
