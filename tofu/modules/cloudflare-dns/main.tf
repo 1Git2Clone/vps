@@ -38,11 +38,11 @@ resource "cloudflare_dns_record" "a" {
 # priority/weight/port/target live in `data`. Target is the A record above, not
 # the IP: an SRV target must be a name.
 resource "cloudflare_dns_record" "minecraft2_srv" {
-  zone_id = var.zone_id
-  name    = "_minecraft._tcp.mc2.${var.domain}"
-  type    = "SRV"
+  zone_id  = var.zone_id
+  name     = "_minecraft._tcp.mc2.${var.domain}"
+  type     = "SRV"
   priority = 0
-  ttl     = 1
+  ttl      = 1
 
   data = {
     priority = 0
