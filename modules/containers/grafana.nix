@@ -31,15 +31,26 @@ in
   '';
 
   virtualisation.oci-containers.containers.grafana = {
-    # Pinned to a patch, and the change is a PIN rather than an upgrade:
+    # Pinned to an exact patch. That pin came first, on its own, before any
+    # upgrade was taken on this line:
     # `13.0` is a FLOATING tag. On 2026-09-12 it and `13.0.8` resolved to the
     # same digest (sha256:a21e4b8b9cd2...), so this box has silently been
     # tracking every 13.0.x — running each one's migrations on first start —
     # without a line in this file ever changing. Reproducibility is the whole
     # point of the repo, so the version is now written down.
     #
+    # 13.0.8 -> 13.2.2 crosses two minors and is taken for the CVEs fixed
+    # across 13.1.5, 13.1.6, 13.2.1 and 13.2.2, not for anything new. This
+    # port is tailnet-only (ARCHITECTURE.md §3), so none of them was reachable
+    # from the internet — the bump is hygiene, not an incident.
+    #
+    # grafana.db migrates FORWARD on first start and grafana does not support
+    # downgrading. Re-deploying the previous generation therefore runs the old
+    # binary against the new schema: the rollback for this line is a restic
+    # restore of grafana_data, not a deploy.
+    #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/grafana/grafana/tags?page_size=20&ordering=last_updated'
-    image = "grafana/grafana:13.0.8";
+    image = "grafana/grafana:13.2.2";
 
     environment = {
       GF_AUTH_ANONYMOUS_ENABLED = "false";
