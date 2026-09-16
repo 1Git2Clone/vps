@@ -33,7 +33,18 @@
   };
 
   virtualisation.oci-containers.containers.navidrome = {
-    image = "deluan/navidrome:0.63.2";
+    # 0.64.0 re-encodes every internal ID to a canonical 128-bit base62 form.
+    # Upstream: "The migration touches every table, so back up your database
+    # before upgrading." navidrome_data is that database, and the rewrite is
+    # one-way — re-deploying the previous generation runs 0.63.2 against IDs it
+    # cannot read, so the rollback here is a restic restore of navidrome_data.
+    #
+    # The library itself is never at risk: /music is a read-only bind mount
+    # (below) and holds no navidrome state. Worst case is a restore plus a
+    # rescan. Clients that cached item IDs — offline downloads — re-sync once.
+    #
+    # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/deluan/navidrome/tags?page_size=20&ordering=last_updated'
+    image = "deluan/navidrome:0.64.0";
 
     ports = [ "127.0.0.1:4533:4533" ];
 
