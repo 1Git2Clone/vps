@@ -27,6 +27,9 @@ ssh_public_key = "ssh-ed25519 AAAA... you@workstation"
 dkim_cloudflare_key = "v=DKIM1; h=sha256; k=rsa; p=YOUR_CLOUDFLARE_DKIM_KEY"
 dkim_default_key    = "v=DKIM1; p=YOUR_DEFAULT_DKIM_KEY"
 
+# Get it from Settings -> Account on BlueSky.
+bsky_record = "did=did:plc:..."
+
 # Optional overrides:
 # domain      = "hu-tao.dev"
 # server_name = "hu-tao"

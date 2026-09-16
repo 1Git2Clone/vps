@@ -15,4 +15,6 @@ module "dns" {
   dkim_cloudflare_key = var.dkim_cloudflare_key
   dkim_default_key    = var.dkim_default_key
   dmarc_rua           = var.dmarc_rua
+
+  bsky_record = var.bsky_record
 }
