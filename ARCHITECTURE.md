@@ -141,11 +141,15 @@ priority **-110**, ten ahead of docker's `dstnat`, rewriting port 443 arriving
 on `tailscale0` onto it. Getting that priority wrong is silent: docker DNATs the
 packet to caddy's *public* listener first and the name 404s.
 
-The names are CNAMEs to the node's MagicDNS name rather than A records to a
-`100.x` literal (`tofu/modules/cloudflare-dns`), for the reason
-`modules/containers/tempo.nix` documents — a tailnet address outlives nothing,
-least of all the host it belonged to. The certificate covers them as ordinary
-SANs, because DNS-01 never asks whether a name resolves publicly.
+The names are plain A records to the box's `100.x` address
+(`tofu/modules/cloudflare-dns`). A CNAME to the node's MagicDNS name would
+avoid that literal — the trap `modules/containers/tempo.nix` documents — but
+Tailscale does not publish `<node>.<tailnet>.ts.net` in public DNS (verified
+2026-09-17: empty answers from 1.1.1.1, 9.9.9.9 and 8.8.8.8), so it resolves
+only on a device whose MagicDNS is active and fails silently on one where it is
+not. The literal is the lesser failure: it goes stale only when the machine is
+replaced, and it goes stale loudly. The certificate covers the names as
+ordinary SANs, because DNS-01 never asks whether a name resolves publicly.
 
 Two of the three backends are in the host's own namespace, so caddy — a
 container — reaches them at `infra.dockerBridgeGateway`, which is why the input

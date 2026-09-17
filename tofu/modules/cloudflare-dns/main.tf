@@ -30,20 +30,24 @@ resource "cloudflare_dns_record" "a" {
   proxied = false
 }
 
-# Tailnet-only names. CNAMEs to the node's MagicDNS name, which resolves to its
-# 100.x address — public DNS carrying a CGNAT address that is worthless to
-# anyone outside the tailnet. The names themselves are public either way: they
-# are SANs on the certificate, so they reach the CT logs when it is issued.
+# Tailnet-only names, pointing at the box's CGNAT address. Public DNS carrying
+# a 100.x address that is unroutable from the internet, so the record resolves
+# for everyone and connects for nobody outside the tailnet. The names are
+# public either way — they are SANs on the certificate and reach the CT logs
+# when it is issued.
 #
-# for_each over an empty set while tailnet_host is unset, so the records simply
+# See var.tailnet_ipv4 for why this is an A record and not a CNAME to the
+# node's MagicDNS name.
+#
+# for_each over an empty set while tailnet_ipv4 is unset, so the records simply
 # do not exist until there is something to point them at.
 resource "cloudflare_dns_record" "tailnet" {
-  for_each = var.tailnet_host == "" ? toset([]) : var.tailnet_subdomains
+  for_each = var.tailnet_ipv4 == "" ? toset([]) : var.tailnet_subdomains
 
   zone_id = var.zone_id
   name    = "${each.key}.${var.domain}"
-  type    = "CNAME"
-  content = var.tailnet_host
+  type    = "A"
+  content = var.tailnet_ipv4
   ttl     = 1
   proxied = false
 }
