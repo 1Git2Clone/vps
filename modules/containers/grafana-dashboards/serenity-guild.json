@@ -17,7 +17,7 @@
     "list": [
       {
         "type": "query",
-        "name": "guild_id",
+        "name": "guild",
         "label": "Guild",
         "datasource": {
           "type": "tempo",
@@ -25,10 +25,9 @@
         },
         "query": {
           "type": 1,
-          "label": "span.guild_id",
+          "label": "span.guild_name",
           "refId": "TempoVariableQueryEditor-VariableQuery"
         },
-        "regex": "/(\\d{15,})/",
         "refresh": 2,
         "includeAll": false,
         "multi": false,
@@ -57,7 +56,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_id =~ \".*$guild_id.*\" } | count_over_time()",
+          "query": "{ name = \"handle_message\" && span.guild_name =~ \"$guild\" } | count_over_time()",
           "refId": "A",
           "step": "1h"
         }
@@ -114,7 +113,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_id =~ \".*$guild_id.*\" } | count_over_time()",
+          "query": "{ name = \"handle_message\" && span.guild_name =~ \"$guild\" } | count_over_time()",
           "refId": "A",
           "step": "1h"
         }
@@ -168,19 +167,12 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_id =~ \".*$guild_id.*\" } | count_over_time() by (span.author)",
+          "query": "{ name = \"handle_message\" && span.guild_name =~ \"$guild\" && span.author_name != nil } | count_over_time() by (span.author_name)",
           "refId": "A",
           "step": "1h"
         }
       ],
       "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": ".*?(\\d{15,}).*",
-            "renamePattern": "$1"
-          }
-        },
         {
           "id": "reduce",
           "options": {
@@ -193,33 +185,8 @@
           "id": "organize",
           "options": {
             "renameByName": {
-              "Field": "User ID",
+              "Field": "User",
               "Total": "Messages"
-            }
-          }
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "User ID": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "Messages": {
-                "aggregations": [
-                  "sum"
-                ],
-                "operation": "aggregate"
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Messages (sum)": "Messages"
             }
           }
         },
@@ -248,7 +215,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "User ID"
+              "options": "User"
             },
             "properties": [
               {
@@ -256,7 +223,7 @@
                 "value": [
                   {
                     "title": "Open Most active users",
-                    "url": "/d/serenity-user/serenity-user?var-user_id=${__value.raw}&var-guild_id=$guild_id&${__url_time_range}"
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=$guild&${__url_time_range}"
                   }
                 ]
               }
@@ -298,19 +265,12 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_id =~ \".*$guild_id.*\" && span.channel_id != nil } | count_over_time() by (span.channel_id)",
+          "query": "{ name = \"handle_message\" && span.guild_name =~ \"$guild\" && span.channel_id != nil } | count_over_time() by (span.channel_id)",
           "refId": "A",
           "step": "1h"
         }
       ],
       "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": ".*?(\\d{15,}).*",
-            "renamePattern": "$1"
-          }
-        },
         {
           "id": "reduce",
           "options": {
@@ -325,31 +285,6 @@
             "renameByName": {
               "Field": "Channel ID",
               "Total": "Messages"
-            }
-          }
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Channel ID": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "Messages": {
-                "aggregations": [
-                  "sum"
-                ],
-                "operation": "aggregate"
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Messages (sum)": "Messages"
             }
           }
         },
@@ -410,7 +345,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ span.guild_id =~ \".*$guild_id.*\" } | select(span.author, span.channel_id, span.attachments)",
+          "query": "{ span.guild_name =~ \"$guild\" } | select(span.author, span.author_name, span.channel_id, span.attachments, span.links)",
           "refId": "A",
           "limit": 100,
           "spss": 5,
@@ -426,10 +361,13 @@
               "traceIdHidden": true
             },
             "renameByName": {
-              "author": "Author",
+              "author_name": "Author",
+              "author": "User ID",
               "channel_id": "Channel",
               "attachments": "Files",
-              "guild_id": "Guild"
+              "links": "Links",
+              "guild_name": "Guild",
+              "guild_id": "Guild ID"
             }
           }
         }
