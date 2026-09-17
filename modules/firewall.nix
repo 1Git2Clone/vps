@@ -150,6 +150,13 @@
           # shape as the bot's rule above, and the same failure if it is missing:
           # every other check passes and the vhost hangs.
           #
+          # tailnetHttpsPort is here for kuma, which monitors the tailnet vhosts
+          # at https://<name>:8443 and is a container like any other. Its
+          # packets cannot take the DNAT shortcut — docker's rule for a
+          # published port carries `! -i <bridge>`, and kuma shares the proxy
+          # bridge with caddy — so they arrive here as plain input instead, and
+          # a monitor pointed at the name simply times out.
+          #
           # NOT narrowed to a source subnet, unlike that rule. The proxy network
           # is left on docker's address pool (see modules/containers/default.nix)
           # and pinning a subnet onto a network that already exists means
@@ -159,7 +166,8 @@
           # could not already reach.
           iifname "br-*" tcp dport {
             3000,
-            8384
+            8384,
+            ${toString config.infra.tailnetHttpsPort}
           } ct state new accept
 
           log prefix "DROP_in: " counter drop
