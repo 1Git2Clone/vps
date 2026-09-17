@@ -146,16 +146,17 @@
           # minutes. Re-measure rather than re-guess if the build grows.
           #
           # Deliberately LONGER than the build unit's own TimeoutStartSec
-          # (10min, in modules/containers/serenity-bot.nix). The unit therefore
-          # gives up first, and an overrun reads as
-          # "serenity-bot-image.service: Start operation timed out" instead of
-          # an unexplained rollback. Keep that ordering if either number moves.
+          # (10min, in modules/containers/serenity-bot.nix). That unit only
+          # covers the boot path now, but an overrun there should still read as
+          # "serenity-bot-image.service: Start operation timed out" rather than
+          # an unexplained rollback. Keep the ordering if either number moves.
           #
-          # The bot no longer goes down for the duration: both its units are
-          # `stopIfChanged = false` (see modules/containers/serenity-bot.nix),
-          # so the old container keeps serving while the new image compiles and
-          # swaps at the end. Activation still WAITS for the build, which is
-          # why this timeout stays where it is.
+          # This timeout is what bounds the build on a DEPLOY, because the build
+          # happens in the activation script itself — deliberately, since that
+          # is the one phase of a switch where the old container is still
+          # serving (see the phase list in modules/containers/serenity-bot.nix).
+          # Activation therefore still WAITS for the compile, which is why this
+          # number stays where it is; the bot just does not go down for it.
           #
           # The cost is still borne by every deploy, so the durable fix stands:
           # build the image off-box — same architecture, so a native build here

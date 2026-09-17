@@ -179,6 +179,34 @@ let
   # the value). An empty file in the world-readable Nix store gives away
   # nothing, which is the point.
   dotenvPlaceholder = pkgs.writeText "serenity-dotenv-placeholder" "";
+
+  docker = "${config.virtualisation.docker.package}/bin/docker";
+
+  # Shared by the activation script and the builder unit, which run it at
+  # different points of a switch for different reasons — see the comment above
+  # `systemd.services` below.
+  #
+  # The guard is what keeps a routine redeploy from spending 20 minutes
+  # rebuilding Rust: an unchanged rev means an unchanged tag, so this exits 0.
+  # It is also what makes running this twice in one switch free.
+  #
+  # No --pull: upstream's runtime base is debian:bullseye-slim, a MOVING tag.
+  # Refreshing it would change the runtime image underneath a rev that is
+  # supposed to be pinned.
+  buildImage = pkgs.writeShellScript "serenity-bot-build-image" ''
+    set -eu
+
+    if ${docker} image inspect ${tag} >/dev/null 2>&1; then
+      echo "${tag} already built"
+      exit 0
+    fi
+
+    ${docker} build \
+      --build-arg RUSTFLAGS=${lib.escapeShellArg rustflags} \
+      --build-arg FEATURES=${lib.escapeShellArg features} \
+      -t ${tag} \
+      ${src}
+  '';
 in
 {
   assertions = [
@@ -362,24 +390,45 @@ in
   # Source arrives hash-pinned through fetchgit while the build itself stays
   # upstream's own two-stage Dockerfile — so their build knowledge is not
   # duplicated in Nix and a bump is one rev plus one hash.
-  # Both the builder and the containers are RESTARTED rather than stopped in the
-  # old generation and started in the new one, which is the difference between
-  # a few seconds of downtime and the length of a Rust release build.
+  # THE IMAGE IS BUILT IN ACTIVATION, and the builder unit below is the fallback
+  # rather than the usual path. That is the whole trick to deploying without an
+  # outage, and it needs the phase order of switch-to-configuration to explain:
   #
-  # switch-to-configuration stops every changed unit up front, then starts the
-  # new ones. A rev bump changes both units, so the bot went down FIRST and the
-  # compile the container was waiting on only started afterwards. Worse, the
-  # containers have Requires= on the builder (`requiredBy` below), and stopping
-  # a required unit propagates the stop — so marking only the containers would
-  # not have helped.
+  #   1. stop jobs          <- the bot is NOT here; see stopIfChanged below
+  #   2. the activate script
+  #   3. sysinit-reactivation.target
+  #   4. reload jobs
+  #   5. restart jobs       <- the bot stops and starts HERE
   #
-  # `stopIfChanged = false` emits X-StopIfChanged=false, which moves a unit out
-  # of the stop phase and into the restart phase. Both restart jobs then land in
-  # one systemd transaction, where the containers' After= on the builder orders
-  # them behind it: the old bot keeps serving the whole time the new image is
-  # compiling, and only swaps once there is something to swap to.
+  # Step 2 is the only hook that runs while the old container is still serving,
+  # so it is the only place a five-minute compile is free. By the time the
+  # restart in step 5 comes round, the tag exists and the swap is seconds.
+  #
+  # `stopIfChanged = false` (X-StopIfChanged=false) is what keeps the bot out of
+  # step 1 so it survives to step 2. It is necessary and NOT sufficient: a
+  # systemd restart job is a stop followed by a start, and ordering is REVERSED
+  # for the stop half — the containers' After= on the builder means they stop
+  # BEFORE it, so in step 5 the bot goes down, the builder then compiles, and
+  # only then does the bot come back. Marking the units alone moved the outage
+  # from step 1 to step 5; it did not remove it. Both containers and builder
+  # still need the flag, because Requires= propagates a stop.
   #
   # The deploy takes just as long. It is the outage that goes away, not the wait.
+  #
+  # On BOOT there is no old container to protect and docker is not up yet when
+  # activation runs, so the script no-ops and the unit does the build — which is
+  # what the unit is for.
+  system.activationScripts.serenity-bot-image = {
+    deps = [ ];
+    text = ''
+      if ${docker} info >/dev/null 2>&1; then
+        ${buildImage}
+      else
+        echo "serenity-bot: docker not up, leaving the image to serenity-bot-image.service"
+      fi
+    '';
+  };
+
   systemd.services =
     lib.genAttrs (map (n: "docker-${n}") names) (_: {
       stopIfChanged = false;
@@ -405,31 +454,17 @@ in
           # image pulls included. 10min is ~3x that; systemd's default would kill
           # it partway.
           #
-          # Kept BELOW deploy-rs's activationTimeout (900s in flake.nix), because
-          # this build runs inside activation. This unit therefore gives up first
-          # and says so, rather than deploy-rs timing out and rolling back with the
-          # build killed underneath it. Raise both together or not at all.
+          # Kept BELOW deploy-rs's activationTimeout (900s in flake.nix). The
+          # usual build now happens in the activation script, which deploy-rs
+          # times out directly; this bound covers the boot path, where nothing
+          # else would ever stop a wedged build.
           TimeoutStartSec = "10min";
         };
 
-        # The guard is what keeps a routine redeploy from spending 20 minutes
-        # rebuilding Rust: an unchanged rev means an unchanged tag, so this exits 0.
-        #
-        # No --pull: upstream's runtime base is debian:bullseye-slim, a MOVING tag.
-        # Refreshing it would change the runtime image underneath a rev that is
-        # supposed to be pinned.
-        script = ''
-          if docker image inspect ${tag} >/dev/null 2>&1; then
-            echo "${tag} already built"
-            exit 0
-          fi
-
-          docker build \
-            --build-arg RUSTFLAGS=${lib.escapeShellArg rustflags} \
-            --build-arg FEATURES=${lib.escapeShellArg features} \
-            -t ${tag} \
-            ${src}
-        '';
+        # Normally a no-op: activation built the image several steps earlier and
+        # the guard inside exits 0. This is the boot path, and the backstop for
+        # anything that reaches the unit without having gone through a switch.
+        script = "${buildImage}";
       };
     };
 }
