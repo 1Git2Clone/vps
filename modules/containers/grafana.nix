@@ -2,13 +2,18 @@
 # Grafana — dashboards
 # ==============================================================================
 # Host networking on :3000, tailnet-only: 3000 is not in the firewall's input
-# allow-list, and the tailscale0 interface is accepted wholesale.
+# allow-list, and the tailscale0 interface is accepted wholesale. Also at
+# grafana.<domain> through caddy, which — being a container — reaches this one
+# by the docker bridge address rather than by name (see
+# modules/containers/caddy.nix).
 #
 # Anonymous Admin access, which the ansible compose had, is off. The login is a
 # real one backed by sops.
 { config, pkgs, ... }:
 
 let
+  inherit (config.infra) domain;
+
   # tempo is on host networking too, hence localhost rather than a container
   # name — grafana is not on the proxy network and cannot use docker DNS.
   datasource = pkgs.writeText "tempo.yaml" ''
@@ -53,6 +58,14 @@ in
     image = "grafana/grafana:13.2.2";
 
     environment = {
+      # Behind caddy now. Grafana builds redirects and absolute links from
+      # root_url, which defaults to http://localhost:3000/ — right for a direct
+      # hit on the port, wrong the moment a proxy is in front: the login POST
+      # answers with a Location pointing at localhost and the browser follows it
+      # to its own machine.
+      GF_SERVER_DOMAIN = "grafana.${domain}";
+      GF_SERVER_ROOT_URL = "https://grafana.${domain}/";
+
       GF_AUTH_ANONYMOUS_ENABLED = "false";
       # Grafana would otherwise let an unauthenticated visitor create an
       # account on a box whose port is only meant to be tailnet-reachable.

@@ -30,6 +30,24 @@ resource "cloudflare_dns_record" "a" {
   proxied = false
 }
 
+# Tailnet-only names. CNAMEs to the node's MagicDNS name, which resolves to its
+# 100.x address — public DNS carrying a CGNAT address that is worthless to
+# anyone outside the tailnet. The names themselves are public either way: they
+# are SANs on the certificate, so they reach the CT logs when it is issued.
+#
+# for_each over an empty set while tailnet_host is unset, so the records simply
+# do not exist until there is something to point them at.
+resource "cloudflare_dns_record" "tailnet" {
+  for_each = var.tailnet_host == "" ? toset([]) : var.tailnet_subdomains
+
+  zone_id = var.zone_id
+  name    = "${each.key}.${var.domain}"
+  type    = "CNAME"
+  content = var.tailnet_host
+  ttl     = 1
+  proxied = false
+}
+
 # The second minecraft world is published on 25566, not the default 25565, so a
 # bare A record is not enough — the client would have to be told the port. This
 # is what lets players type "mc2.<domain>" and nothing else.

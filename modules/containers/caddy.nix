@@ -7,8 +7,14 @@
 # certificate management for that site.
 #
 # Upstreams are container names, resolved by docker's embedded DNS on the proxy
-# network. Nothing here is an IP address, so a container can be recreated with a
-# new address and caddy is none the wiser.
+# network, so a container can be recreated with a new address and caddy is none
+# the wiser. The two exceptions are grafana and syncthing: both live in the
+# HOST's network namespace, where docker's DNS cannot reach, so they are named
+# by the bridge gateway address instead.
+#
+# The sites split in two. Everything above the "Tailnet-only" marker answers the
+# internet on 443; everything below it answers `tailnetHttpsPort`, which the
+# firewall exposes to tailscale0 alone.
 {
   config,
   lib,
@@ -17,7 +23,14 @@
 }:
 
 let
-  inherit (config.infra) domain pagesVolume proxyNetwork;
+  inherit (config.infra)
+    domain
+    dockerBridgeGateway
+    pagesVolume
+    proxyNetwork
+    tailnetHttpPort
+    tailnetHttpsPort
+    ;
 
   # Same number for the uid and the gid, from modules/ids.nix.
   id = toString config.infra.serviceId.caddy;
@@ -169,9 +182,58 @@ let
         window = "1m";
       };
     }
+
+    # ---- Tailnet-only, below this line -------------------------------------
+    #
+    # `tailnet = true` is the ONLY difference: it moves the site off 443 and
+    # onto `tailnetHttpsPort`, a listener the firewall never exposes to the
+    # internet, and the firewall rewrites tailscale0's 443 onto it so the URL
+    # still carries no port. Same certificate as everything above — the names
+    # are SANs on it, issued over DNS-01, which needs no public A record.
+    #
+    # Adding one of these to the PUBLIC set is a one-word mistake with no
+    # visible symptom: it would simply start answering the internet.
+    {
+      host = "dozzle.${domain}";
+      upstream = "dozzle:8080";
+      tailnet = true;
+    }
+    {
+      host = "grafana.${domain}";
+
+      # Not a container name. Grafana runs with --network=host, so it is not on
+      # the proxy network and docker's embedded DNS has never heard of it; the
+      # route from a container to a host-namespace service is the host's own
+      # address on the docker bridge. See `dockerBridgeGateway` in
+      # modules/options.nix, and the matching input rule in
+      # modules/firewall.nix — without that rule this is a hang, not an error.
+      upstream = "${dockerBridgeGateway}:3000";
+      tailnet = true;
+    }
+    {
+      host = "syncthing.${domain}";
+
+      # A host service, not even a container. Same route as grafana.
+      upstream = "${dockerBridgeGateway}:8384";
+      tailnet = true;
+
+      # Syncthing rejects any request whose Host header is neither localhost
+      # nor a bare address — an anti-DNS-rebinding check, and the reason its
+      # GUI answers 403 "Host check error" behind a proxy that forwards the
+      # original Host. Rewriting it to the upstream satisfies the check, which
+      # is why that upstream must stay an IP literal rather than a name.
+      #
+      # The alternative is insecureSkipHostcheck, and that lives in the config
+      # directory this repo deliberately does not manage (overrideDevices and
+      # overrideFolders are both false — see modules/syncthing.nix), so it
+      # would be a hand edit no deploy can reproduce.
+      rewriteHost = true;
+    }
   ];
 
   anyRateLimit = lib.any (s: s ? rateLimit) sites;
+
+  tailnetSites = lib.filter (s: s.tailnet or false) sites;
 
   # Tabs and this exact shape are what `caddy fmt` produces, so `caddy validate`
   # on the generated file is clean rather than warning about formatting every
@@ -193,6 +255,16 @@ let
       ++ lib.optionals anyRateLimit [
         "\torder rate_limit before basic_auth"
       ]
+      # Caddy enables HTTP/3 on every server it builds, and advertises it with
+      # the LISTENER's port — so the tailnet sites would hand the browser
+      # `Alt-Svc: h3=":${toString tailnetHttpsPort}"`. Nothing publishes that
+      # port over udp and the firewall rewrites tcp only, so every visit would
+      # open with a QUIC attempt into a black hole before falling back.
+      ++ lib.optionals (tailnetSites != [ ]) [
+        "\tservers :${toString tailnetHttpsPort} {"
+        "\t\tprotocols h1 h2"
+        "\t}"
+      ]
       ++ [
         "}"
       ]
@@ -200,7 +272,7 @@ let
         site:
         [
           ""
-          "${site.host} {"
+          "${site.host}${lib.optionalString (site.tailnet or false) ":${toString tailnetHttpsPort}"} {"
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
         ]
         # Zone keyed on {remote_host} — the client IP — so one address's flood
@@ -239,11 +311,26 @@ let
               # whatever else the workflow put there.
               "\tfile_server"
             ]
+          else if site.rewriteHost or false then
+            [
+              "\treverse_proxy ${site.upstream} {"
+              "\t\theader_up Host {upstream_hostport}"
+              "\t}"
+            ]
           else
             [ "\treverse_proxy ${site.upstream}" ]
         )
         ++ [ "}" ]
       ) sites
+      # One block for all of them: a site address with an explicit port gets no
+      # automatic http->https redirect from caddy, and a 404 from the public :80
+      # listener is a worse answer than a redirect. See `tailnetHttpPort`.
+      ++ lib.optionals (tailnetSites != [ ]) [
+        ""
+        "${lib.concatMapStringsSep ", " (s: "http://${s.host}:${toString tailnetHttpPort}") tailnetSites} {"
+        "\tredir https://{host}{uri}"
+        "}"
+      ]
     )
     + "\n"
   );
@@ -273,6 +360,13 @@ in
       # HTTP/3. The nftables input chain has to allow udp 443 for this to be
       # more than decoration.
       "443:443/udp"
+
+      # The tailnet listeners. Published on 0.0.0.0 like everything else and
+      # kept private the same way dozzle:8080 always has been — neither port is
+      # in the firewall's public allow-lists, so only `iifname tailscale0
+      # accept` reaches them.
+      "${toString tailnetHttpPort}:${toString tailnetHttpPort}"
+      "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}"
     ];
 
     volumes = [

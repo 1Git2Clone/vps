@@ -50,6 +50,32 @@
       delete table inet nixos-fw
 
       table inet nixos-fw {
+        # THE TAILNET'S PORT 443, MOVED ONTO CADDY'S SECOND LISTENER.
+        #
+        # dozzle, grafana and syncthing are ordinary caddy vhosts, but served on
+        # `tailnetHttpsPort` instead of 443 — and that port appears in neither
+        # allow-list below, so the internet cannot reach it while
+        # `iifname tailscale0 accept` can. Rewriting the port here is what lets
+        # the URL stay `https://dozzle.<domain>` with nothing after it.
+        #
+        # PRIORITY IS THE LOAD-BEARING PART. Docker's own prerouting chain sits
+        # at dstnat (-100) and has a rule for the published 443, so anything
+        # later than that would find the packet already DNAT'd to caddy's PUBLIC
+        # listener and rewrite nothing. -110 runs first, and docker's own rule
+        # for the rewritten port then delivers the packet to the container
+        # exactly as it would any other.
+        #
+        # The side effect, stated plainly: a tailnet client can no longer reach
+        # the PUBLIC sites through this host's tailnet address. It never could
+        # usefully — those names resolve to the public IP, so that traffic
+        # arrives on enp1s0 and never passes through here.
+        chain prerouting {
+          type nat hook prerouting priority -110; policy accept;
+
+          iifname tailscale0 tcp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
+          iifname tailscale0 tcp dport 80 redirect to :${toString config.infra.tailnetHttpPort}
+        }
+
         chain input {
           type filter hook input priority filter; policy drop;
 
@@ -115,6 +141,25 @@
           iifname "br-*" ip saddr ${config.infra.botSubnet} tcp dport {
             4317,
             6432
+          } ct state new accept
+
+          # CADDY REACHING BACK INTO THE HOST, for the two tailnet vhosts whose
+          # backend is not a container on the proxy network: grafana on 3000 and
+          # syncthing's GUI on 8384. The caddy container addresses them at the
+          # host's bridge address, which makes this the input hook — the same
+          # shape as the bot's rule above, and the same failure if it is missing:
+          # every other check passes and the vhost hangs.
+          #
+          # NOT narrowed to a source subnet, unlike that rule. The proxy network
+          # is left on docker's address pool (see modules/containers/default.nix)
+          # and pinning a subnet onto a network that already exists means
+          # deleting it by hand, which detaches every container on it. The cost
+          # of the wider match is small: both ports already answer the whole
+          # tailnet, so the containers on the other bridges gain nothing they
+          # could not already reach.
+          iifname "br-*" tcp dport {
+            3000,
+            8384
           } ct state new accept
 
           log prefix "DROP_in: " counter drop

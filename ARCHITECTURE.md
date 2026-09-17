@@ -80,8 +80,8 @@ exactly one of them.
                        │                             │
               ┌────────┴────────┐          grafana:3000, tempo OTLP,
               │ docker networks │          dozzle:8080, pgbouncer:6432,
-              │  proxy / botnet │          syncthing GUI:8384
-              └─────────────────┘
+              │  proxy / botnet │          syncthing GUI:8384, and caddy's
+              └─────────────────┘          second listener on :8443
 ```
 
 ### The two firewalls
@@ -131,6 +131,25 @@ is accepted wholesale on the input hook, which is how the tailnet-only services
 (grafana, tempo, dozzle, pgbouncer, syncthing GUI) are kept private — by the
 *absence* of an internet rule, not by their bind address. Several bind
 `0.0.0.0` and rely entirely on this.
+
+Three of them also answer by name — `dozzle.`, `grafana.` and `syncthing.` —
+and that is the same mechanism wearing a hat. Caddy runs a **second listener**
+on `infra.tailnetHttpsPort` (8443) carrying those three vhosts and nothing else;
+like every other private port it is published on `0.0.0.0` and kept private by
+being in neither allow-list. What makes the URL portless is a `nat` chain at
+priority **-110**, ten ahead of docker's `dstnat`, rewriting port 443 arriving
+on `tailscale0` onto it. Getting that priority wrong is silent: docker DNATs the
+packet to caddy's *public* listener first and the name 404s.
+
+The names are CNAMEs to the node's MagicDNS name rather than A records to a
+`100.x` literal (`tofu/modules/cloudflare-dns`), for the reason
+`modules/containers/tempo.nix` documents — a tailnet address outlives nothing,
+least of all the host it belonged to. The certificate covers them as ordinary
+SANs, because DNS-01 never asks whether a name resolves publicly.
+
+Two of the three backends are in the host's own namespace, so caddy — a
+container — reaches them at `infra.dockerBridgeGateway`, which is why the input
+chain has a rule for 3000 and 8384 from `br-*`.
 
 The full port/exposure map is the Services table in [README.md](README.md#services).
 
