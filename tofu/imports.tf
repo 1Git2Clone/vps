@@ -14,7 +14,7 @@
 #
 # WHAT A RECOVERY PLAN LOOKS LIKE, so a wrong one is recognisable:
 #
-#   Plan: 20 to import, 0 to add, 1 to change, 0 to destroy.
+#   Plan: 24 to import, 0 to add, 1 to change, 0 to destroy.
 #
 # The one change is hcloud_server.vps gaining three provider-side booleans
 # (ignore_remote_firewall_ids, keep_disk, shutdown_before_deletion) that the
@@ -42,8 +42,10 @@ locals {
     git       = "acf3cabcabfb15082fb920c213408b7f"
     mail      = "d95eaec80d7ef0326de086aa2d7dd883"
     mc        = "8b5b420ea4b1c920e560ae488c7d824e"
+    mc2       = "ae7ae954818b8660e32346a2ff864308"
     minecraft = "cc4c0e13050cc0b3fd928f65db032ce9"
     music     = "e4aea113292b407283fcbb447abe723f"
+    pages     = "0c8b8dbe295b4f125050da6acbe836a6"
     search    = "77ca2c34bc4fe585462349a4e0cd76b8"
     smtp      = "1a8fa2eac6aab44c98e9cb46a39073d5"
     status    = "2f7cf86c32a9d0f0aab797eebbac6d13"
@@ -121,4 +123,14 @@ import {
 import {
   to = module.dns.cloudflare_dns_record.dmarc
   id = "${var.cloudflare_zone_id}/91f99f89efbb9b2b3203f8a710ad1389"
+}
+
+import {
+  to = module.dns.cloudflare_dns_record.minecraft2_srv
+  id = "${var.cloudflare_zone_id}/065cd7f358df976afa6a2f484e59c61e"
+}
+
+import {
+  to = module.dns.cloudflare_dns_record.bsky
+  id = "${var.cloudflare_zone_id}/49002efb9babb52cd5dc5a207fb42cd0"
 }
