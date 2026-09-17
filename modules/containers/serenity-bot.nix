@@ -101,11 +101,17 @@ let
   # landed after it. Revisit if upstream starts cutting releases that include
   # them.
   #
-  # Taken for upstream PR #2: trace spans now record `guild_id` as a snowflake
-  # (`0` in DMs) instead of the Debug of `Option<GuildId>`, which was splitting
-  # every per-guild figure in grafana across two values, and they no longer
-  # carry the whole serenity `Message` — author object, avatar hashes and the
-  # message text were going into tempo on every message.
+  # Taken for the trace fields the grafana dashboards group on. Spans record
+  # `guild_name` and `author_name` alongside the snowflakes — a leaderboard
+  # keyed on an id is a list of numbers nobody can read — plus a `links` count,
+  # and `attachments` as an integer rather than a string, which is what makes
+  # `sum_over_time()` able to add it up at all.
+  #
+  # Before that (upstream PR #2): `guild_id` became a snowflake (`0` in DMs)
+  # instead of the Debug of `Option<GuildId>`, which was splitting every
+  # per-guild figure across two values, and spans stopped carrying the whole
+  # serenity `Message` — author object, avatar hashes and the message text were
+  # going into tempo on every message.
   #
   # Bump with:
   #   gh api repos/1Git2Clone/serenity-discord-bot/commits/main --jq .sha
@@ -115,12 +121,12 @@ let
   # Both lines change together. A rev without its matching hash fails the fetch
   # at build time, which is the good failure — the bad one would be a stale hash
   # silently reusing the old source, and fetchgit does not allow that.
-  rev = "21a77ce91170332befb3f066f565ce9db4f787ab";
+  rev = "bd6de38e554d6680b99ba3ebefc805a065e3da01";
 
   src = pkgs.fetchgit {
     url = "https://github.com/1Git2Clone/serenity-discord-bot";
     inherit rev;
-    hash = "sha256-xdrWCc2JGwYT7F8fcK6hoy/1coWEK7tOTWq7IAVfT/M=";
+    hash = "sha256-syaU3M1gcB5M6V8qIYto2oRNRGVMTqfNCCfkUiwGqd8=";
     # build.rs is only a `cargo:rerun-if-changed=migrations`, so nothing in the
     # build reads git metadata.
     leaveDotGit = false;
