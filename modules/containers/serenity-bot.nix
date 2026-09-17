@@ -356,49 +356,74 @@ in
   # Source arrives hash-pinned through fetchgit while the build itself stays
   # upstream's own two-stage Dockerfile — so their build knowledge is not
   # duplicated in Nix and a bump is one rev plus one hash.
-  systemd.services.serenity-bot-image = {
-    description = "Build the serenity-discord-bot image (${builtins.substring 0 12 rev})";
-    wantedBy = [ "multi-user.target" ];
-    after = [
-      "docker.service"
-      "docker.socket"
-    ];
-    requires = [ "docker.service" ];
-    before = map (n: "docker-${n}.service") names;
-    requiredBy = map (n: "docker-${n}.service") names;
-    path = [ config.virtualisation.docker.package ];
+  # Both the builder and the containers are RESTARTED rather than stopped in the
+  # old generation and started in the new one, which is the difference between
+  # a few seconds of downtime and the length of a Rust release build.
+  #
+  # switch-to-configuration stops every changed unit up front, then starts the
+  # new ones. A rev bump changes both units, so the bot went down FIRST and the
+  # compile the container was waiting on only started afterwards. Worse, the
+  # containers have Requires= on the builder (`requiredBy` below), and stopping
+  # a required unit propagates the stop — so marking only the containers would
+  # not have helped.
+  #
+  # `stopIfChanged = false` emits X-StopIfChanged=false, which moves a unit out
+  # of the stop phase and into the restart phase. Both restart jobs then land in
+  # one systemd transaction, where the containers' After= on the builder orders
+  # them behind it: the old bot keeps serving the whole time the new image is
+  # compiling, and only swaps once there is something to swap to.
+  #
+  # The deploy takes just as long. It is the outage that goes away, not the wait.
+  systemd.services =
+    lib.genAttrs (map (n: "docker-${n}") names) (_: {
+      stopIfChanged = false;
+    })
+    // {
+      serenity-bot-image = {
+        stopIfChanged = false;
+        description = "Build the serenity-discord-bot image (${builtins.substring 0 12 rev})";
+        wantedBy = [ "multi-user.target" ];
+        after = [
+          "docker.service"
+          "docker.socket"
+        ];
+        requires = [ "docker.service" ];
+        before = map (n: "docker-${n}.service") names;
+        requiredBy = map (n: "docker-${n}.service") names;
+        path = [ config.virtualisation.docker.package ];
 
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      # MEASURED at 3m28s on this host from a cold cache (2026-09-04), base
-      # image pulls included. 10min is ~3x that; systemd's default would kill
-      # it partway.
-      #
-      # Kept BELOW deploy-rs's activationTimeout (900s in flake.nix), because
-      # this build runs inside activation. This unit therefore gives up first
-      # and says so, rather than deploy-rs timing out and rolling back with the
-      # build killed underneath it. Raise both together or not at all.
-      TimeoutStartSec = "10min";
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          # MEASURED at 3m28s on this host from a cold cache (2026-09-04), base
+          # image pulls included. 10min is ~3x that; systemd's default would kill
+          # it partway.
+          #
+          # Kept BELOW deploy-rs's activationTimeout (900s in flake.nix), because
+          # this build runs inside activation. This unit therefore gives up first
+          # and says so, rather than deploy-rs timing out and rolling back with the
+          # build killed underneath it. Raise both together or not at all.
+          TimeoutStartSec = "10min";
+        };
+
+        # The guard is what keeps a routine redeploy from spending 20 minutes
+        # rebuilding Rust: an unchanged rev means an unchanged tag, so this exits 0.
+        #
+        # No --pull: upstream's runtime base is debian:bullseye-slim, a MOVING tag.
+        # Refreshing it would change the runtime image underneath a rev that is
+        # supposed to be pinned.
+        script = ''
+          if docker image inspect ${tag} >/dev/null 2>&1; then
+            echo "${tag} already built"
+            exit 0
+          fi
+
+          docker build \
+            --build-arg RUSTFLAGS=${lib.escapeShellArg rustflags} \
+            --build-arg FEATURES=${lib.escapeShellArg features} \
+            -t ${tag} \
+            ${src}
+        '';
+      };
     };
-
-    # The guard is what keeps a routine redeploy from spending 20 minutes
-    # rebuilding Rust: an unchanged rev means an unchanged tag, so this exits 0.
-    #
-    # No --pull: upstream's runtime base is debian:bullseye-slim, a MOVING tag.
-    # Refreshing it would change the runtime image underneath a rev that is
-    # supposed to be pinned.
-    script = ''
-      if docker image inspect ${tag} >/dev/null 2>&1; then
-        echo "${tag} already built"
-        exit 0
-      fi
-
-      docker build \
-        --build-arg RUSTFLAGS=${lib.escapeShellArg rustflags} \
-        --build-arg FEATURES=${lib.escapeShellArg features} \
-        -t ${tag} \
-        ${src}
-    '';
-  };
 }
