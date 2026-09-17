@@ -108,13 +108,11 @@ variable "legacy_server_ids" {
   default     = []
 }
 
-variable "tailnet_host" {
+variable "tailnet_ipv4" {
   description = <<-EOT
-    MagicDNS name of this box's tailscale node ("hu-tao.tailXXXX.ts.net"), from
-    the tailnet's DNS page. dozzle/grafana/syncthing become CNAMEs to it.
-
-    Not a secret — it ends up in public DNS either way — but it is
-    tailnet-specific, so it has no sensible default. Empty creates no records.
+    This box's tailscale address, from `tailscale status`. dozzle, grafana and
+    syncthing become A records pointing at it — resolvable by anything,
+    reachable only from the tailnet. Empty creates no records.
   EOT
   type        = string
   default     = ""

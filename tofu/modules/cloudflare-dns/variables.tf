@@ -34,18 +34,29 @@ variable "subdomains" {
   default = ["mail", "git", "minecraft", "mc", "mc2", "music", "status", "smtp", "search", "pages"]
 }
 
-variable "tailnet_host" {
+variable "tailnet_ipv4" {
   description = <<-EOT
-    MagicDNS name of this box's tailscale node, e.g. "hu-tao.tailXXXX.ts.net".
+    This box's tailscale address, e.g. "100.109.115.12". The tailnet-only
+    subdomains below become plain A records pointing at it.
 
-    A CNAME target rather than a 100.x A record on purpose. Tailscale publishes
-    that name in public DNS and keeps it pointing at whatever address the node
-    currently holds, so replacing the machine cannot leave a stale literal here
-    — the trap modules/containers/tempo.nix documents, where a hardcoded tailnet
-    address outlived the host it belonged to.
+    A CGNAT address in public DNS looks alarming and is not: 100.64.0.0/10 is
+    unroutable on the internet, so the record is a dead end for anyone off the
+    tailnet, and four further layers sit behind it (ARCHITECTURE.md §3).
 
-    Empty disables the records below entirely, which is the right state until
-    the node name is known.
+    A RECORDS RATHER THAN A CNAME to the node's MagicDNS name, which was the
+    first design here. Tailscale does NOT publish <node>.<tailnet>.ts.net in
+    public DNS — verified 2026-09-17, empty answers from 1.1.1.1, 9.9.9.9 and
+    8.8.8.8 — it resolves only through the tailnet's own split-DNS route. A
+    CNAME would therefore work on a device with MagicDNS active and fail
+    silently on one without it, which is a worse failure than the one below.
+
+    The cost, stated plainly: this is a literal, and replacing the machine
+    gives it a new tailnet address that this value will not follow. That is
+    the trap modules/containers/tempo.nix documents. It is accepted here
+    because the failure is loud and local — the names stop resolving to the
+    box — and the fix is this one variable.
+
+    Empty disables the records entirely.
   EOT
   type        = string
   default     = ""
