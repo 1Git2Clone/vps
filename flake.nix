@@ -151,6 +151,12 @@
           # "serenity-bot-image.service: Start operation timed out" instead of
           # an unexplained rollback. Keep that ordering if either number moves.
           #
+          # The bot no longer goes down for the duration: both its units are
+          # `stopIfChanged = false` (see modules/containers/serenity-bot.nix),
+          # so the old container keeps serving while the new image compiles and
+          # swaps at the end. Activation still WAITS for the build, which is
+          # why this timeout stays where it is.
+          #
           # The cost is still borne by every deploy, so the durable fix stands:
           # build the image off-box — same architecture, so a native build here
           # and a pushed closure there, not a cross-compile — and ship it as an
