@@ -37,7 +37,7 @@ nothing to remember to run.
 
 | Service | Exposure |
 |---|---|
-| `caddy` | 80/443 (+443/udp); TLS terminator for the five sites below. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
+| `caddy` | 80/443 (+443/udp) for the public sites, and 8880/8443 for the tailnet-only ones — the second pair is kept private by its absence from the firewall's allow-lists, and nftables rewrites tailscale0's 80/443 onto it so those URLs carry no port. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
 | `cloudflared` | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly |
 | `mailserver` | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host |
 | `webmail` | roundcube, proxied at `mail.` |
@@ -46,8 +46,8 @@ nothing to remember to run.
 | `navidrome` | `127.0.0.1:4533`, reached only through caddy at `music.` |
 | `kuma` | proxy network only, reached at `status.` |
 | `searxng` | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt |
-| `dozzle` | 8080, tailnet only |
-| `grafana` | host networking, :3000, tailnet only |
+| `dozzle` | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part |
+| `grafana` | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS |
 | `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
 | `minecraft` | 25565; RCON on loopback only (25575) |
 | `minecraft2` | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576) |
@@ -55,7 +55,7 @@ nothing to remember to run.
 | `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback |
 | `postgres` | not a container — a host service; unix socket + loopback only, never on `botnet` |
 | `pgbouncer` | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain |
-| `syncthing` | not a container — a host service; GUI on 8384, tailnet only |
+| `syncthing` | not a container — a host service; GUI on 8384, tailnet only; also `syncthing.`, where caddy must rewrite the `Host` header or syncthing's rebinding check answers 403 |
 
 Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is over
 Tailscale SSH. Keeping 22 is what lets git remotes stay portless: ssh has no

@@ -31,6 +31,12 @@
         "status"
         "search"
         "pages"
+        # Tailnet-only vhosts. They belong on the same certificate as the rest
+        # because DNS-01 never needs a name to resolve publicly or a port to be
+        # reachable — see modules/containers/caddy.nix.
+        "dozzle"
+        "grafana"
+        "syncthing"
       ];
       description = ''
         Subdomains carried as SANs on the apex certificate. Order is
@@ -89,6 +95,37 @@
       '';
     };
 
+    tailnetHttpsPort = lib.mkOption {
+      type = lib.types.port;
+      default = 8443;
+      description = ''
+        Caddy's SECOND https listener, carrying the vhosts that are meant for
+        the tailnet alone — dozzle, grafana and syncthing. Two places must
+        agree on it: caddy publishes it, and the firewall's prerouting chain
+        rewrites tailscale0's port 443 onto it, which is what lets the URL be
+        `https://dozzle.<domain>` with no port in it.
+
+        It is published on 0.0.0.0 like every other container port and kept
+        private exactly the way grafana:3000 is — by its ABSENCE from the
+        firewall's public allow-lists, not by a bind address.
+      '';
+    };
+
+    tailnetHttpPort = lib.mkOption {
+      type = lib.types.port;
+      default = 8880;
+      description = ''
+        The plain-http half of `tailnetHttpsPort`, serving nothing but a
+        redirect to https.
+
+        It exists because a site address with an explicit port makes caddy skip
+        the http->https redirect it adds for every other site. Without it a
+        browser that still tries http first lands on the PUBLIC :80 listener,
+        which has no site for these names and answers 404 — the confusing
+        failure, not the obvious one.
+      '';
+    };
+
     botNetwork = lib.mkOption {
       type = lib.types.str;
       default = "botnet";
@@ -135,6 +172,12 @@
         modules/containers/forgejo-runner.nix), so that network differs every
         run and its own gateway cannot be named ahead of time. The Actions
         cache proxy is published here.
+
+        Caddy uses it too, for the two tailnet vhosts whose backends are in the
+        HOST's network namespace rather than on the proxy network: grafana:3000
+        and syncthing's GUI:8384. A container on any bridge reaches a local
+        address of the host by routing through its own gateway, so this works
+        from the proxy network as well.
 
         OBSERVED, not enforced. `ip -4 -br addr show docker0` reports
         172.17.0.1/16 on this host, which is docker's built-in default.

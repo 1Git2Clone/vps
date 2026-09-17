@@ -34,7 +34,15 @@
 
     # 0.0.0.0, restricted by the firewall rather than by the bind address —
     # the same arrangement as grafana:3000 and tempo's OTLP ports. The input
-    # chain has no rule for 8384, so only `iifname tailscale0 accept` reaches it.
+    # chain reaches it from `iifname tailscale0` and, since the GUI also answers
+    # at syncthing.<domain>, from the caddy container on the docker bridge.
+    #
+    # That proxy needs one thing from this end and gets it in the Caddyfile
+    # instead: syncthing refuses a request whose Host header is not localhost or
+    # a bare address, so caddy rewrites Host to the upstream. The alternative,
+    # insecureSkipHostcheck, lives in the config directory below — which this
+    # module deliberately does not own, so it would be a hand edit no deploy can
+    # reproduce.
     guiAddress = "0.0.0.0:8384";
 
     # Deliberately NOT opening 22000/21027. The Hetzner edge firewall has never

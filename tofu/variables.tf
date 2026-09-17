@@ -108,6 +108,18 @@ variable "legacy_server_ids" {
   default     = []
 }
 
+variable "tailnet_host" {
+  description = <<-EOT
+    MagicDNS name of this box's tailscale node ("hu-tao.tailXXXX.ts.net"), from
+    the tailnet's DNS page. dozzle/grafana/syncthing become CNAMEs to it.
+
+    Not a secret — it ends up in public DNS either way — but it is
+    tailnet-specific, so it has no sensible default. Empty creates no records.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "dkim_cloudflare_key" {
   description = "DKIM public key for the cf2024-1 selector (Cloudflare Email Security)."
   type        = string

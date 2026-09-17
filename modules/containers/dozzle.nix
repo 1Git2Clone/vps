@@ -1,9 +1,13 @@
 # ==============================================================================
 # Dozzle — log viewer
 # ==============================================================================
-# Reachable on :8080 from the tailnet only: published ports arrive through the
-# forward chain, and 8080 is not in its internet allow-list (see
-# modules/firewall.nix).
+# Reachable two ways, both tailnet-only: at dozzle.<domain> through caddy, and
+# still directly on :8080. Published ports arrive through the forward chain and
+# 8080 is not in its internet allow-list (see modules/firewall.nix).
+#
+# The direct port stays ON PURPOSE even though the vhost supersedes it. This is
+# the log viewer — the thing you reach for when caddy is the broken part — and a
+# path to it that does not go through caddy is worth one line.
 #
 # Dozzle's simple auth provider cannot hash a plaintext password — it reads a
 # bcrypt hash from users.yml in its data directory. Generate the hash once:
@@ -56,6 +60,10 @@ in
     image = "amir20/dozzle:v11.1.0";
 
     ports = [ "8080:8080" ];
+
+    # Joined so caddy can resolve `dozzle` over docker's embedded DNS. Dozzle
+    # itself talks to nothing on this network.
+    networks = [ config.infra.proxyNetwork ];
 
     environment.DOZZLE_AUTH_PROVIDER = "simple";
 
