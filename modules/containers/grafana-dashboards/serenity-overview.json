@@ -148,19 +148,12 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" } | count_over_time() by (span.guild_id)",
+          "query": "{ name = \"handle_message\" && span.guild_name != nil } | count_over_time() by (span.guild_name)",
           "refId": "A",
           "step": "1h"
         }
       ],
       "transformations": [
-        {
-          "id": "renameByRegex",
-          "options": {
-            "regex": ".*?(\\d{15,}).*",
-            "renamePattern": "$1"
-          }
-        },
         {
           "id": "reduce",
           "options": {
@@ -173,33 +166,8 @@
           "id": "organize",
           "options": {
             "renameByName": {
-              "Field": "Guild ID",
+              "Field": "Guild",
               "Total": "Messages"
-            }
-          }
-        },
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Guild ID": {
-                "aggregations": [],
-                "operation": "groupby"
-              },
-              "Messages": {
-                "aggregations": [
-                  "sum"
-                ],
-                "operation": "aggregate"
-              }
-            }
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "renameByName": {
-              "Messages (sum)": "Messages"
             }
           }
         },
@@ -228,7 +196,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Guild ID"
+              "options": "Guild"
             },
             "properties": [
               {
@@ -236,7 +204,7 @@
                 "value": [
                   {
                     "title": "Open Hot guilds",
-                    "url": "/d/serenity-guild/serenity-guild?var-guild_id=${__value.raw}&${__url_time_range}"
+                    "url": "/d/serenity-guild/serenity-guild?var-guild=${__value.raw}&${__url_time_range}"
                   }
                 ]
               }
@@ -332,7 +300,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" } | select(span.author, span.channel_id, span.attachments)",
+          "query": "{ name = \"handle_message\" } | select(span.author, span.author_name, span.channel_id, span.attachments, span.links)",
           "refId": "A",
           "limit": 100,
           "spss": 5,
@@ -348,10 +316,13 @@
               "traceIdHidden": true
             },
             "renameByName": {
-              "author": "Author",
+              "author_name": "Author",
+              "author": "User ID",
               "channel_id": "Channel",
               "attachments": "Files",
-              "guild_id": "Guild"
+              "links": "Links",
+              "guild_name": "Guild",
+              "guild_id": "Guild ID"
             }
           }
         }
