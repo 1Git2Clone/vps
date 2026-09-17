@@ -22,6 +22,14 @@ let
     server:
       http_listen_port: 3200
 
+    # TraceQL metrics queries are capped at 24h by default, and grafana's
+    # "Last 24 hours" sends a range a few seconds over that — so the preset
+    # that looks like it should work is exactly the one that 400s. A week is
+    # the window where this bot's traffic forms a shape worth plotting.
+    query_frontend:
+      metrics:
+        max_duration: 168h
+
     distributor:
       receivers:
         otlp:
