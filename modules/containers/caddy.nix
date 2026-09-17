@@ -28,12 +28,27 @@ let
   # official image was pinned to, so nothing about caddy's own behaviour moves.
   #
   # withPlugins runs xcaddy and vendors the module's Go deps; `hash` is the
-  # fixed-output hash of that vendor tree. Bump the plugin or caddy and the
-  # hash changes — set it to lib.fakeHash, build once, and copy the value the
-  # error prints.
+  # fixed-output hash of that vendor tree. Set it to lib.fakeHash, build once,
+  # and copy the value the error prints.
+  #
+  # IT IS NOT ONLY CADDY AND THE PLUGIN THAT MOVE IT. xcaddy writes the Go
+  # toolchain version into the generated go.mod — the tree here literally says
+  # `go 1.26.7` — so a nixpkgs bump that carries a new Go changes this hash with
+  # neither version below touching. 2026-09-17 was exactly that: caddy still
+  # 2.11.4, the plugin still v0.1.0, and the hash off by a whole tree.
+  #
+  # Worse, it does not fail where it changed. A fixed-output derivation is
+  # content-addressed, so a store that already has the old tree never re-runs
+  # the fetch: the flake update of 2026-09-16 deployed clean from a warm store
+  # and the mismatch surfaced the next day on a workstation with a cold one.
+  # Expect this after a `nix flake update`, not on the machine that ran it.
+  #
+  # The module contents are still pinned independently of this value —
+  # go.sum carries upstream's hashes for caddy v2.11.4 and the plugin, and a
+  # tampered module fails there regardless of what is written here.
   caddyWithRateLimit = pkgs.caddy.withPlugins {
     plugins = [ "github.com/mholt/caddy-ratelimit@v0.1.0" ];
-    hash = "sha256-u/cMyier+OMIyNnr8QbodVn+lgK35H82lGn6N8k+g+A=";
+    hash = "sha256-w5ovOoAjzA1HlC2s1GDwKo4fwPJKO3Ou3K/5AiUl4Kk=";
   };
 
   # A minimal image around that binary, matching the two things the official
