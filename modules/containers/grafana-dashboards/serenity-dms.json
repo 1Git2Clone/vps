@@ -37,7 +37,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_name = \"DM\" } | count_over_time()",
+          "query": "{ name = \"handle_message\" && (span.guild_name = \"DM\" || span.guild_id = \"0\" || span.guild_id = \"None\") && span.author != \"1211325231659089920\" } | count_over_time()",
           "refId": "A",
           "step": "1h"
         }
@@ -94,7 +94,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_name = \"DM\" } | count_over_time()",
+          "query": "{ name = \"handle_message\" && (span.guild_name = \"DM\" || span.guild_id = \"0\" || span.guild_id = \"None\") && span.author != \"1211325231659089920\" } | count_over_time()",
           "refId": "A",
           "step": "1h"
         }
@@ -148,8 +148,18 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.guild_name = \"DM\" } | count_over_time() by (span.author_name)",
+          "query": "{ name = \"handle_message\" && (span.guild_name = \"DM\" || span.guild_id = \"0\" || span.guild_id = \"None\") && span.author != \"1211325231659089920\" && span.author_name != nil } | count_over_time() by (span.author_name)",
           "refId": "A",
+          "step": "1h"
+        },
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ name = \"handle_message\" && (span.guild_name = \"DM\" || span.guild_id = \"0\" || span.guild_id = \"None\") && span.author != \"1211325231659089920\" && span.guild_id =~ \"Some.*\" } | count_over_time() by (span.author)",
+          "refId": "B",
           "step": "1h"
         }
       ],
@@ -246,7 +256,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ span.guild_name = \"DM\" } | select(span.author, span.author_name, span.channel_id, span.attachments, span.links)",
+          "query": "{ (span.guild_name = \"DM\" || span.guild_id = \"0\" || span.guild_id = \"None\") && span.author != \"1211325231659089920\" } | select(span.content, span.author, span.author_name, span.channel_id, span.attachments, span.links)",
           "refId": "A",
           "limit": 100,
           "spss": 5,
@@ -258,15 +268,16 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "nested": true,
-              "traceIdHidden": true
+              "nested": true
             },
             "renameByName": {
               "author_name": "Author",
               "author": "User ID",
               "channel_id": "Channel",
-              "attachments": "Files",
+              "attachments": "File count",
               "links": "Links",
+              "content": "Message",
+              "attachment_urls": "Files",
               "guild_name": "Guild",
               "guild_id": "Guild ID"
             }
@@ -280,7 +291,78 @@
             "filterable": true
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Author"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Author",
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=.*&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open User ID",
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=.*&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Guild"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Guild",
+                    "url": "/d/serenity-guild/serenity-guild?var-guild=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
