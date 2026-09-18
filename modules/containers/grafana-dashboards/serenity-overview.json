@@ -151,6 +151,16 @@
           "query": "{ name = \"handle_message\" && span.guild_name != nil } | count_over_time() by (span.guild_name)",
           "refId": "A",
           "step": "1h"
+        },
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ name = \"handle_message\" && span.guild_id =~ \"Some.*\" } | count_over_time() by (span.guild_id)",
+          "refId": "B",
+          "step": "1h"
         }
       ],
       "transformations": [
@@ -257,8 +267,7 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "nested": true,
-              "traceIdHidden": true
+              "nested": true
             }
           }
         }
@@ -291,7 +300,7 @@
         "x": 0,
         "y": 15,
         "w": 24,
-        "h": 11
+        "h": 12
       },
       "targets": [
         {
@@ -300,7 +309,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" } | select(span.author, span.author_name, span.channel_id, span.attachments, span.links)",
+          "query": "{ name = \"handle_message\" } | select(span.content, span.author, span.author_name, span.channel_id, span.attachments, span.links)",
           "refId": "A",
           "limit": 100,
           "spss": 5,
@@ -312,15 +321,16 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "nested": true,
-              "traceIdHidden": true
+              "nested": true
             },
             "renameByName": {
               "author_name": "Author",
               "author": "User ID",
               "channel_id": "Channel",
-              "attachments": "Files",
+              "attachments": "File count",
               "links": "Links",
+              "content": "Message",
+              "attachment_urls": "Files",
               "guild_name": "Guild",
               "guild_id": "Guild ID"
             }
@@ -334,7 +344,214 @@
             "filterable": true
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Author"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Author",
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=.*&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open User ID",
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=.*&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Guild"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Guild",
+                    "url": "/d/serenity-guild/serenity-guild?var-guild=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "title": "Recent attachments",
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 24,
+        "h": 11
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{ name = \"handle_message\" && span.attachments > 0 } | select(span.attachment_urls, span.content, span.author, span.author_name, span.channel_id, span.guild_name)",
+          "refId": "A",
+          "limit": 100,
+          "spss": 5,
+          "tableType": "spans"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "nested": true
+            },
+            "renameByName": {
+              "author_name": "Author",
+              "author": "User ID",
+              "channel_id": "Channel",
+              "attachments": "File count",
+              "links": "Links",
+              "content": "Message",
+              "attachment_urls": "Files",
+              "guild_name": "Guild",
+              "guild_id": "Guild ID"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Author"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Author",
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=.*&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open User ID",
+                    "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=.*&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Guild"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Guild",
+                    "url": "/d/serenity-guild/serenity-guild?var-guild=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
