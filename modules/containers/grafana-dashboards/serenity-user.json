@@ -504,9 +504,9 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ (span.author_name = \"$user\" || span.author = \"$user\") && (span.guild_name =~ \"$guild\" || span.guild_id =~ \".*$guild.*\") } | select(span.content, span.author, span.author_name, span.channel_id, span.attachments, span.links) with (most_recent=true)",
+          "query": "{ (span.author_name = \"$user\" || span.author = \"$user\") && (span.guild_name =~ \"$guild\" || span.guild_id =~ \".*$guild.*\") && span.attachment_urls != nil } | select(span.content, span.author, span.author_name, span.channel_id, span.attachments, span.links)",
           "refId": "A",
-          "limit": 100,
+          "limit": 200,
           "spss": 5,
           "tableType": "spans"
         }
@@ -606,9 +606,9 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{  name = \"handle_message\" && (span.author_name = \"$user\" || span.author = \"$user\") && (span.guild_name =~ \"$guild\" || span.guild_id =~ \".*$guild.*\") && span.attachments > 0 } | select(span.attachment_urls, span.content, span.author, span.author_name, span.channel_id, span.guild_name) with (most_recent=true)",
+          "query": "{  name = \"handle_message\" && (span.author_name = \"$user\" || span.author = \"$user\") && (span.guild_name =~ \"$guild\" || span.guild_id =~ \".*$guild.*\") && span.attachments > 0 } | select(span.attachment_urls, span.content, span.author, span.author_name, span.channel_id, span.guild_name)",
           "refId": "A",
-          "limit": 100,
+          "limit": 200,
           "spss": 5,
           "tableType": "spans"
         }
