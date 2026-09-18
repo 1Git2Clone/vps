@@ -101,11 +101,15 @@ let
   # landed after it. Revisit if upstream starts cutting releases that include
   # them.
   #
-  # Taken for the trace fields the grafana dashboards group on. Spans record
+  # Taken for the trace fields the grafana dashboards read. Spans record
   # `guild_name` and `author_name` alongside the snowflakes — a leaderboard
-  # keyed on an id is a list of numbers nobody can read — plus a `links` count,
-  # and `attachments` as an integer rather than a string, which is what makes
-  # `sum_over_time()` able to add it up at all.
+  # keyed on an id is a list of numbers nobody can read — plus the message
+  # `content`, `attachment_urls`, and `links` and `attachments` as INTEGERS.
+  #
+  # The integers are the subtle one: tracing-opentelemetry has no `record_u64`,
+  # so an unsigned count falls through to Debug and arrives as a string, and
+  # every `sum_over_time()` over it returns an empty series rather than an
+  # error. Upstream now lints against that.
   #
   # Before that (upstream PR #2): `guild_id` became a snowflake (`0` in DMs)
   # instead of the Debug of `Option<GuildId>`, which was splitting every
@@ -121,12 +125,12 @@ let
   # Both lines change together. A rev without its matching hash fails the fetch
   # at build time, which is the good failure — the bad one would be a stale hash
   # silently reusing the old source, and fetchgit does not allow that.
-  rev = "bd6de38e554d6680b99ba3ebefc805a065e3da01";
+  rev = "ed491fa9871f47a75ed58dba73a16e25d5181c39";
 
   src = pkgs.fetchgit {
     url = "https://github.com/1Git2Clone/serenity-discord-bot";
     inherit rev;
-    hash = "sha256-syaU3M1gcB5M6V8qIYto2oRNRGVMTqfNCCfkUiwGqd8=";
+    hash = "sha256-EfTFvQ6wYhTfRWgTBj6L2u2DegZ9VLhN2CKpH3xz7Ew=";
     # build.rs is only a `cargo:rerun-if-changed=migrations`, so nothing in the
     # build reads git metadata.
     leaveDotGit = false;
