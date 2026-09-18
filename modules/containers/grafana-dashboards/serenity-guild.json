@@ -211,8 +211,7 @@
           "custom": {
             "align": "auto",
             "filterable": true
-          },
-          "unit": "short"
+          }
         },
         "overrides": [
           {
@@ -229,6 +228,22 @@
                     "url": "/d/serenity-user/serenity-user?var-user=${__value.raw}&var-guild=$guild&${__url_time_range}"
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
               }
             ]
           }
@@ -309,10 +324,26 @@
           "custom": {
             "align": "auto",
             "filterable": true
-          },
-          "unit": "short"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Channel ID"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
