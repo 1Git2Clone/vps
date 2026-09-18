@@ -126,3 +126,60 @@ resource "hcloud_server" "vps" {
 #
 # Both commands are in docs/deploying.md. Neither can be triggered by an
 # `apply`, which is the point.
+
+# ==============================================================================
+# The CI runner
+# ==============================================================================
+# A second, deliberately disposable box. It exists because forgejo-runner was
+# sharing 15 GB with two JVMs that commit their heaps up front, and on
+# 2026-09-18 a 732 MB `nix eval` was enough to push the box over and make the
+# kernel shoot minecraft's java — the OOM killer scores by resident size, so the
+# biggest idle process loses regardless of who caused the spike.
+#
+# Created in the console, ADOPTED here: see the import block in imports.tf. As
+# with the VPS, do not apply against an unimported server — tofu would build a
+# second one.
+#
+# Everything about it is imported-shaped rather than created-shaped:
+#
+#   * no public_net block. The provider's importer leaves public_net out of
+#     state, so declaring it makes every post-import plan propose an ADDITION
+#     that detaches and reattaches the live primary IPs — the exact accident
+#     that cost 167.233.24.58 on 2026-09-05. This box's addresses
+#     (46.225.61.172 / 2a01:4f8:1c19:cb62::/64) carry no reputation and no PTR,
+#     but churn on a live attachment is still churn.
+#   * protections stay OFF, matching live and matching intent. The VPS turns
+#     them on because a deleted mail server cannot be undeleted; this box holds
+#     a nix store and an Actions cache, both of which are caches by definition.
+#     Rescaling it to a CX33 is a normal thing to do to it.
+resource "hcloud_server" "runner" {
+  name        = var.runner_server_name
+  server_type = var.runner_server_type
+
+  # nbg1, NOT var.location. The VPS is pinned to fsn1 because its primary IP is
+  # location-bound and carries the mail reputation; this box has no such tie, and
+  # a private network spans the whole eu-central zone, so the two being in
+  # different cities costs nothing. See network.tf.
+  location = "nbg1"
+
+  # What the console booted it with. Ignored below, like the VPS's: nixos-anywhere
+  # kexecs over it and nothing from this image survives the install.
+  image = "ubuntu-26.04"
+
+  ssh_keys = [hcloud_ssh_key.main.name]
+
+  # Set live by the console at creation, so it is declared here. An attribute
+  # that exists on the server but not in the config is not "unmanaged" — it is a
+  # silent proposed removal on the next plan.
+  labels = {
+    runner = ""
+  }
+
+  # Same reason as the VPS: the firewall is attached by
+  # hcloud_firewall_attachment, so a rule change never reads as a server change.
+  ignore_remote_firewall_ids = true
+
+  lifecycle {
+    ignore_changes = [ssh_keys, image, public_net]
+  }
+}

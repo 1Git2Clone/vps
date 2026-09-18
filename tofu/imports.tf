@@ -134,3 +134,13 @@ import {
   to = module.dns.cloudflare_dns_record.bsky
   id = "${var.cloudflare_zone_id}/49002efb9babb52cd5dc5a207fb42cd0"
 }
+
+# The CI runner, created in the console on 2026-09-18 and adopted here. Its
+# primary IPs are deliberately NOT imported: server.tf declares no public_net
+# block for this box, so there is nothing for them to be imported into. They
+# stay Hetzner-managed and auto-delete with the server, which is the right
+# lifecycle for an address that carries neither DNS nor a PTR.
+import {
+  to = hcloud_server.runner
+  id = "166488672"
+}
