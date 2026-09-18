@@ -271,7 +271,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && duration > 200ms }",
+          "query": "{ name = \"handle_message\" && duration > 200ms } with (most_recent=true)",
           "refId": "A",
           "limit": 50,
           "spss": 5
@@ -324,7 +324,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" } | select(span.content, span.author, span.author_name, span.channel_id, span.attachments, span.links)",
+          "query": "{ name = \"handle_message\" } | select(span.content, span.author, span.author_name, span.channel_id, span.attachments, span.links) with (most_recent=true)",
           "refId": "A",
           "limit": 100,
           "spss": 5,
@@ -460,7 +460,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
-          "query": "{ name = \"handle_message\" && span.attachments > 0 } | select(span.attachment_urls, span.content, span.author, span.author_name, span.channel_id, span.guild_name)",
+          "query": "{ name = \"handle_message\" && span.attachments > 0 } | select(span.attachment_urls, span.content, span.author, span.author_name, span.channel_id, span.guild_name) with (most_recent=true)",
           "refId": "A",
           "limit": 100,
           "spss": 5,
