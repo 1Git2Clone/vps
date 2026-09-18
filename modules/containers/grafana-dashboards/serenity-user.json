@@ -336,8 +336,7 @@
           "custom": {
             "align": "auto",
             "filterable": true
-          },
-          "unit": "short"
+          }
         },
         "overrides": [
           {
@@ -354,6 +353,22 @@
                     "url": "/d/serenity-guild/serenity-guild?var-guild=${__value.raw}&${__url_time_range}"
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Guild"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
               }
             ]
           }
@@ -434,10 +449,26 @@
           "custom": {
             "align": "auto",
             "filterable": true
-          },
-          "unit": "short"
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Channel ID"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "string"
+              },
+              {
+                "id": "custom.align",
+                "value": "left"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
