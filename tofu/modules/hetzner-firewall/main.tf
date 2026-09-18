@@ -40,6 +40,17 @@ locals {
     # Server-to-server ssh on the host sshd port. Added during the CX33 -> CX43
     # migration so the old box could rsync directly to the new one.
     { protocol = "tcp", port = "2222", description = "Host sshd, server-to-server" },
+    # Egress to the CI runner's BOOTSTRAP sshd, which is on 22 because the box
+    # still runs the Ubuntu image nixos-anywhere is about to replace. Scoped to
+    # that one address rather than local.anywhere: this is the jump-host half of
+    # the runner's single inbound rule, so that box never has to open 22 to the
+    # internet. Remove both once NixOS and tailscale are up there.
+    {
+      protocol        = "tcp"
+      port            = "22"
+      description     = "Bootstrap ssh to the CI runner (jump host)"
+      destination_ips = ["46.225.61.172/32"]
+    },
   ]
 }
 
@@ -60,10 +71,13 @@ resource "hcloud_firewall" "main" {
   dynamic "rule" {
     for_each = local.outbound
     content {
-      direction       = "out"
-      protocol        = rule.value.protocol
-      port            = rule.value.port
-      destination_ips = local.anywhere
+      direction = "out"
+      protocol  = rule.value.protocol
+      port      = rule.value.port
+      # Defaults to anywhere; an entry may narrow it. try() rather than lookup()
+      # because these objects are a tuple of differing shapes, and only try()
+      # tolerates the attribute being absent on most of them.
+      destination_ips = try(rule.value.destination_ips, local.anywhere)
       description     = rule.value.description
     }
   }

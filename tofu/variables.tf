@@ -142,3 +142,35 @@ variable "bsky_record" {
   type        = string
   description = "Bluesky AT Protocol DID."
 }
+
+variable "runner_server_name" {
+  description = <<-EOT
+    Name of the CI runner box in the Hetzner console. Like var.server_name this
+    is a label and nothing more — not networking.hostName, not the tailnet node
+    name — and it is kept equal to the live value so a plan never proposes a
+    cosmetic rename.
+  EOT
+  type        = string
+  default     = "forgejo-runner"
+}
+
+variable "runner_server_type" {
+  description = <<-EOT
+    Server type for the CI runner. cx33 is 4 vCPU / 8 GB / 80 GB.
+
+    Kept equal to the LIVE type on purpose. A rescale done in the console is a
+    change tofu can see — leaving this at the old value does not mean "not
+    managed", it means the next apply proposes shrinking the box, and Hetzner
+    cannot shrink a disk, so that plan either fails or destroys data depending
+    on how it is answered. Rescale, then change this line.
+
+    Sizing, measured rather than guessed: the two CI eval steps peak at 668 MB
+    and 732 MB RSS, so memory was never the binding constraint at cx23 either —
+    disk was, and 40 GB of it. What the extra cores actually buy is concurrent
+    rust builds, which is why runner capacity can go back to 2 at this size.
+    Even at 80 GB the GC timer is not optional: a nix store, job images and a
+    cargo cache grow without bound and nothing prunes them by default.
+  EOT
+  type        = string
+  default     = "cx33"
+}
