@@ -1,16 +1,26 @@
 # ==============================================================================
 # The private network
 # ==============================================================================
-# One /16 with a single /24 subnet, joining the VPS and the CI runner so they
-# can talk without going out to the internet and back in.
+# One /16 with a single /24 subnet, with the VPS attached and NOTHING ELSE.
 #
-# The two boxes are in DIFFERENT locations — hu-tao in fsn1, forgejo-runner in
-# nbg1 — and that is fine: a Hetzner network is scoped to a NETWORK ZONE, not a
-# location, and both sit in eu-central. A subnet in a zone reaches every
-# location in it. (Scaleway or any other provider could not join this, which is
-# the whole reason the runner stayed on Hetzner.)
+# It was built to join the VPS and the CI runner, and the runner is deliberately
+# not on it. Hetzner cloud firewalls filter the PUBLIC interface only: private
+# traffic is never inspected, and there are no ACLs, security groups or route
+# policy for it. So the only cloud-level control over a private path is binary —
+# attached, or not — and "not" is the one that cannot be undone by a typo.
 #
-# Traffic on this network is free and does not count against the 20 TB.
+# Filtering it host-side was the alternative and it is weaker, because
+# modules/firewall.nix accepts nine ports with no iifname. The moment a private
+# interface came up on the VPS, 10.0.1.3 could open new connections to every one
+# of them. See docs/superpowers/specs/2026-09-18-ci-runner-host-design.md.
+#
+# What the runner gets instead: HTTPS to git.<domain> over the public internet,
+# like any other client, and ssh FROM the VPS. One way, by construction.
+#
+# The network stays because it costs nothing and the next box that is actually
+# trusted — a second app host, a database — should be on it. Both locations are
+# in eu-central, and a Hetzner network is scoped to a network ZONE rather than a
+# location, so fsn1 and nbg1 could share it. Traffic on it is free.
 #
 # WHAT THIS DOES NOT DO: attaching a server here gives it a second NIC, it does
 # not configure one. Until the NixOS side brings that interface up (Hetzner
@@ -47,10 +57,9 @@ resource "hcloud_network_subnet" "main" {
   ip_range = "10.0.1.0/24"
 }
 
-# Attachments are their own resources, one per server, each pinning an explicit
-# address. Explicit rather than letting Hetzner assign: these addresses end up
-# in NixOS config and in any future firewall rule, so they must not change when
-# a server is detached and reattached.
+# One attachment, pinning an explicit address rather than letting Hetzner assign
+# one: it ends up in NixOS config and in any future firewall rule, so it must not
+# change when a server is detached and reattached.
 #
 # subnet_id, NOT network_id: attaching to a network whose subnet does not exist
 # yet fails, and naming the subnet is what orders the two correctly.
@@ -59,10 +68,4 @@ resource "hcloud_server_network" "vps" {
   server_id = hcloud_server.vps.id
   subnet_id = hcloud_network_subnet.main.id
   ip        = "10.0.1.2"
-}
-
-resource "hcloud_server_network" "runner" {
-  server_id = hcloud_server.runner.id
-  subnet_id = hcloud_network_subnet.main.id
-  ip        = "10.0.1.3"
 }
