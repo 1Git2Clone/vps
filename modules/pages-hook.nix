@@ -8,29 +8,42 @@
 # it assumed the receiver had to be PUBLIC.
 #
 # Forgejo is a container on this same host. Its webhook delivery never leaves
-# the box — it goes container → docker bridge → here. There is no caddy site,
-# no published port, no DNS name and no new internet surface. The thing that
-# looked expensive costs one input rule of exactly the shape the bot and caddy
-# already have.
+# the box — in fact it never leaves the PROXY NETWORK, because this receiver is
+# a container on it too. There is no caddy site, no published port, no DNS name
+# and no firewall rule: `pages-hook:9000` is reachable from containers on that
+# network and from nothing else at all.
+#
+# A CONTAINER, NOT A HOST SERVICE, AND THAT IS A SECURITY FIX RATHER THAN
+# TIDYING. The first version of this module ran on the host and bound
+# infra.dockerBridgeGateway, which meant Forgejo had to be allowed to reach that
+# address — and ALLOWED_HOST_LIST matches HOSTS, NOT host:port. Allowing
+# 172.17.0.1 therefore allowed a webhook aimed at anything bound there, and
+# grafana (3000), syncthing's GUI (8384), tempo (4317/4318) and pgbouncer (6432)
+# all bind 0.0.0.0 and answer on it. Forgejo webhooks can use GET and record the
+# RESPONSE BODY in their delivery history, so that was a read primitive with an
+# exfiltration channel attached: anyone who could create a webhook could read
+# tailnet-only services without being on the tailnet.
+#
+# Moving here closes it. ALLOWED_HOST_LIST is now the container name, and
+# Forgejo's matcher is `MatchHostName(host) || MatchIPAddr(ip)` (see
+# modules/hostmatcher) — a name pattern alone is sufficient, so nothing needs to
+# allow a private address and 172.17.0.1 stops matching entirely.
 #
 # ONE SYSTEM WEBHOOK, NOT ONE PER REPO. Forgejo's /admin/hooks fires for every
 # repository on the instance, which is the only shape that preserves what
 # pages-pull's discovery bought: adding a pages site is a workflow file in the
-# repo that wants one, with nothing to configure here. A per-repo hook would
-# put the per-repo step straight back.
+# repo that wants one, with nothing to configure here.
 #
 # THE RECEIVER PARSES NOTHING. Any successful Action Run pokes pages-pull, which
 # is already idempotent (a stamp file per repo skips an unchanged artifact) and
-# already cheap (a handful of HTTP calls to a container on this host). Reading
-# the payload would buy a slightly smaller number of no-op runs in exchange for
-# coupling this module to Forgejo's ActionPayload schema, which is not a trade
-# worth making either — and this time that is measured rather than assumed.
+# already cheap. Reading the payload would buy a slightly smaller number of
+# no-op runs in exchange for coupling this module to Forgejo's ActionPayload
+# schema.
 #
-# THE LISTENER HAS NO PRIVILEGE. It runs as a DynamicUser and its entire
-# capability is touching one file in its own RuntimeDirectory; a systemd .path
-# unit watches that file and starts pages-pull as root. A network-facing
-# process that can run `systemctl start` is a network-facing process that is
-# root-adjacent, and the indirection costs six lines.
+# THE RECEIVER CANNOT START ANYTHING. Its entire capability is touching one file
+# in a bind-mounted directory; a systemd .path unit on the host watches that
+# file and starts pages-pull as root. A network-facing process that can run
+# `systemctl start` is root-adjacent, and the indirection costs six lines.
 {
   config,
   lib,
@@ -39,20 +52,30 @@
 }:
 
 let
-  inherit (config.infra) pagesHookPort dockerBridgeGateway;
+  inherit (config.infra) pagesHookPort proxyNetwork;
 
-  # The trigger file, and the only thing the listener can write. Under /run so
-  # it is tmpfs and cannot survive a reboot into a spurious trigger.
-  runtimeDir = "pages-hook";
-  triggerFile = "/run/${runtimeDir}/trigger";
+  uid = config.infra.serviceId.pages-hook;
+
+  # The host side of the signal. /run, so it is tmpfs: a trigger file cannot
+  # survive a reboot, and nothing here is data that should.
+  #
+  # A BIND MOUNT, against this repo's own "data is a named volume, never a bind
+  # mount" rule, and the exception is deliberate. That rule exists so restic
+  # picks up a new service's data automatically (see modules/backups.nix); this
+  # is not data, it is one zero-byte file used as an IPC signal, and a named
+  # volume would both be backed up for no reason and persist across reboots.
+  triggerDir = "/run/pages-hook";
+  triggerFile = "${triggerDir}/trigger";
+
+  # Where the same directory appears inside the container.
+  containerTriggerDir = "/trigger";
 
   # adnanh/webhook's hook definition. Two things about it are load-bearing:
   #
-  # `getenv` rather than the secret itself, with `-template` below. This file
-  # is a NIX STORE PATH and the store is world-readable, so a secret written
-  # here would be readable by every user on the box — the exact rule
-  # modules/options.nix opens with. The value arrives at runtime through an
-  # EnvironmentFile instead.
+  # `getenv` rather than the secret itself, with `-template` below. This file is
+  # a NIX STORE PATH and the store is world-readable, so a secret written here
+  # would be readable by every user on the box. The value arrives at runtime
+  # through an env file instead.
   #
   # BACKTICKS, NOT QUOTES, AROUND THE VARIABLE NAME, and this is not cosmetic.
   # `-template` expands the file as a Go template BEFORE parsing it as JSON, so
@@ -79,11 +102,9 @@ let
         pass-arguments-to-command = [
           {
             source = "string";
-            name = triggerFile;
+            name = "${containerTriggerDir}/trigger";
           }
         ];
-        # No response body worth returning, and no reason to make the caller wait
-        # for the touch.
         response-message = "queued";
         trigger-rule = {
           match = {
@@ -98,86 +119,96 @@ let
       }
     ]
   );
+
+  # Built locally rather than pulled, the same way caddy is: there is no
+  # upstream image for "webhook plus the one coreutils binary it shells out to",
+  # and building it means the contents are pinned by flake.lock like everything
+  # else. `webhook` alone would not do — the hook's command is `touch`, which
+  # has to exist inside the container.
+  #
+  # -ip 0.0.0.0 is correct HERE and would not have been on the host. Inside the
+  # container the only interface is the proxy network, and the port is NOT
+  # published, so "all interfaces" is one interface reachable by containers on
+  # that network alone.
+  hookImage = pkgs.dockerTools.buildLayeredImage {
+    name = "pages-hook";
+    tag = pkgs.webhook.version;
+    contents = [ pkgs.coreutils ];
+    config = {
+      Entrypoint = [ "${pkgs.webhook}/bin/webhook" ];
+      Cmd = [
+        "-hooks"
+        "${hooks}"
+        "-template"
+        "-ip"
+        "0.0.0.0"
+        "-port"
+        (toString pagesHookPort)
+        # -verbose, and it is not noise. Without it webhook logs its startup
+        # line and then NOTHING per delivery, so a hook that silently stops
+        # being delivered looks exactly like a week with no pushes. That is the
+        # failure shape half the modules in this repo carry comments about, and
+        # a few lines an hour is a cheap way not to have it.
+        "-verbose"
+        "-nopanic"
+      ];
+    };
+  };
 in
 {
-  # The secret reaches the process as an ENV FILE, not a mounted template.
+  # The secret reaches the container as an ENV FILE, not a mounted template.
   # Both forms exist in this repo and the difference matters: docker resolves a
   # mounted symlink once and pins the inode, so a rotated secret never arrives.
-  # systemd re-reads an EnvironmentFile on every start, and `restartUnits`
+  # An env file is re-read by docker at container start, and `restartUnits`
   # makes sops-nix restart this one when — and only when — the rendered content
   # actually changes, so a no-op deploy does not bounce the listener.
   sops.templates."pages-hook.env" = {
     content = ''
       PAGES_HOOK_SECRET=${config.sops.placeholder.forgejo_system_webhooks_pages_pull_secret}
     '';
-    restartUnits = [ "pages-hook.service" ];
+    restartUnits = [ "docker-pages-hook.service" ];
   };
 
-  systemd.services.pages-hook = {
-    description = "Receive Forgejo action-run webhooks and poke pages-pull";
-    wantedBy = [ "multi-user.target" ];
-    # docker0 has to exist before anything can bind its address.
-    after = [
-      "network-online.target"
-      "docker.service"
+  # The container writes here, so the host has to create it first and hand it to
+  # the container's uid. 0700: nothing else on this box has any business reading
+  # or writing a trigger that starts a root unit.
+  systemd.tmpfiles.rules = [
+    "d ${triggerDir} 0700 ${toString uid} ${toString uid} -"
+  ];
+
+  virtualisation.oci-containers.containers.pages-hook = {
+    image = "pages-hook:${pkgs.webhook.version}";
+    imageFile = hookImage;
+
+    # NOT on `proxy` for proxying — nothing reverse-proxies this and caddy has
+    # no site for it. It is there because FORGEJO is, and Forgejo is the one
+    # thing that has to reach it. See FORGEJO__webhook__ALLOWED_HOST_LIST in
+    # modules/containers/forgejo.nix, which names this container.
+    networks = [ proxyNetwork ];
+
+    # NO `ports`. Publishing one would put this back on the host, undo the
+    # reason it is a container at all, and need a firewall rule again.
+
+    environmentFiles = [ config.sops.templates."pages-hook.env".path ];
+
+    volumes = [
+      "${triggerDir}:${containerTriggerDir}"
     ];
-    wants = [ "network-online.target" ];
 
-    serviceConfig = {
-      # -ip, so the socket exists on the bridge address ALONE. The firewall
-      # rule in modules/firewall.nix is the control; this is the second one
-      # that has to also fail before anything off this host could reach it,
-      # and it is the cheaper of the two to get right.
-      ExecStart = lib.concatStringsSep " " [
-        "${pkgs.webhook}/bin/webhook"
-        "-hooks ${hooks}"
-        "-template"
-        "-ip ${dockerBridgeGateway}"
-        "-port ${toString pagesHookPort}"
-        "-nopanic"
-      ];
-      EnvironmentFile = config.sops.templates."pages-hook.env".path;
-
-      RuntimeDirectory = runtimeDir;
-      RuntimeDirectoryMode = "0700";
-
-      # A listener on a network socket gets the full set. DynamicUser is the
-      # important one: there is no account to take over, and the process can
-      # write exactly one directory.
-      DynamicUser = true;
-      NoNewPrivileges = true;
-      PrivateDevices = true;
-      PrivateTmp = true;
-      ProtectSystem = "strict";
-      ProtectHome = true;
-      ProtectKernelTunables = true;
-      ProtectKernelModules = true;
-      ProtectControlGroups = true;
-      RestrictNamespaces = true;
-      RestrictRealtime = true;
-      RestrictSUIDSGID = true;
-      LockPersonality = true;
-      MemoryDenyWriteExecute = true;
-      SystemCallArchitectures = "native";
-      SystemCallFilter = [
-        "@system-service"
-        "~@privileged"
-        "~@resources"
-      ];
-      RestrictAddressFamilies = [
-        "AF_INET"
-        "AF_UNIX"
-      ];
-      CapabilityBoundingSet = "";
-
-      Restart = "on-failure";
-      RestartSec = "5s";
-    };
+    extraOptions = [
+      "--user=${toString uid}:${toString uid}"
+      "--read-only"
+      "--cap-drop=ALL"
+      "--security-opt=no-new-privileges"
+      # webhook writes nothing but the trigger and the rootfs is read-only, so
+      # /tmp only has to exist.
+      "--tmpfs=/tmp:rw,noexec,nosuid,size=1m"
+    ];
   };
 
-  # The privileged half, and the reason the half above needs none. `.path` is
-  # a core systemd primitive: it watches the file and starts the unit. Nothing
-  # grants the listener the ability to start anything.
+  # The privileged half, and the reason the half above needs none. `.path` is a
+  # core systemd primitive: it watches the file and starts the unit. Nothing
+  # grants the container the ability to start anything.
   systemd.paths.pages-pull-trigger = {
     description = "Start pages-pull when the webhook receiver signals";
     wantedBy = [ "multi-user.target" ];

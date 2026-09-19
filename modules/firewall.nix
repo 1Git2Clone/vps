@@ -190,23 +190,6 @@ in
             ${toString config.infra.tailnetHttpsPort}
           } ct state new accept
 
-          # FORGEJO REACHING THE PAGES WEBHOOK RECEIVER. Same shape and same
-          # reasoning as the two rules above: a container addressing a service
-          # in the host's own netns arrives at input, not forward.
-          #
-          # This is the whole network cost of turning the pages poll into an
-          # event. The receiver binds dockerBridgeGateway alone and has no
-          # caddy site, no published port and no DNS name, so this rule is the
-          # only thing that makes it reachable — and it is reachable from the
-          # bridges and nowhere else.
-          #
-          # Not narrowed to a source subnet, for the reason spelled out on the
-          # caddy rule: the proxy network is on docker's address pool and
-          # pinning a subnet onto an existing network means deleting it by
-          # hand. The exposure is containers on this host, which is already who
-          # can reach 3000 and 8384.
-          iifname "br-*" tcp dport ${toString config.infra.pagesHookPort} ct state new accept
-
           log prefix "DROP_in: " counter drop
         }
 
