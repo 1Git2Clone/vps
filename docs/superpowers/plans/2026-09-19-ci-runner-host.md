@@ -542,6 +542,17 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Task 2: podman and the Actions daemon
 
+> **SUPERSEDED IN PART (9807149).** This task's identity design — a registration
+> token, later a `--extra-files` staged fallback with an `instance-id` stamp and
+> a reuse branch — is gone. `forgejo-runner register` is deprecated upstream,
+> and the metadata path this text uses
+> (`/hetzner/v1/metadata/userdata`) 404s: the real one is
+> `/hetzner/v1/userdata`. The runner's uuid+secret now arrives only as Hetzner
+> `user_data`, set by `tofu` at create time, which is per-server and therefore
+> clone-safe with no on-disk provenance checks at all. Read
+> `modules/runner/identity.nix` and the spec's "One source: user-data" section
+> rather than the code blocks below. Task 7 is rewritten to match.
+
 **Files:**
 - Modify: `modules/runner/default.nix` (replace the stub body)
 
@@ -2097,128 +2108,154 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Phase 4 — Install
 
-### Task 7: nixos-anywhere onto 166488672
+### Task 7: user-data, then nixos-anywhere onto the runner
 
 **Files:**
-- No repository changes. This task runs commands.
+- `tofu/terraform.tfvars` (gitignored, operator-supplied)
+- `modules/firewall.nix`, `tofu/modules/hetzner-firewall/main.tf` — the runner
+  IPv4 is pinned in both and the box gets a new one.
 
 **Interfaces:**
-- Consumes: `.#runner-hetzner` from Task 1-4, the jump path from Task 6.
-- Produces: a running NixOS runner registered against
-  `https://git.hu-tao.dev/`, which Phase 5 verifies and Phase 6 snapshots.
+- Consumes: `.#runner-hetzner` from Tasks 1-4, the jump path from Task 6.
+- Produces: a running NixOS runner declared against `https://git.hu-tao.dev/`,
+  which Phase 5 verifies and Phase 6 snapshots.
 
-- [ ] **Step 1: Mint a registration token**
+**This task REPLACES the runner box.** `user_data` is replace-forces-new in
+hcloud, and user-data is now the only way the runner learns its identity. The
+box holds a nix store and an Actions cache and nothing else, so replacing it
+costs a rebuild of caches; its public IPv4 changes, which is the part that needs
+care.
 
-In Forgejo: **Site Administration → Actions → Runners → Create new runner**.
-Copy the registration token. Do **not** paste it into any file in this
-repository, any commit message, or any command that gets written to shell
-history in a committed file.
+- [ ] **Step 1: Create the runner record in Forgejo**
 
-- [ ] **Step 2: Stage it for the install**
+Site Administration → Actions → Runners → Create new runner. It shows a uuid and
+a secret together exactly once. Nothing else needs doing there.
 
-```bash
-stage=$(mktemp -d)
-install -d -m 0700 "$stage/var/lib/forgejo-runner-token"
-umask 077
-read -rs -p "registration token: " TOK && echo
-printf 'TOKEN=%s\n' "$TOK" > "$stage/var/lib/forgejo-runner-token/token.env"
-chmod 0400 "$stage/var/lib/forgejo-runner-token/token.env"
-unset TOK
+- [ ] **Step 2: Put the pair in tfvars**
+
+In `tofu/terraform.tfvars` (gitignored — never in a `.tf` file, never in a
+commit):
+
+```hcl
+runner_identity = "forgejo-runner: <uuid> <secret>"
 ```
 
-`read -rs` so it never reaches the terminal or the shell history. This is the
-`--extra-files` fallback `modules/runner/identity.nix` documents — the first
-box exists already and hcloud treats `user_data` as replace-forces-new, so it
-cannot be given user-data without being destroyed.
-
-- [ ] **Step 3: Confirm the target is still the bootstrap image**
+- [ ] **Step 3: Plan, and read what it proposes**
 
 ```bash
-timeout 20 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
-  'cat /etc/os-release | head -2; lsblk -dn -o NAME,SIZE'
+cd tofu && tofu plan -out=runner.tfplan
 ```
 
-Expected: `ubuntu` and a single ~80G `sda`. If it already says NixOS, this task
-has been run before — stop and check with the user before reinstalling, because
-a reinstall destroys the disk.
+Expected: `hcloud_server.runner` **must be replaced**, and nothing else changes.
+A plan that touches `hcloud_server.main`, any DNS record, or any firewall is
+wrong — stop and read it rather than applying.
 
-- [ ] **Step 4: Dry-run the install**
+- [ ] **Step 4: Apply, and capture the new address**
+
+```bash
+cd tofu && tofu apply runner.tfplan && tofu output
+```
+
+- [ ] **Step 5: Repoint the two places that pin the runner IPv4**
+
+Both are on the VPS side, and until both are updated and the VPS is deployed the
+jump in Step 7 cannot connect:
+
+- `modules/firewall.nix` — the `output`-chain accept
+  `ip daddr <runner> tcp dport 22 ct state new accept`. The chain is
+  policy-drop, so a stale address here silently blackholes the jump.
+- `tofu/modules/hetzner-firewall/main.tf` — `destination_ips` on the VPS's
+  `tcp/22` egress rule.
+
+`tofu/runner-firewall.tf` needs nothing: it filters the RUNNER's public NIC and
+pins the VPS's address as the source, which has not changed.
+
+Commit the Nix change, `tofu apply` the firewall change, then deploy the VPS:
+
+```bash
+deploy .#vps-hetzner
+```
+
+- [ ] **Step 6: Confirm the target is the fresh bootstrap image**
+
+```bash
+timeout 20 ssh -o BatchMode=yes -J vps root@<new ip> \
+  'head -2 /etc/os-release; lsblk -dn -o NAME,SIZE; \
+   curl -s -o /dev/null -w "userdata HTTP %{http_code}\n" \
+     http://169.254.169.254/hetzner/v1/userdata'
+```
+
+Expected: `ubuntu`, a single ~80G `sda`, and **`userdata HTTP 200`** — the last
+one is the whole point of this task and is worth seeing before the install, not
+after. A 204 means `user_data` did not reach the server and the install will
+come up with no identity.
+
+- [ ] **Step 7: Dry-run the install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
   --flake .#runner-hetzner \
   --ssh-option ProxyJump=vps \
-  --extra-files "$stage" \
   --vm-test
 ```
 
-Expected: a VM boots the closure and exits 0. Note what this does **not** catch:
-`modules/hardware.nix` explains that the test harness injects its own virtio
-modules, so a missing driver passes here and fails on the real machine. The
-module list is shared with the VPS, which boots, so the risk is low.
+Expected: a VM boots the closure and exits 0. No `--extra-files`: this host
+holds no age key and stages no identity. Note what this does **not** catch —
+`modules/hardware.nix` explains that the harness injects its own virtio modules,
+so a missing driver passes here and fails on the real machine. The module list
+is shared with the VPS, which boots, so the risk is low.
 
-- [ ] **Step 5: Install**
+- [ ] **Step 8: Install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
   --flake .#runner-hetzner \
   --ssh-option ProxyJump=vps \
-  --extra-files "$stage" \
-  root@46.225.61.172
+  root@<new ip>
 ```
 
 Expected: kexec, disko partitions `/dev/sda`, the closure copies, the machine
-reboots. Several minutes.
+reboots. Several minutes. **Irreversible** — it repartitions the disk.
 
-- [ ] **Step 6: Clean up the staged token**
-
-```bash
-rm -rf "$stage"
-```
-
-- [ ] **Step 7: Verify the box came up as NixOS**
+- [ ] **Step 9: Verify the box came up as NixOS**
 
 ```bash
-timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
+timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> \
   'hostnamectl; systemctl is-system-running || true'
 ```
 
 Expected: `Operating System: NixOS 26.05`, hostname `forgejo-runner`. A
-`degraded` system state is not automatically a failure here — check which unit
-in the next step.
+`degraded` state is not automatically a failure — check which unit next.
 
-- [ ] **Step 8: Verify the token unit and the runner registered**
+- [ ] **Step 10: Verify the identity unit and the daemon**
 
 ```bash
-timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 '
-  systemctl status forgejo-runner-token.service --no-pager -l | head -20
-  echo "=== runner ==="
-  systemctl status gitea-runner-forgejo.service --no-pager -l | head -30
-  echo "=== state ==="
-  ls -la /var/lib/gitea-runner/forgejo/
+timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> '
+  systemctl status forgejo-runner-identity.service --no-pager -l | head -20
+  echo "=== daemon ==="
+  systemctl status forgejo-runner.service --no-pager -l | head -30
+  echo "=== state (no secrets printed) ==="
+  ls -la /var/lib/forgejo-runner/
+  echo "=== composed config, token_url not token ==="
+  grep -c "token_url: file://" /var/lib/forgejo-runner/config.yaml
 '
 ```
 
-Expected: `forgejo-runner-token.service` succeeded with
-`no token in user-data; keeping the existing ...`;
-`gitea-runner-forgejo.service` **active (running)**; and
-`/var/lib/gitea-runner/forgejo/.runner` present.
+Expected: `forgejo-runner-identity.service` succeeded with
+`forgejo runner identity composed from user-data`; `forgejo-runner.service`
+**active (running)**; `/var/lib/forgejo-runner/` holding `config.yaml` (0440)
+and `token` (0400) and **no `.runner`**; and the grep returning `1`.
 
-If the runner is in a restart loop, read the journal:
-`journalctl -u gitea-runner-forgejo -n 50 --no-pager`. The two likely causes are
-an empty `$TOKEN` (the file is not `TOKEN=<token>`) and a 403 from Forgejo (the
-registration token was already consumed or expired — mint a new one, write it to
-`/var/lib/forgejo-runner-token/token.env` on the box, then
-`rm /var/lib/gitea-runner/forgejo/.runner` and restart the unit).
+Never `cat` the token. If the daemon restart-loops, read
+`journalctl -u forgejo-runner -n 50 --no-pager`. The identity unit validates the
+uuid and secret shapes before the daemon sees them, so a malformed pair fails
+loudly in the identity unit instead — a loop here means Forgejo rejected a
+well-formed credential, i.e. the record was deleted or the secret is stale.
 
-- [ ] **Step 9: Confirm it appears in Forgejo**
+- [ ] **Step 11: Confirm it appears in Forgejo**
 
 Site Administration → Actions → Runners. Expected: a runner named
 `forgejo-runner`, status **Idle**, carrying the four labels.
-
-- [ ] **Step 10: Record the install in the repo**
-
-No code change, so no commit. Note in the plan's checkboxes that Task 7 is done.
 
 ---
 
