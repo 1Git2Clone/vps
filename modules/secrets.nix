@@ -58,30 +58,19 @@
       };
 
       # === Forgejo ===
-      # A MULTI-LINE BLOCK, one runner per line:
+      # NOTHING HERE. The runner secret used to live at forgejo/runners, read
+      # by the in-container runner on this box. That runner is gone and the key
+      # has no reader left, so the declaration is removed rather than kept
+      # "just in case": a declared sops secret is decrypted onto this machine
+      # at activation, and a credential nothing consumes is pure exposure.
       #
-      #     <uuid> <secret>  # optional comment naming the runner
-      #
-      # Forgejo runners are DECLARED, not registered — `forgejo-runner register`
-      # reports itself as deprecated in 13.1.0 — so a runner's identity is the
-      # PAIR. The uuid is an identifier and appears in plaintext in the module
-      # that consumes it; the secret is the credential and lives only here.
-      # Deleting the record in Site Administration -> Actions -> Runners
-      # invalidates both halves at once, so a rotation changes both places.
-      #
-      # Consumers look their line up BY UUID rather than by position, so adding
-      # or reordering lines cannot point a runner at another runner's secret.
-      #
-      # The CI runner on its own box CANNOT read this file — it holds no age
-      # key and decrypts nothing here, asserted by checks.runner-has-no-secrets.
-      # Giving it one would hand a machine we do not trust the key to mail,
-      # backups and everything else in this file. Its pair arrives through
-      # Hetzner user-data at create time instead, which is also what lets N
-      # identical clones each come up as themselves. Lines here for those hosts
-      # are inventory for the operator and are not read by anything.
-      forgejo_runners = {
-        key = "forgejo/runners";
-      };
+      # The key may stay in secrets.yaml as operator inventory — sops-nix only
+      # looks up what is declared here, so an extra key costs nothing. The CI
+      # runners on their own boxes cannot read this file at all: they hold no
+      # age key and decrypt nothing, asserted by checks.runner-has-no-secrets.
+      # Each one gets its uuid+secret from its own Hetzner user_data, or from a
+      # file staged at install for a box that predates that mechanism. See
+      # modules/runner/identity.nix.
 
       # === Renovate ===
       # Both were Forgejo Actions secrets until the CI runner moved onto its own

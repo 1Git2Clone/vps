@@ -1,7 +1,8 @@
 # ==============================================================================
 # Runner identity — a declared uuid+secret out of Hetzner user-data
 # ==============================================================================
-# THIS REVERSES modules/containers/forgejo-runner.nix's DECLARED-not-registered
+# THIS REVERSES THE ARGUMENT the VPS's former in-container runner made for
+# DECLARED-not-registered
 # argument, and the reversal is worth stating rather than quietly overwriting.
 # That module is right that a uuid+secret pair beats a `register` call for the
 # VPS's one permanent runner: no state file, nothing imperative, no first-boot
@@ -141,7 +142,7 @@ let
 
   # One `echo` per label, indented to match the file this section is prefixed
   # onto: a multi-line interpolation only indents its first line, and YAML is
-  # whitespace. Same technique as modules/containers/forgejo-runner.nix.
+  # whitespace. Same technique the VPS's former in-container runner used.
   labelEchoes = lib.concatMapStringsSep "\n" (l: "  echo \"        - ${l}\"") labels;
 in
 {

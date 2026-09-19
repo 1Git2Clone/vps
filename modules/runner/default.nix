@@ -29,7 +29,8 @@
 # says so in the first line. The current mechanism is a DECLARED runner: a
 # uuid+secret pair Forgejo issues for one record, written into
 # `server.connections` in config.yaml, with no imperative first-boot call and
-# no `.runner` state file. modules/containers/forgejo-runner.nix already does
+# no `.runner` state file. The VPS's in-container runner (removed once this
+# host took over) already did
 # this correctly for the VPS's one permanent runner. The wrinkle here is that
 # this box is a SNAPSHOT cloned into N runners, so the uuid can no longer be a
 # Nix string the way it is there — every clone would otherwise claim the same
@@ -76,7 +77,7 @@ let
 
   # Assembled line by line rather than as one indented string: a multi-line
   # interpolation only indents its first line, and YAML is whitespace. Same
-  # technique as modules/containers/forgejo-runner.nix.
+  # technique as the VPS's former in-container runner used.
   #
   # THIS IS THE STATIC HALF ONLY. There is no `server:` key here on purpose —
   # that section holds the uuid Forgejo issued for THIS runner's record, and

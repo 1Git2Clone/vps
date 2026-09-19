@@ -51,9 +51,13 @@
       default = "pages_data";
       description = ''
         Docker volume holding the static sites served at `pages.<domain>`.
-        Named here because three places must agree on it: caddy mounts it
-        read-only, the Actions runner allows it as the ONE volume a workflow
-        may mount, and a workflow names it in `jobs.<id>.container.volumes`.
+        Named here because two places must agree on it: caddy mounts it
+        read-only, and modules/pages-pull.nix unpacks fetched artifacts into it.
+
+        It was three places while the runner lived on this box — it allowed
+        this as the ONE volume a workflow could mount, and a workflow named it
+        in `jobs.<id>.container.volumes`. A runner on its own box cannot reach
+        it, which is the whole point of the split.
         Being a docker volume also means restic already backs it up, since
         `services.restic` takes /var/lib/docker/volumes wholesale.
       '';
@@ -259,12 +263,12 @@
       description = ''
         The host's address on docker's DEFAULT bridge, and the one address a
         job container can reach the host at whichever per-job network it was
-        created on — `container.network` is "" (see
-        modules/containers/forgejo-runner.nix), so that network differs every
-        run and its own gateway cannot be named ahead of time. The Actions
-        cache proxy is published here.
+        created on, back when this box ran the Actions runner in a container:
+        `container.network` was "", so that network differed every run and its
+        own gateway could not be named ahead of time.
 
-        Caddy uses it too, for the two tailnet vhosts whose backends are in the
+        That runner is gone and so is the Actions cache proxy it published
+        here. What still needs this is CADDY, for the two tailnet vhosts whose backends are in the
         HOST's network namespace rather than on the proxy network: grafana:3000
         and syncthing's GUI:8384. A container on any bridge reaches a local
         address of the host by routing through its own gateway, so this works
