@@ -462,7 +462,7 @@ on git.hu-tao.dev.
 | Check | What |
 |---|---|
 | lint | `pre-commit run --all-files`, then gitleaks across the full history |
-| evaluate | evaluates both `nixosConfigurations`, then `nix flake check --no-build`, then builds deploy-rs's `deploy-schema` |
+| evaluate | evaluates both `nixosConfigurations`, then `nix flake check --no-build`, then builds deploy-rs's `deploy-schema` and the runner firewall's `runner-firewall-ordering` |
 
 The two differ in exactly two ways, both forced:
 

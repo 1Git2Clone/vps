@@ -265,7 +265,13 @@ carries no sops. `modules/runner/default.nix` is a stub here; Task 2 fills it.
 
 The test is a `nix eval` assertion, because a NixOS configuration's unit of
 behaviour is its evaluated config. Save this as a shell function you run by
-hand in Steps 2 and 4 — it becomes a flake check in Task 5.
+hand in Steps 2 and 4 — it becomes `checks.runner-has-no-secrets` in
+`flake.nix`, a `checks.${system}` entry like the ones Task 5 adds. That does
+not by itself mean it runs on every push: `nix flake check --no-build`
+evaluates a check but does not build it, and CI's build step only names the
+checks it explicitly builds — see Task 5 for why `runner-firewall` (the deep
+VM test) is deliberately absent from that list, and confirm
+`runner-has-no-secrets` is or isn't in it before assuming either way.
 
 ```bash
 # Expected: prints "false" for sops, "false" for docker, "false" for tailscale.
@@ -1441,8 +1447,14 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 5: A NixOS VM test for the one-way rules
 
 This is the task that answers "if you can't enforce it on a cloud level then
-tell me how we can enforce this". It is hermetic, runs in `nix flake check`, and
-fails if anyone reorders the rules.
+tell me how we can enforce this". It is hermetic and fails if anyone reorders
+the rules — but the NixOS VM test itself (`runner-firewall`) needs `/dev/kvm`
+and is HAND-RUN ONLY, not in CI: this repo's CI runner is a shared-vCPU
+Hetzner box with no nested virtualisation, and a two-node VM test there falls
+back to qemu's TCG software emulation (measured ~5x slower just to boot).
+What actually runs on every push is `runner-firewall-ordering`, a static
+sibling check added alongside it that greps the evaluated ruleset for the same
+rule-order regression and needs no KVM.
 
 **Files:**
 - Create: `tests/runner-firewall.nix`
