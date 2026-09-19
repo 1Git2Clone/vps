@@ -171,9 +171,9 @@ sequenceDiagram
     H->>I: user_data
     I->>H: live instance-id
     Note over I: must match, or stop
-    I->>I: prepend server: to config.yaml
+    Note over I: prepend server: to config.yaml
     I->>D: start
-    D->>D: read, declare, poll
+    Note over D: read, declare, poll
 ```
 
 Identity arrives via Hetzner user-data and is **checked against the live
