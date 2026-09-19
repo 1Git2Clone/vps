@@ -109,18 +109,18 @@ its current content while the unit kept exiting 0.
 A **Forgejo system webhook** on `action_run_success`, so publishing is an event
 rather than a poll. The whole path is:
 
-|          |                                                                                           |
-| -------- | ----------------------------------------------------------------------------------------- |
-| trigger  | one system hook in Site Administration, firing for every repo on the instance             |
-| target   | `http://<dockerBridgeGateway>:<pagesHookPort>/hooks/pages-pull`                           |
-| auth     | HMAC-SHA256 over the body, read from `X-Hub-Signature-256`                                |
-| receiver | `modules/pages-hook.nix` — `webhook(1)`, `DynamicUser`, bound to the bridge address alone |
-| effect   | touches one file; a systemd `.path` unit starts `pages-pull` as root                      |
+|          |                                                                                                |
+| -------- | ---------------------------------------------------------------------------------------------- |
+| trigger  | one system hook in Site Administration, firing for every repo on the instance                  |
+| target   | `http://<dockerBridgeGateway>:<pagesHookPort>/hooks/pages-pull`                                |
+| auth     | HMAC-SHA256 over the body, read from `X-Hub-Signature-256`                                     |
+| receiver | `modules/pages-hook.nix` — `webhook(1)` in a container on the proxy network, no published port |
+| effect   | touches one file; a systemd `.path` unit starts `pages-pull` as root                           |
 
-**It never leaves the box.** Forgejo is a container on this host, so the
-delivery goes container → docker bridge → receiver. There is no caddy site, no
-published port, no DNS name and no public listener — the network cost is one
-input rule of the same shape the Discord bot and caddy already have.
+**It never leaves the proxy network.** Both Forgejo and the receiver are
+containers on it, so the delivery is container-to-container. There is no caddy
+site, no published port, no public listener — and no firewall rule at all,
+because the port never exists on the host.
 
 That is also the correction to an earlier claim here: this used to say a
 webhook cost "an HTTP receiver on the mail server, which is not a trade worth
@@ -135,9 +135,10 @@ which is idempotent and cheap. Reading the payload would trade a slightly
 smaller number of no-op runs for a coupling to Forgejo's `ActionPayload`
 schema.
 
-**The listener holds no privilege.** It runs as a `DynamicUser` whose entire
-capability is touching one file in its own `RuntimeDirectory`; the `.path` unit
-does the privileged half. A network-facing process that can run
+**The listener holds no privilege.** It runs as its own uid from
+`modules/ids.nix`, with a read-only rootfs and every capability dropped, and
+its entire capability is touching one file in a bind-mounted directory; the
+`.path` unit does the privileged half. A network-facing process that can run
 `systemctl start` is a network-facing process that is root-adjacent.
 
 **The hourly timer stays**, and is now a safety net rather than the mechanism.
@@ -146,16 +147,26 @@ mid-deploy, Forgejo's retries can run out, the hook can be switched off in a
 web form nothing here can see. Each of those leaves a site frozen with no error
 anywhere. The sweep makes the worst case "stale for up to an hour".
 
-### Forgejo has to be told the address is allowed
+### Forgejo has to be told the destination is allowed
 
 `ALLOWED_HOST_LIST` defaults to `external`, which permits public addresses and
-**blocks private ones** — so out of the box Forgejo refuses to deliver to
-`172.17.0.1` and the webhook silently never fires.
+**blocks private ones** — so out of the box Forgejo refuses to deliver and the
+webhook silently never fires. `modules/containers/forgejo.nix` sets it to
+`pages-hook`.
 
-`modules/containers/forgejo.nix` sets it to that exact address. Not `private`,
-and certainly not `*`: this is an outbound-request allow-list, so widening it
-makes the instance a more capable SSRF tool for anyone who can create a
-webhook.
+**The container name, not an address, and that is the security-relevant part.**
+The list matches _hosts, not host:port_. While the receiver ran on the host,
+this had to name `172.17.0.1` — which also permitted a webhook aimed at
+anything else bound there, and grafana (3000), syncthing's GUI (8384), tempo
+(4317/4318) and pgbouncer (6432) all bind `0.0.0.0` and answer on it. Forgejo
+webhooks can use `GET` and record the **response body** in their delivery
+history, so that was a read primitive with an exfiltration channel: whoever
+could create a webhook could read tailnet-only services without being on the
+tailnet.
+
+A name works because the matcher is `MatchHostName(host) || MatchIPAddr(ip)` —
+a name pattern alone is sufficient, so no private address needs allowing and
+`172.17.0.1` stops matching at all. One destination, nothing else.
 
 The failure mode is worth knowing because everything on the receiving side
 looks correct while it happens. The socket is listening, the nftables rule

@@ -67,29 +67,32 @@ in
       # WITHOUT THIS, THE PAGES WEBHOOK SILENTLY NEVER FIRES.
       #
       # ALLOWED_HOST_LIST defaults to `external` (Gitea 1.16 and later), which
-      # permits public addresses and BLOCKS private ones. modules/pages-hook.nix
-      # listens on infra.dockerBridgeGateway — 172.17.0.1, RFC1918 — so every
-      # delivery is refused by Forgejo's own policy before a socket is opened.
+      # permits public addresses and BLOCKS private ones. The pages receiver is
+      # a container on this same network, so every delivery is refused by
+      # Forgejo's own policy before a socket is opened.
       #
       # That last part is what makes it nasty to diagnose. There is no dropped
       # packet, no connection refused, nothing in the kernel log and nothing in
       # the receiver's journal, because nothing is ever sent. Everything on the
-      # receiving side looks perfect: the socket is listening, the nftables rule
-      # matches, the host itself gets a 200. The refusal is in the sender, and
-      # its only trace is the delivery history inside the hook's own settings
-      # page.
+      # receiving side looks perfect. The refusal is in the SENDER, and its only
+      # trace is the delivery history inside the hook's own settings page.
       #
-      # THE EXACT ADDRESS, not `private` and certainly not `*`. This is an
-      # outbound-request allow-list, so widening it turns the Forgejo instance
-      # into a more capable SSRF tool for anyone who can create a webhook.
+      # THE CONTAINER NAME, not an address. This was `infra.dockerBridgeGateway`
+      # while the receiver ran on the host, and that was too wide: the list
+      # matches HOSTS, NOT host:port, so allowing 172.17.0.1 allowed a webhook
+      # aimed at anything bound there — grafana (3000), syncthing's GUI (8384),
+      # tempo (4317/4318) and pgbouncer (6432) all bind 0.0.0.0 and answer on
+      # it. Forgejo webhooks can use GET and record the RESPONSE BODY in their
+      # delivery history, so it was a read primitive with an exfiltration
+      # channel: whoever could create a webhook could read tailnet-only services
+      # without being on the tailnet.
       #
-      # Even at one address the trade is real and worth naming: the list matches
-      # hosts, not host:port, so this permits a webhook aimed at ANYTHING bound
-      # to the bridge address — grafana on 3000 and syncthing's GUI on 8384 bind
-      # 0.0.0.0 and are reachable there. What bounds it is that registration is
-      # disabled on this instance, so the set of people who can create a webhook
-      # is the set who can already reach those services over the tailnet.
-      FORGEJO__webhook__ALLOWED_HOST_LIST = config.infra.dockerBridgeGateway;
+      # A name works because the matcher is
+      # `MatchHostName(host) || MatchIPAddr(ip)` (modules/hostmatcher) — a name
+      # pattern alone is sufficient, and the resolved private IP never has to be
+      # allowed. So this permits exactly one destination and 172.17.0.1 stops
+      # matching at all.
+      FORGEJO__webhook__ALLOWED_HOST_LIST = "pages-hook";
 
       FORGEJO__server__DOMAIN = fqdn;
       FORGEJO__server__SSH_DOMAIN = fqdn;

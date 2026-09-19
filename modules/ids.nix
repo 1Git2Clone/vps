@@ -71,6 +71,11 @@ in
     # the config does not keep.
     infra.serviceIdOffsets = {
       caddy = 1;
+      # The pages webhook receiver. A container that listens on a socket and
+      # whose only write is one file in a bind-mounted /run directory — so it
+      # gets an id for the same reason caddy does: something on the host has to
+      # own that directory, and it must not be root.
+      pages-hook = 2;
     };
 
     infra.serviceId = ids;
