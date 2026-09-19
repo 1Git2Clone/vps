@@ -2126,7 +2126,7 @@ box holds a nix store and an Actions cache and nothing else, so replacing it
 costs a rebuild of caches; its public IPv4 changes, which is the part that needs
 care.
 
-- [ ] **Step 1: Put the EXISTING pair in tfvars**
+- [x] **Step 1: Put the EXISTING pair in tfvars**
 
 The runner record for this box already exists —
 `187cde37-2e9b-4601-b431-b437e7f83bc4`. It does not need recreating: a declared
@@ -2164,7 +2164,7 @@ runners tofu *creates*, and the existing one takes its identity from the file
 staged in Step 3. The entry still belongs here — it is what a from-scratch
 rebuild would use, and `runner_names` needs a matching key.
 
-- [ ] **Step 2: Plan and apply the state move**
+- [x] **Step 2: Plan and apply the state move**
 
 ```bash
 cd tofu && tofu plan -out=runner.tfplan
@@ -2191,7 +2191,7 @@ cd tofu && tofu apply runner.tfplan
 provider on every DNS resource. Unrelated credential problem, but it blocks an
 untargeted apply — resolve it, or target the runner resources, first.)*
 
-- [ ] **Step 3: Stage the identity for the install**
+- [x] **Step 3: Stage the identity for the install**
 
 The box cannot be given user-data, so this file is its permanent source. It
 needs BOTH lines, `instance-id` first: `identity.nix` checks that line against
@@ -2213,7 +2213,7 @@ unset SEC
 
 `read -rs` so the secret never reaches the terminal or the shell history.
 
-- [ ] **Step 4: Confirm the target is still the bootstrap image**
+- [x] **Step 4: Confirm the target is still the bootstrap image**
 
 ```bash
 timeout 20 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
@@ -2226,7 +2226,7 @@ match the line staged in Step 3** or the runner refuses to start — that check 
 the whole point of the line. If it already says NixOS, this task has been run
 before: stop and check, because a reinstall repartitions the disk.
 
-- [ ] **Step 5: Dry-run the install**
+- [x] **Step 5: Dry-run the install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- --flake .#runner-hetzner --vm-test
@@ -2244,7 +2244,7 @@ Expected: a VM boots the closure. What this does **not** catch —
 so a missing driver passes here and fails on the real machine. The module list
 is shared with the VPS, which boots, so the risk is low.
 
-- [ ] **Step 6: Install**
+- [x] **Step 6: Install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
@@ -2260,7 +2260,7 @@ server itself is untouched: same id, same address, nothing destroyed.
 
 Then `rm -rf "$stage"`.
 
-- [ ] **Step 7: Verify the box came up as NixOS**
+- [x] **Step 7: Verify the box came up as NixOS**
 
 ```bash
 timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
@@ -2270,7 +2270,7 @@ timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
 Expected: `Operating System: NixOS 26.05`, hostname `forgejo-runner`. A
 `degraded` state is not automatically a failure — check which unit next.
 
-- [ ] **Step 8: Verify the identity unit and the daemon**
+- [x] **Step 8: Verify the identity unit and the daemon**
 
 ```bash
 timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 '
@@ -2297,12 +2297,30 @@ uuid and secret shapes before the daemon sees them, so a malformed pair fails
 loudly in the identity unit instead — a loop here means Forgejo rejected a
 well-formed credential, i.e. the record was deleted or the secret is stale.
 
-- [ ] **Step 9: Confirm it appears in Forgejo**
+- [x] **Step 9: Confirm it appears in Forgejo**
 
 Site Administration → Actions → Runners. Expected: a runner named
 `forgejo-runner`, status **Idle**, carrying the four labels.
 
 ---
+
+> **TASK 7 DONE, 2026-09-19.** Installed and verified live on 166488672. The
+> identity unit reports `composed from staged file
+> (/var/lib/forgejo-runner-identity/userdata)`, the daemon logs `runner:
+> forgejo-runner-1 ... with labels: [nix ubuntu-latest node-22 alpine],
+> declared successfully`, and `[poller] launched`. disko applied its layout
+> (1M BIOS boot / 1G ESP at /boot / 75.3G root). `/var/lib/forgejo-runner/`
+> holds `config.yaml` 0440 and `token` 0400, no `.runner`, and `token_url:
+> file://` appears once with no bare `token:` key. podman 5.8.6 active.
+>
+> THE ONE-WAY RULE, PROVEN ON THE REAL BOX rather than in the VM test:
+> `tcp/443` to the VPS returns HTTP 200 and increments `vps_allowed_out`;
+> `tcp/22` (forgejo ssh, open to the entire internet) and `tcp/2222` (host
+> sshd) both drop, taking `vps_blocked_out` from 0 to 14. The runner reaches
+> the one port it needs and nothing else on that box.
+>
+> Note for the operator: the reinstall changed the host key, so the stale
+> entry for this address needs clearing with `ssh-keygen -R 46.225.61.172`.
 
 ## Phase 5 — Prove it live
 
