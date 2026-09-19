@@ -73,6 +73,22 @@
         key = "forgejo/runner_token";
       };
 
+      # === Renovate ===
+      # Both were Forgejo Actions secrets until the CI runner moved onto its own
+      # untrusted box. A runner this repo explicitly does not trust does not get
+      # a bot token with write on repository and issue across hutao/* and
+      # skavex/* handed to it once a day — so the job became modules/renovate.nix,
+      # a timer on this host, and the credentials became ordinary sops secrets.
+      #
+      # They could not be migrated by copying: a Forgejo Actions secret is
+      # write-only once set, so both were reissued.
+      renovate_token = {
+        key = "renovate/token";
+      };
+      renovate_github_com_token = {
+        key = "renovate/github_com_token";
+      };
+
       # === Grafana ===
       grafana_admin_user = {
         key = "grafana/admin_user";

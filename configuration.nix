@@ -15,6 +15,7 @@
     ./modules/postgres.nix
     ./modules/backups.nix
     ./modules/vuln-scan.nix
+    ./modules/renovate.nix
     ./modules/syncthing.nix
     ./modules/containers
   ];
