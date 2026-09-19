@@ -2506,6 +2506,28 @@ acceptance test that matters, because it is the workload.
 
 ### Task 8b: An L7 allowlist in front of Forgejo
 
+> **TASK 8b DONE, 2026-09-19** (79d5db6, c8c2ba6). Path set measured through
+> temporary access logging on the git vhost, driven by a real run:
+> `FetchTask`, `UpdateLog`, `UpdateTask` under
+> `/api/actions/runner.v1.RunnerService/`, plus `info/refs` and
+> `git-upload-pack`. No `/api/v1` and no web UI at all.
+>
+> Implemented against the existing `infra.runnerIPv4s` rather than adding the
+> `infra.runnerIPs` this task proposed — same one-list argument, and that
+> option already feeds both firewalls.
+>
+> Verified from the runner: 403 on `/`, `/api/v1/version`, `/hutao/compress`,
+> `/explore/repos`, `/user/login`; proxied (405/401/200) on the allowed paths;
+> an ordinary client still gets 200 everywhere. A full workflow ran through it
+> with zero 403s.
+>
+> ONE PATH COULD NOT BE MEASURED and was probed instead:
+> `/twirp/github.actions.results.api.v1.ArtifactService/*`, where
+> upload-artifact v4 posts — ACTIONS_RESULTS_URL is the instance ROOT, so it is
+> not under `/api/`. No upload has yet succeeded, so it never appeared in the
+> capture. A measured path set is complete only for the paths that already work.
+
+
 **Files:**
 - Modify: `modules/options.nix` (add `infra.runnerIPs`)
 - Modify: `modules/containers/caddy.nix` (the `git.${domain}` vhost)
@@ -2516,7 +2538,7 @@ acceptance test that matters, because it is the workload.
   that has completed one CI run (Task 8) so the access log has real paths in it.
 - Produces: `config.infra.runnerIPs`, the single list every consumer reads.
 
-- [ ] **Step 1: Derive the real path set, do not guess it**
+- [x] **Step 1: Derive the real path set, do not guess it**
 
 Guessing breaks CI in confusing ways. Turn on access logging for the git vhost,
 run the repo's own CI once on the new runner, and read back what it touched:
@@ -2545,7 +2567,7 @@ Expected shape — confirm against the output before writing the matcher:
 | `/{owner}/{repo}/info/refs` | git discovery for `actions/checkout` and the workflows' own `git fetch` |
 | `/{owner}/{repo}/git-upload-pack` | the fetch itself |
 
-- [ ] **Step 2: Add `infra.runnerIPs` to `modules/options.nix`**
+- [x] **Step 2: Add `infra.runnerIPs` to `modules/options.nix`**
 
 ```nix
     runnerIPs = lib.mkOption {
@@ -2576,7 +2598,7 @@ Expected shape — confirm against the output before writing the matcher:
     };
 ```
 
-- [ ] **Step 3: Restrict the git vhost in `modules/containers/caddy.nix`**
+- [x] **Step 3: Restrict the git vhost in `modules/containers/caddy.nix`**
 
 Inside the `git.${domain}` site block, before the existing `reverse_proxy`:
 
@@ -2605,7 +2627,7 @@ Three properties worth stating, because they are why this is sound:
   actually blocked, which no packet filter can do: push and fetch share a port
   and a TLS session.
 
-- [ ] **Step 4: Have the firewall read the same list**
+- [x] **Step 4: Have the firewall read the same list**
 
 Task 6 added `ip daddr 46.225.61.172 tcp dport 22 ct state new accept` as a
 literal. Replace it with a rule generated from the list, so the two can never
@@ -2617,7 +2639,7 @@ disagree:
           ) config.infra.runnerIPs}
 ```
 
-- [ ] **Step 5: Deploy and verify both directions**
+- [x] **Step 5: Deploy and verify both directions**
 
 ```bash
 deploy .#vps
@@ -2640,12 +2662,12 @@ Expected: `api v1`, `web ui` and `recv-pack` all **403**; `actions rpc` and
 curl -sS -o /dev/null -w "%{http_code}\n" https://git.hu-tao.dev/api/v1/version   # 200
 ```
 
-- [ ] **Step 6: Re-run CI on the runner**
+- [x] **Step 6: Re-run CI on the runner**
 
 The acceptance test is the workload. If a step 403s, add the path it needs —
 from the access log, not from memory — and redeploy.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 nixfmt modules/options.nix modules/containers/caddy.nix modules/firewall.nix
