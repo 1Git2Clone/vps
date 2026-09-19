@@ -9,10 +9,13 @@
 #
 # TWO THINGS THAT SHAPE EVERY RULE BELOW.
 #
-# First: this firewall filters the PUBLIC interface only. Traffic over the
-# private network (network.tf) is never seen by it, so "the runner may talk to
-# the VPS privately" needs no rule here and gets none. That access is governed
-# by the hosts' own nftables.
+# First: this firewall filters the PUBLIC interface only, which is the whole
+# interface this box has. A Hetzner private network is invisible to these rules
+# — no ACLs, no inspection, attached or not is the only control — so the runner
+# was deliberately kept off the one that existed, and that network has since
+# been deleted outright: with only the VPS on it, it was an unfiltered path to
+# nine ports that modules/firewall.nix accepts with no iifname. Everything
+# between these two hosts is therefore public and filtered, by construction.
 #
 # Second: Hetzner's semantics are all-or-nothing per direction. An EMPTY rule
 # set in a direction means ALLOW EVERYTHING in that direction, not deny — so the
@@ -47,7 +50,8 @@ resource "hcloud_firewall" "runner" {
   #       --ssh-option ProxyJump=vps root@46.225.61.172
   #
   # The public address, NOT the 10.0.1.3 an earlier revision named here — the
-  # private NIC was removed in 5d0ae14 and that address does not exist.
+  # private NIC was removed in 5d0ae14, and the network itself is gone too, so
+  # no address in that range exists on either host.
   #
   # It needs tcp/22 outbound on main-firewall, which tofu/modules/
   # hetzner-firewall grants to this /32 — AND a matching rule in the VPS's own
