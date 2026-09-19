@@ -72,6 +72,23 @@
       # file staged at install for a box that predates that mechanism. See
       # modules/runner/identity.nix.
 
+      # HMAC secret for the Forgejo SYSTEM webhook that pokes pages-pull, set by
+      # hand in Site Administration → Integrations → Webhooks. The same string
+      # has to be in both places; nothing can check that for you, and a mismatch
+      # shows up as a 403 in `journalctl -u pages-hook` and as a failed delivery
+      # in the hook's own history — loud in two places, which is the best
+      # available when one of them is a web form.
+      #
+      # NESTED UNDER system_webhooks/<name>/ rather than flat, because a system
+      # webhook is a THING THERE CAN BE SEVERAL OF: /admin/hooks fires for every
+      # repository on the instance, so the next one is a sibling here rather
+      # than a second flat key that happens to start with the same word. `secret`
+      # is a leaf under the hook's own name for the same reason — a hook may
+      # later need more than one value.
+      forgejo_system_webhooks_pages_pull_secret = {
+        key = "forgejo/system_webhooks/pages_pull/secret";
+      };
+
       # === Renovate ===
       # Both were Forgejo Actions secrets until the CI runner moved onto its own
       # untrusted box. A runner this repo explicitly does not trust does not get
