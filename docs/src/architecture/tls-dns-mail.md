@@ -19,6 +19,15 @@ silently issue a second lineage under a new name.
   unprivileged caddy container reads it by group membership rather than by
   `CAP_DAC_OVERRIDE`, which it drops. `reloadServices` restarts caddy and the
   mailserver after a renewal.
+- **Every site emits HSTS.** Caddy adds nothing of the sort on its own, and
+  until it was added no vhost here carried it. What it buys is the _first_
+  request: every name is https-only and caddy already redirects `http`→`https`,
+  but that redirect is a plaintext round trip an attacker on the path can answer
+  instead — sslstrip against `mail.`'s login form, say. Tailnet sites carry it
+  too; the plaintext redirect block deliberately does **not**, because a browser
+  ignores HSTS on a plaintext response. No `preload`: that is a submission to a
+  list baked into browser binaries, removal takes months, and it would bind the
+  apex and therefore names this caddy does not serve.
 
 ## Mail deliverability depends on three things agreeing
 
