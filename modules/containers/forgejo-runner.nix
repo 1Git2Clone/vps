@@ -69,7 +69,12 @@ let
   # that list and not a credential; the secret it is paired with is, and lives
   # in sops. Delete the runner there and this line changes with it.
   connectionName = "hu-tao";
-  runnerUuid = "496902b3-ff10-435f-b34b-b37d91b67c33";
+  # Reissued 2026-09-19. The previous record was deleted during the runner
+  # migration, which invalidated both halves at once — the daemon then logged
+  # "unauthenticated: unregistered runner" every two seconds until this changed.
+  # Deleting a record is the fastest way to revoke a runner, and this line is
+  # what has to follow it.
+  runnerUuid = "602bb6f5-388b-4409-a3a9-5c56c950c408";
 
   dataVolume = "forgejo_runner_data";
 
@@ -218,10 +223,50 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
     };
-    # Readable by the image's uid, and by nothing else on the host.
+    path = with pkgs; [
+      coreutils
+      gawk
+      gnugrep
+    ];
+
+    # LOOKED UP BY UUID, and readable by the image's uid and nothing else.
+    #
+    # The sops secret is a multi-line block of `<uuid> <secret>  # comment`, one
+    # runner per line (see modules/secrets.nix). This matches on the uuid rather
+    # than taking a fixed line, so reordering the block — or adding a runner
+    # above this one — cannot silently point this container at another runner's
+    # credential. awk's field splitting also eats any indentation the YAML block
+    # scalar preserved, and the trailing comment is field 3+ and ignored.
+    #
+    # The runner resolves `token_url: file://...` by reading the WHOLE file as a
+    # single token, so anything extra in this file becomes part of the
+    # credential.
+    #
+    # THE VALIDATION IS THE POINT. Without it a malformed value reaches the
+    # runner, which rejects it as "token contains invalid characters" and
+    # crashloops on Restart=always — five restarts deep before anyone reads the
+    # journal, and indistinguishable at a glance from a revoked credential. A
+    # runner secret is 40 hex characters; anything with punctuation or spaces in
+    # it is a formatting mistake in secrets.yaml, and this says so in one line
+    # instead. It never echoes the value.
     script = ''
-      install -D -m 0400 -o 1000 -g 1000 \
-        ${config.sops.secrets.forgejo_runner_token.path} ${tokenFile}
+      umask 077
+      tmp=$(mktemp)
+      awk -v want=${runnerUuid} '$1 == want { print $2; exit }' \
+        ${config.sops.secrets.forgejo_runners.path} | tr -d '\r' > "$tmp"
+
+      if ! grep -qE '^[A-Za-z0-9]{32,}$' "$tmp"; then
+        echo "no usable secret for uuid ${runnerUuid} in forgejo/runners." >&2
+        echo "Expected a line '<uuid> <40-char secret>  # optional comment'," >&2
+        echo "with THIS uuid as field 1 and its secret as field 2." >&2
+        echo "It is the value shown beside the uuid when the runner record was" >&2
+        echo "created — not the uuid, which contains dashes." >&2
+        rm -f "$tmp"
+        exit 1
+      fi
+
+      install -D -m 0400 -o 1000 -g 1000 "$tmp" ${tokenFile}
+      rm -f "$tmp"
     '';
   };
 
