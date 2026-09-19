@@ -16,6 +16,7 @@
     ./modules/backups.nix
     ./modules/vuln-scan.nix
     ./modules/renovate.nix
+    ./modules/pages-pull.nix
     ./modules/syncthing.nix
     ./modules/containers
   ];

@@ -12,7 +12,7 @@
 #
 # NO CREDENTIAL. The publishing repos are public and Forgejo serves
 # /api/v1/repos/<owner>/<repo>/actions/artifacts anonymously (verified
-# 2026-09-19: 200). The day a PRIVATE repo publishes, this needs a sops token
+# 2026-09-19 against the live instance: 200, with a bare JSON array body). The day a PRIVATE repo publishes, this needs a sops token
 # with read:repository and not before — do not add one speculatively.
 #
 # NOT a gh-pages branch, which would be the idiomatic shape. That needs
@@ -96,9 +96,23 @@ in
           # Newest artifact named `pages` that has not expired. Forgejo
           # returns expired entries with expired=true rather than omitting
           # them, so filtering on it is what stops us unpacking a 404.
+          #
+          # A BARE ARRAY, not an object with an `artifacts` key. This filter
+          # read `.artifacts[]?` on its first deploy and every repo failed with
+          # `jq: Cannot index array with string ("artifacts")`. The `?` made it
+          # worse than a plain typo would have been: against an OBJECT with no
+          # such key it would have yielded empty and logged the benign "no live
+          # pages artifact" forever, so a shape mistake would have looked
+          # exactly like "nothing published yet". Checked against this
+          # instance's own swagger rather than assumed:
+          # ActionArtifactList is `{type: array, items: ActionArtifact}`, and
+          # ActionArtifact carries id, name, expired, created_at,
+          # archive_download_url and run_id. The earlier note claiming this was
+          # "verified 2026-09-19: 200" had verified the STATUS CODE, which says
+          # nothing about the body.
           id=$(curl -fsS --max-time 30 \
             "https://${fqdn}/api/v1/repos/$repo/actions/artifacts" \
-            | jq -r '[.artifacts[]? | select(.name == "pages") | select(.expired != true)]
+            | jq -r '[.[] | select(.name == "pages") | select(.expired != true)]
                      | sort_by(.created_at) | last | .id // empty')
 
           if [ -z "$id" ]; then
