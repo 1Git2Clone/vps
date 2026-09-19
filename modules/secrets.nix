@@ -58,19 +58,29 @@
       };
 
       # === Forgejo ===
-      # The Actions runner's own secret, from Site Administration -> Actions ->
-      # Runners -> Create new runner, which creates the runner record and shows
-      # its uuid and secret. The uuid is not secret and is in
-      # modules/containers/forgejo-runner.nix; this is the half that is.
+      # A MULTI-LINE BLOCK, one runner per line:
       #
-      # NOT a registration token: `forgejo-runner register` and the .runner file
-      # it writes are the legacy path, and a declared server.connections entry
-      # and a .runner file cannot coexist.
+      #     <uuid> <secret>  # optional comment naming the runner
       #
-      # A missing key here fails sops-install-secrets, which fails the BUILD —
-      # so add the value before the deploy that first imports this module.
-      forgejo_runner_token = {
-        key = "forgejo/runner_token";
+      # Forgejo runners are DECLARED, not registered — `forgejo-runner register`
+      # reports itself as deprecated in 13.1.0 — so a runner's identity is the
+      # PAIR. The uuid is an identifier and appears in plaintext in the module
+      # that consumes it; the secret is the credential and lives only here.
+      # Deleting the record in Site Administration -> Actions -> Runners
+      # invalidates both halves at once, so a rotation changes both places.
+      #
+      # Consumers look their line up BY UUID rather than by position, so adding
+      # or reordering lines cannot point a runner at another runner's secret.
+      #
+      # The CI runner on its own box CANNOT read this file — it holds no age
+      # key and decrypts nothing here, asserted by checks.runner-has-no-secrets.
+      # Giving it one would hand a machine we do not trust the key to mail,
+      # backups and everything else in this file. Its pair arrives through
+      # Hetzner user-data at create time instead, which is also what lets N
+      # identical clones each come up as themselves. Lines here for those hosts
+      # are inventory for the operator and are not read by anything.
+      forgejo_runners = {
+        key = "forgejo/runners";
       };
 
       # === Renovate ===
