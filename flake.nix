@@ -70,10 +70,39 @@
       vps-hetzner = mkVps [
         { disko.devices.disk.main.device = "/dev/sda"; }
       ];
+
+      # ── The CI runner ──────────────────────────────────────────────────────
+      # A second system in the same flake rather than a second flake, because
+      # it shares boot, hardware, nix, security and disk-config verbatim — see
+      # runner/configuration.nix for the list it deliberately does NOT share.
+      #
+      # NOTE THE ABSENT ARGUMENT: sops-nix.nixosModules.sops is in mkVps and is
+      # not here. This host holds no age key and can decrypt nothing in
+      # secrets.yaml, so the module would only add a unit that fails at boot.
+      # Task: keep it absent. checks.runner-has-no-secrets asserts it.
+      mkRunner =
+        extraModules:
+        nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            ./runner/configuration.nix
+            ./disk-config.nix
+            disko.nixosModules.disko
+          ]
+          ++ extraModules;
+        };
+
+      # Same one-line difference as vps-hetzner: Hetzner presents the root disk
+      # as /dev/sda, and disk-config.nix defaults to /dev/vda for the local VM.
+      # The 80 GB is picked up without a line changing — the root partition is
+      # size = "100%".
+      runner-hetzner = mkRunner [
+        { disko.devices.disk.main.device = "/dev/sda"; }
+      ];
     in
     {
       nixosConfigurations = {
-        inherit vps vps-hetzner;
+        inherit vps vps-hetzner runner-hetzner;
       };
 
       # ── Circuit breaker ────────────────────────────────────────────────────
@@ -235,6 +264,34 @@
                 fi
                 touch $out
               '';
+
+              # Makes good on the mkRunner comment above ("Task: keep it absent.
+              # checks.runner-has-no-secrets asserts it"). The runner holds no age
+              # key, so a sops-install-secrets unit appearing on it is a build that
+              # must fail, not a build that boots with dead credentials.
+              #
+              # Reads systemd.services on the EVALUATED config, not the built
+              # closure — attribute access is lazy, so this never forces
+              # system.build.toplevel. That distinction is the whole lesson in the
+              # deploy-schema comment above: deploy-schema looked cheap and instead
+              # compiled deploy-rs from source because a context-bearing string
+              # dragged the closure in. `hasSecrets` here is a plain Nix bool with
+              # no derivation attached, so the runCommand below builds nothing but
+              # itself either way.
+              runner-has-no-secrets =
+                let
+                  units = self.nixosConfigurations.runner-hetzner.config.systemd.services;
+                  hasSecrets = builtins.hasAttr "sops-install-secrets" units;
+                  script =
+                    if hasSecrets then
+                      ''
+                        echo "runner-hetzner grew a sops-install-secrets unit; this host holds no age key" >&2
+                        exit 1
+                      ''
+                    else
+                      "touch $out";
+                in
+                pkgs.runCommand "runner-has-no-secrets" { } script;
             };
           };
 
