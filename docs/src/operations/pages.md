@@ -168,12 +168,19 @@ A name works because the matcher is `MatchHostName(host) || MatchIPAddr(ip)` —
 a name pattern alone is sufficient, so no private address needs allowing and
 `172.17.0.1` stops matching at all. One destination, nothing else.
 
-The failure mode is worth knowing because everything on the receiving side
-looks correct while it happens. The socket is listening, the nftables rule
-matches, the host itself gets a 200, and there is no dropped packet, no
-connection refused, nothing in the kernel log and nothing in the receiver's
-journal — because nothing is ever sent. The only trace is the delivery history
-on the hook's own settings page.
+The failure mode is worth knowing because everything on the RECEIVING side
+looks correct while it happens: the socket is listening, the rule matches, and
+there is no dropped packet, no connection refused and nothing in the receiver's
+journal — because nothing is ever sent.
+
+Look at the sender instead. Forgejo logs the refusal as an error on its own
+service:
+
+```sh
+journalctl -u docker-forgejo | grep -i 'unable to deliver webhook'
+```
+
+and the hook's settings page shows the same thing under Recent deliveries.
 
 ### The one hand-kept value
 
