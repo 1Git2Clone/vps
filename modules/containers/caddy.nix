@@ -116,14 +116,15 @@ let
   # this worth doing: the runner's real surface is tiny next to what an
   # address-only control has to leave open.
   #
-  # /api/actions_pipeline/* IS THE ONE ENTRY NOT IN THAT LIST, and it is here on
-  # purpose. It carries artifact upload, which is how pages publishes now that
-  # the job can no longer write the volume (modules/pages-pull.nix). It did not
-  # appear in the capture because the upload step failed BEFORE issuing a
-  # request — zero requests to that prefix, which is itself how we know the
-  # failure was client-side rather than anything at this layer. Leaving it out
-  # would guarantee a 403 the moment uploads start working, and the whole point
-  # of measuring was to avoid breaking CI in ways that read as a Forgejo fault.
+  # ARTIFACT UPLOAD is the one thing that capture could not show, because at the
+  # time it was taken no upload had ever issued a request: actions/upload-artifact
+  # v4 bundles @actions/artifact v2, which tests GITHUB_SERVER_URL's hostname
+  # against GITHUB.COM and *.GHE.COM, decides a Forgejo instance is a self-hosted
+  # GitHub Enterprise Server, and throws before opening a socket. Zero requests
+  # from the runner is exactly what that looks like from here, and it is why no
+  # amount of work at this layer could have fixed it. The publishing workflows now
+  # use code.forgejo.org/forgejo/upload-artifact, whose one patch is to drop that
+  # check, and the upload route it actually uses is the twirp service below.
   #
   # The two git paths are wildcarded by owner and repo rather than pinned to the
   # repos that publish today: `actions/checkout` runs in every workflow on every
@@ -131,17 +132,23 @@ let
   # into a checkout failure.
   runnerApiPaths = [
     "/api/actions/*"
-    "/api/actions_pipeline/*"
-    # v4 ARTIFACT UPLOAD, and it does NOT live under /api/. actions/upload-artifact
-    # v4 posts to ACTIONS_RESULTS_URL + this twirp service, and Forgejo sets that
-    # variable to the instance ROOT — so the path is top-level and none of the
-    # entries above cover it. Probed against the live instance: POST returns 401
-    # (route exists, wants the job token) rather than 404, on all of
-    # /api/actions_pipeline/_apis/..., this path, and the same path nested under
-    # /api/actions_pipeline. Left out, this allowlist would 403 every artifact
-    # upload the moment the publishing workflows start working — a self-inflicted
-    # break that measurement could not have caught, because no upload has yet
-    # got far enough to issue a request.
+    # ARTIFACT TRANSFER, AND IT DOES NOT LIVE UNDER /api/. upload-artifact posts to
+    # ACTIONS_RESULTS_URL + this twirp service, and Forgejo sets that variable to
+    # the instance ROOT, so the path is top-level and the entry above does not
+    # cover it. Added on the strength of a probe (POST returns 401 — route exists,
+    # wants the job token — rather than 404) and since CONFIRMED by real traffic:
+    # hutao/compress artifact 15 and skavex/skavex artifact 14 both uploaded
+    # through it, and modules/pages-pull.nix fetched and unpacked both.
+    #
+    # One wildcard covers download as well as upload — ListArtifacts and
+    # GetSignedArtifactURL are methods on the same service — which matters if a
+    # workflow ever consumes an artifact rather than only producing one.
+    #
+    # /api/actions_pipeline/* WAS HERE AND IS DELIBERATELY GONE. It is the v3
+    # artifact API, added defensively when the guess was that uploads rode it.
+    # They do not: a full run's capture never touched it, and the upload that now
+    # works goes to the twirp service instead. An allow-list entry nothing uses is
+    # surface, and this is the layer whose whole job is to have less of it.
     "/twirp/github.actions.results.api.v1.ArtifactService/*"
     "/*/*/info/refs"
     "/*/*/git-upload-pack"
