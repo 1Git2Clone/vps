@@ -37,6 +37,15 @@ Not tidiness — each difference is forced.
   inside the job container, so the CI file has no `uses:` whatsoever and does
   its own `git fetch` in place of `actions/checkout`.
 
+  `pages.yml` is the exception that proves it. It needs one action —
+  `upload-artifact`, which has no shell equivalent — so it installs node from
+  the flake's own nixpkgs into `/root/.nix-profile` first. That path is the
+  first entry of the image's own `PATH`, so the binary is found by the
+  container rather than by anything the runner has to agree to carry forward.
+  Skipping that step fails the job with
+  `crun: executable file 'node' not found in $PATH` before the action runs at
+  all.
+
   The image is not only a saving, it is the fix: on `ubuntu-latest`
   (`node:22-bookworm`) `install-nix-action` exits 127, because the branch it
   takes without systemd runs `sudo mkdir -p /etc/nix` and that image has no
