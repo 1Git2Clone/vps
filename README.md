@@ -1,8 +1,21 @@
-# NixOS Image
+# VPS Architecture
 
-The image for my self-hosted infrastructure: one flake that describes the whole
-VPS — disks, firewall, secrets, every container service — plus the OpenTofu that
-creates the machine and publishes its DNS.
+[![CI Icon]][CI Status]&emsp;[![Pages Icon]][Pages Status]&emsp;[![Handbook Icon]][Handbook]&emsp;[![Status Icon]][Status]&emsp;[![NixOS Icon]][NixOS]
+
+[CI Icon]: https://git.hu-tao.dev/hutao/vps/badges/workflows/ci.yml/badge.svg
+[CI Status]: https://git.hu-tao.dev/hutao/vps/actions
+[Pages Icon]: https://git.hu-tao.dev/hutao/vps/badges/workflows/pages.yml/badge.svg
+[Pages Status]: https://git.hu-tao.dev/hutao/vps/actions
+[Handbook Icon]: https://img.shields.io/badge/docs-handbook-7aa2f7
+[Handbook]: https://pages.hu-tao.dev/hutao/vps/docs/
+[Status Icon]: https://img.shields.io/badge/uptime-status%20page-7aa2f7
+[Status]: https://status.hu-tao.dev/status/all
+[NixOS Icon]: https://img.shields.io/badge/NixOS-26.05-7aa2f7
+[NixOS]: https://git.hu-tao.dev/hutao/vps/src/branch/main/flake.nix
+
+One flake that describes a whole VPS — disks, firewall, secrets, every
+container service — plus a second machine that runs its CI, and the OpenTofu
+that creates both and publishes their DNS.
 
 Ported from the Ansible repo it replaces. What that repo needed three layers for
 (docker's restart policy, a boot-time `docker-services.sh` sweep, and an Ansible
