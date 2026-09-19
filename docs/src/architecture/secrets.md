@@ -39,6 +39,8 @@ flowchart TB
         d1 -.->|"never sees it"| g2
     end
 
+    broken ~~~ ok
+
     subgraph ok["✓ two fixes"]
         f1["copy to a stable path first<br/><code>dozzle-users.service</code><br/><code>mailserver-dkim.service</code>"]
         f2["pass as an env file<br/>docker re-reads at container start<br/>caddy · cloudflared"]

@@ -12,7 +12,7 @@ human would otherwise have to remember to run is a systemd unit instead.
 ## The two machines
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph vps["hu-tao · CX43 · fsn1"]
         direction TB
         mail["mail · git · music<br/>search · status · minecraft"]

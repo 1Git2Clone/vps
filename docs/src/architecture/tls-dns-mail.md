@@ -25,7 +25,7 @@ silently issue a second lineage under a new name.
 They are set in three different places, and nothing checks that they match:
 
 ```mermaid
-flowchart LR
+flowchart TB
     ptr["<b>PTR (rDNS)</b><br/>tofu/rdns.tf<br/><code>smtp.hu-tao.dev</code>"]
     dms["<b>DMS hostname</b><br/>mailserver.nix<br/><code>smtp.hu-tao.dev</code>"]
     mx["<b>MX target</b><br/>Cloudflare<br/><code>smtp.hu-tao.dev</code>"]

@@ -18,26 +18,25 @@ a VM — and what sits inside it got much smaller.
 ## Six layers
 
 ```mermaid
-flowchart LR
-    subgraph R["forgejo-runner (hostile)"]
+flowchart TB
+    subgraph R["forgejo-runner · hostile"]
+        direction LR
         job["job container<br/>podman, per job"]
         rd["runner daemon"]
-        job -.-> rd
-    end
-
-    subgraph V["hu-tao"]
-        cad["caddy"]
-        fj["forgejo:4242"]
-        cad --> fj
     end
 
     job --> L4
-    rd --> L4["④ runner nftables<br/>output policy drop<br/>VPS reachable on 443 only"]
-    L4 --> L1["① runner cloud firewall<br/>out: 53/80/443"]
-    L1 --> L2["② VPS cloud firewall"]
+    rd --> L4["④ runner nftables<br/>output policy-drop<br/>VPS on 443, nothing else"]
+    L4 --> L1["① runner cloud firewall<br/>out: 53 / 80 / 443"]
+    L1 --> L2["② VPS cloud firewall<br/>in: tcp/22 from the VPS /32"]
     L2 --> L3["③ VPS nftables"]
-    L3 --> L5["⑤ caddy L7 allow-list<br/>4 paths, else 403"]
+    L3 --> L5["⑤ caddy L7 allow-list<br/>4 paths, everything else 403"]
     L5 --> cad
+
+    subgraph V["hu-tao"]
+        direction LR
+        cad["caddy"] --> fj["forgejo:4242"]
+    end
 
     classDef ctl fill:#2d4a7c,stroke:#16233c,color:#fff
     class L1,L2,L3,L4,L5 ctl
@@ -165,17 +164,16 @@ claim the same runner record, which is undefined.
 
 ```mermaid
 sequenceDiagram
-    participant H as Hetzner metadata
-    participant I as identity.nix (oneshot)
-    participant C as /var/lib/forgejo-runner/config.yaml
-    participant D as forgejo-runner daemon
+    participant H as metadata
+    participant I as identity.nix
+    participant D as daemon
 
-    H->>I: user_data (instance-id + uuid/secret)
-    I->>H: read live instance-id
-    Note over I: the two must match, or stop
-    I->>C: prepend server: section onto the static half
+    H->>I: user_data
+    I->>H: live instance-id
+    Note over I: must match, or stop
+    I->>I: prepend server: to config.yaml
     I->>D: start
-    D->>D: read config, declare, poll
+    D->>D: read, declare, poll
 ```
 
 Identity arrives via Hetzner user-data and is **checked against the live

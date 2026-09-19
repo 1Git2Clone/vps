@@ -1,7 +1,7 @@
 # Data and backups
 
 ```mermaid
-flowchart LR
+flowchart TB
     vols[("docker volumes<br/>/var/lib/docker/volumes")]
     pg["postgres (host service)"]
     dumps[("pg_dumpall<br/>/var/backup/postgresql")]
