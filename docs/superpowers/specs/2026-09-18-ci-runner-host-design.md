@@ -27,10 +27,13 @@ placed *around* a primitive that should not have been on that machine.
 Four decisions, taken deliberately, each reversing something that was correct in
 the old context and is not in the new one.
 
-**The runner is not a container.** `services.gitea-actions-runner` runs it as an
-ordinary systemd service. On a dedicated host there is nothing to isolate it
-*from*, so the containerised daemon buys nothing and costs the socket mount that
-started this. No socket is mounted into anything, because there is no "into".
+**The runner is not a container.** A plain `systemd.services.forgejo-runner`
+unit runs it as an ordinary systemd service. On a dedicated host there is
+nothing to isolate it *from*, so the containerised daemon buys nothing and
+costs the socket mount that started this. No socket is mounted into anything,
+because there is no "into". *(Not `services.gitea-actions-runner` — that
+module's `ExecStartPre` calls the now-deprecated `forgejo-runner register`; see
+Identity below.)*
 
 **Jobs get a container engine on purpose.** `container.docker_host` changes from
 `"-"` to podman's socket, which is the exact access the old allow-list existed
@@ -41,13 +44,29 @@ token — no mail, no git, no sops key, no other service — and the box is a
 snapshot away from replacement. The isolation boundary moved from the container
 to the VM, which is what buying a second VM was for.
 
-**Identity is registered, not declared.** The VPS runner is declared: uuid and
-secret in config, no `.runner` state file, nothing imperative. That is right for
-one permanent runner and impossible for N clones, because a uuid identifies
-exactly one runner record and two daemons claiming one record is undefined.
-A *registration token* can be reused, so each clone self-registers on first boot
-and gets its own record. The token arrives in Hetzner user-data, which is also
-the primitive an ephemeral orchestrator would mint through the API later.
+**Identity is declared, delivered per-instance.** *(Revised — see below.)* The
+VPS runner is declared: a uuid+secret pair in config, no `.runner` state file,
+nothing imperative. The first draft of this document argued that pattern was
+right for exactly one permanent runner and impossible for N clones — a uuid
+identifies exactly one runner record, two daemons claiming the same record is
+undefined — and reached for a *registration token* instead, because a token
+can be reused and each clone could self-register on first boot to get its own
+record.
+
+That reasoning is reversed here, because the primitive it leaned on is going
+away: `forgejo-runner register` is DEPRECATED upstream (`forgejo-runner
+register --help` says so in its first line, against the exact package this
+flake builds). Building a new host around a call upstream is already walking
+away from is the wrong trade even before it ships. The clone story does not
+actually require register — it only requires the uuid to be a RUNTIME value
+instead of a Nix one, which Hetzner user-data already had to supply for the
+secret half regardless. So both halves of a declared identity now arrive
+together, per instance, in user-data: a runner record is created by hand in
+Forgejo for each clone (the one-time action `register` used to do on the
+daemon's behalf), and `modules/runner/identity.nix` composes them into the
+runtime config at boot. N clones still get N distinct identities; creating the
+record moves from an automatic side effect of first boot to a manual step, and
+nothing else about the clone story changes.
 
 **The runner may not initiate anything toward the VPS.** Stated as a hard
 requirement, so the rest of this document is written around it.
@@ -124,31 +143,131 @@ Two paths survive by construction and are accepted, not mitigated:
 
 ## Identity — `modules/runner/identity.nix`
 
+*(Revised along with the section above — this mechanism replaced a
+registration-token design after `forgejo-runner register` turned out to be
+deprecated upstream.)*
+
 A oneshot unit, ordered before the runner, reads the Hetzner metadata service
-and writes the registration token where the runner consumes it.
+and composes the runner's config.yaml from what it finds — a uuid and secret,
+not a token.
 
-`services.gitea-actions-runner.instances.<name>.tokenFile` is mapped straight
-onto systemd's `EnvironmentFile=`, and upstream's registration script reads
-`$TOKEN` — so the file must contain the line `TOKEN=<token>`, not the bare
-token. A bare token registers nothing and fails with an empty-token error.
+`services.gitea-actions-runner` is gone entirely from `modules/runner/
+default.nix`: its `ExecStartPre` is what called the deprecated `register`
+subcommand, so the module built around it went with it. What runs instead is a
+plain `systemd.services.forgejo-runner` that execs `forgejo-runner --config
+<path> daemon` directly, no registration step at any point in its lifecycle.
 
-The metadata endpoint is reachable on link-local over the public NIC; the
-runner's egress allow-list already permits `tcp/80`, which is what it uses.
+`default.nix` writes the STATIC half of config.yaml to the store — logging,
+capacity, cache, the container engine settings, everything identical across
+every clone. It deliberately omits `server:` entirely, because that section
+holds the one thing that is NOT identical across clones: the uuid Forgejo
+issued for this instance's runner record. `identity.nix` composes the real
+file the daemon reads by prepending a `server.connections` block — built from
+the uuid and secret it just validated — onto that static file, into the
+runner's state directory (never the Nix store, which is world-readable and
+therefore the one place a secret must never sit).
 
-### The token file must not be world-readable, and must not be in the store
+The user-data line has the shape:
 
-Same constraint as `forgejo-runner.nix`'s existing `tokenFile` dance: a Nix
-string is a world-readable store path, so the token is written at runtime with
-`install -m 0400` to a path outside the store. It differs from the VPS's case in
-that there is no sops involved at all — this host holds no key from this repo
-and can decrypt nothing in `secrets.yaml`.
+```
+forgejo-runner: <uuid> <secret>
+```
 
-### A clone leaves a record behind
+whitespace-separated, uuid first, matching the order Forgejo displays them in
+when a runner record is created. The metadata service is reachable on
+link-local over the public NIC; the runner's egress allow-list already permits
+`tcp/80`, which is what it uses.
 
-Each registration creates a runner record in Forgejo. Destroying a clone does
-not delete it; stale records accumulate in Site Administration → Actions →
-Runners and must be pruned by hand, or by the orchestrator if the ephemeral
-follow-up is ever built.
+**The endpoint is `/hetzner/v1/userdata`, not `/hetzner/v1/metadata/userdata`.**
+The latter looks right, sits beside the keys that do work, and survived five
+review rounds in the implementation — and it 404s. Probed against the live
+instance 166488672:
+
+| path | result |
+|------|--------|
+| `/hetzner/v1/metadata` | 200, the instance-id/hostname/network document |
+| `/hetzner/v1/metadata/userdata` | **404** |
+| `/latest/user-data` | 404 — no EC2-compatible alias on this service |
+| `/hetzner/v1/userdata` | 204 with none set, 200 with |
+
+The 204-when-unset is why `identity.nix` distinguishes a transport failure from
+an empty body: "the service did not answer" must retry, and "it answered and has
+nothing" is a provisioning error that retrying cannot fix.
+
+### The secret must not be world-readable, and must not be in the store
+
+Same constraint the token file faced, applied to one field instead of the
+whole value: a Nix string is a world-readable store path, so the secret is
+written outside the store, at runtime, and `config.yaml` references it with
+`token_url: file://...` rather than embedding it — the same scheme
+`modules/containers/forgejo-runner.nix` uses for the VPS's one permanent
+runner, and for the same reason. It differs from the VPS's case in that there
+is no sops involved at all — this host holds no key from this repo and can
+decrypt nothing in `secrets.yaml`.
+
+Not `install -m 0400`, though an earlier draft of this document said so: it is
+written to a `mktemp` file in the SAME directory as its destination, `chmod`ed
+and `chown`ed, then moved into place with `mv`. `install` copies into the
+existing destination inode (open-and-truncate), which a reader that already
+has the old file open — or a manual `systemctl restart
+forgejo-runner-identity` racing the live daemon — can observe mid-write;
+`mv` within one directory is a single `rename(2)`, so any reader sees the
+complete old file or the complete new one, never a partial write. Same
+directory is load-bearing: `mv` across filesystems falls back to
+copy-then-unlink, exactly as non-atomic as `install`, and `/tmp` (where the
+secret was briefly staged in an earlier version of this file) is routinely a
+different filesystem from `/var/lib`.
+
+### Validate before the daemon ever sees it
+
+A malformed secret reaching the daemon is rejected as "token contains invalid
+characters," and `Restart=on-failure` turns that into a crashloop — several
+restarts deep before anyone reads the journal, indistinguishable at a glance
+from a revoked credential. That is not hypothetical: it is what happened to
+the VPS runner's declared identity on 2026-09-19. `identity.nix` checks the
+uuid's shape (standard 8-4-4-4-12 hex) and the secret's (32+ alphanumeric
+characters) before writing anything, and fails the unit — loudly, with a
+message naming which field was wrong — rather than handing the daemon a value
+that will fail three layers downstream. Neither value is ever echoed.
+
+### One source: user-data, because user-data is per-server
+
+`user_data` is server metadata, not image content. A box built from a snapshot
+of the runner is a NEW server and serves its OWN user-data, so N clones of one
+image come up as N distinct runners carrying no identity state between them.
+That property is the whole design: it is what makes clone-safety structural
+instead of procedural, and it needs no stamping, no provenance checks, and no
+scrub step to hold.
+
+An earlier version of this document specified a SECOND source — a file staged
+by `nixos-anywhere --extra-files`, read when the metadata service had nothing —
+for one reason: hcloud cannot attach `user_data` to a server that already
+exists (the provider marks it replace-forces-new), and the first box had been
+created in the console without any. That single workaround cost roughly 400
+lines in `identity.nix`: the staged path itself, an `instance-id:` line to bind
+the file to one machine, a persisted `instance-id` stamp to bind the derived
+state the same way, and a reuse branch for the box whose own user-data would be
+empty forever. Four consecutive adversarial review rounds each found a fresh
+hole in it — a clone inheriting the source box's pair, then a fix that depended
+on a manual scrub, then a staged path that laundered a stolen identity into a
+self-consistent stamp, then a reuse branch that trusted `config.yaml`'s
+contents.
+
+**That entire mechanism is deleted.** `tofu/server.tf` sets `user_data` on
+`hcloud_server.runner` from `var.runner_identity`, which replaces the box — an
+empty box holding a nix store and an Actions cache, both caches by definition.
+Recreating it once is cheaper than carrying the workaround, and none of those
+four holes exist in code that is not there.
+
+The cost, stated plainly: rotating the runner's secret now means replacing the
+box, and the box's public IPv4 changes with it. Two places pin that address —
+the `output`-chain rule in `modules/firewall.nix` and the ingress rule in
+`tofu/runner-firewall.tf`.
+
+Each declared record still has to be created in Forgejo by hand. Destroying a
+clone does not delete it; stale records accumulate in Site Administration →
+Actions → Runners and must be pruned by hand, or by the orchestrator if the
+ephemeral follow-up is ever built.
 
 ## The runner host — `modules/runner/`
 
@@ -217,20 +336,55 @@ boot, not added after the first ENOSPC.
 
 ## Snapshot and replication
 
-1. Install with nixos-anywhere, jumped through the VPS:
-   `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps root@46.225.61.172`.
-   The private NIC was removed in 5d0ae14, so the target is the public address;
-   the jump is what makes the runner's single ingress rule — `tcp/22` from
-   `167.233.24.58/32` — sufficient. It needs `tcp/22` egress on main-firewall
-   AND in the VPS's own `modules/firewall.nix` output chain, which is
-   policy-drop and did not have it.
-2. Power off, snapshot.
-3. A new runner is a server created from that snapshot with a registration token
-   in user-data. No deploy, no flake change, no commit.
+1. Set `runner_identity` in `tofu/terraform.tfvars` to the line
+   `forgejo-runner: <uuid> <secret>` and apply. `user_data` is
+   replace-forces-new, so this destroys and recreates the box — intended, and
+   the reason the whole staged-file mechanism above could be deleted. **The
+   public IPv4 changes.** Update the `output`-chain rule in
+   `modules/firewall.nix` and the ingress rule in `tofu/runner-firewall.tf` to
+   the new address, and deploy the VPS, before the next step.
+2. Install with nixos-anywhere, jumped through the VPS:
+   `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps root@<new ip>`.
+   No `--extra-files`: this host holds no age key and stages no identity —
+   everything per-instance arrives from the metadata service at boot. The
+   private NIC was removed in 5d0ae14, so the target is the public address; the
+   jump is what makes the runner's single ingress rule — `tcp/22` from
+   `167.233.24.58/32` — sufficient.
+3. Before imaging, delete `/var/lib/forgejo-runner/{config.yaml,token}`.
+
+   NOT because it saves a failed boot — it does not. A clone created with its
+   own user-data composes cleanly on its first boot whether or not the image
+   carries the source box's stale state, because `identity.nix` reads user-data
+   unconditionally and overwrites both files every time. The reason is
+   credential hygiene: `token` is a LIVE, WORKING credential, valid against
+   Forgejo until someone revokes it, and shipping one inside a disk image means
+   every place that image is stored, copied or backed up also holds a working
+   secret. Don't put a real key in a template, independent of whether the
+   template would misuse it if you forgot.
+4. Power off, snapshot.
+5. A new runner is a server created from that snapshot with its own uuid+secret
+   pair in `user_data`. No deploy, no flake change, no commit.
 
 The snapshot carries a warm nix store, which is what keeps a fresh clone from
 paying a cold build — and is the reason the ephemeral follow-up stays cheap if
 it is ever built.
+
+### config.yaml is derived, every boot — never trusted from a previous run
+
+`container.docker_host` hands every job root-equivalent access to podman on
+purpose (see "Jobs get a container engine on purpose" above), so a job that
+escapes through it can rewrite anything on disk — `privileged: true`,
+`valid_volumes: ["/"]` — including `config.yaml` itself. An adversarial review
+round found an earlier draft that reused an existing `config.yaml` when its
+identity checks passed, which would have let exactly that edit survive every
+reboot and every `nixos-rebuild`, because nothing ever looked at the file again.
+
+`config.yaml` is therefore a RENDER, not state. `identity.nix` recomposes it
+unconditionally on every run, from the Nix-built static half
+(`modules/runner/default.nix`) plus the uuid it just read out of user-data.
+Tampering survives until the next boot and no longer, and a changed `capacity`,
+`labels` or `docker_host` in Nix reaches the box the way everything else does.
+The only file that persists between boots is `token`.
 
 ## VPS-side changes
 
@@ -251,8 +405,8 @@ it is ever built.
 | `tofu/network.tf` | remove `hcloud_server_network.runner` |
 | `flake.nix` | `mkRunner`, `nixosConfigurations.runner-hetzner`, deploy node |
 | `runner/configuration.nix` | new; imports the shared four plus runner modules |
-| `modules/runner/default.nix` | new; podman + `gitea-actions-runner` |
-| `modules/runner/identity.nix` | new; user-data → token file |
+| `modules/runner/default.nix` | new; podman + a plain `systemd.services.forgejo-runner` |
+| `modules/runner/identity.nix` | new; user-data → composed config.yaml + secret file |
 | `modules/runner/firewall.nix` | new; one-way rules, forward and output |
 | `modules/runner/users.nix` | new; ssh keys only, no sops passwords |
 | `modules/firewall.nix` | bind port-accepts to the public interface |
@@ -269,8 +423,9 @@ file is needed and the 80 GB is picked up without a line changing.
 
 The runner host holds **no secret from this repo**. `.sops.yaml` is untouched,
 no age key is provisioned there, and `secrets.yaml` does not decrypt on it. Its
-only credential is the registration token in user-data, which is visible to
-anyone with Hetzner console access and is scoped to registering runners.
+only credential is the secret half of the uuid+secret pair in user-data, which
+is visible to anyone with Hetzner console access and is scoped to the one
+runner record it belongs to.
 
 ## Out of scope
 
