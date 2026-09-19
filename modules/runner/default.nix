@@ -138,12 +138,32 @@ let
       # volume — and the pages volume does not exist on this box; caddy
       # serves it from the VPS.
       "  valid_volumes: []"
-      # CHANGED from the VPS runner's "-", which meant "mount no docker host
-      # in the job container". Here jobs get podman's socket, which is the
-      # requirement: a CI run that uses docker should work. This is not the
-      # runner's OWN connection to the engine (that is $DOCKER_HOST on the
-      # unit below) — it is what gets handed to every JOB.
-      "  docker_host: \"unix:///run/podman/podman.sock\""
+      # "-" MEANS MOUNT NO ENGINE SOCKET IN THE JOB CONTAINER, and it is what
+      # makes a job EPHEMERAL. This is not the runner's own connection to the
+      # engine (that is $DOCKER_HOST on the unit below, which still creates job
+      # and service containers) — it is only what gets handed to the JOB.
+      #
+      # It was briefly podman's socket here, on the reasoning that a CI run
+      # using docker should work. That reasoning had the cost backwards. Podman's
+      # socket is root on this box: a job holding it can start a privileged
+      # container mounting /, and from there write systemd units, the store, or
+      # the runner's own identity pair. The job's container is destroyed when the
+      # job ends; anything it plants on the HOST is not. So that one mount is the
+      # difference between "a compromised job lasts one job" and "a compromised
+      # job watches every later job on this runner and harvests its tokens".
+      #
+      # Without it a job's whole world is a container created for it and
+      # destroyed after it, which is the property GitHub's hosted runners buy by
+      # throwing away a VM per job. The remaining escape is a kernel or runtime
+      # bug rather than a mount we handed over deliberately.
+      #
+      # THIS COSTS NOTHING TODAY. No workflow in any repo on this instance uses
+      # docker in a job; checked across all six. `services:` does NOT need it —
+      # hutao/serenity-discord-bot declares postgres and redis services and ran
+      # them fine against the VPS runner, which also set "-", because the RUNNER
+      # creates service containers, not the job. If a job ever genuinely needs a
+      # container engine, the answer is dind as a service, not the host's socket.
+      "  docker_host: \"-\""
     ]
     + "\n"
   );
