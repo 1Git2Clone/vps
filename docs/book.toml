@@ -49,6 +49,10 @@ command = "mdbook-mermaid"
 # mermaid.min.js for hashing" — which is the intended behaviour, since the
 # alternative is silently publishing un-rendered code fences.
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
+# Centres the diagrams and strips mdBook's code-block chrome off them. Unlike
+# the two JS files above this one is committed — it is nine rules, not 2.6 MB
+# of vendored minified library.
+additional-css = ["diagrams.css"]
 git-repository-url = "https://git.hu-tao.dev/hutao/vps"
 edit-url-template = "https://git.hu-tao.dev/hutao/vps/_edit/main/docs/{path}"
 # The published site lives under /hutao/vps/docs/ on pages.hu-tao.dev, never at
