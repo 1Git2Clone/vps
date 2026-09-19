@@ -4,7 +4,7 @@
 
 **Goal:** Install NixOS on Hetzner server `166488672` as a self-registering Forgejo Actions runner that uses podman, cannot initiate anything toward the VPS except HTTPS to Forgejo, and can be cloned from a snapshot.
 
-**Architecture:** A second `nixosSystem` in the same flake (`runner-hetzner`) built from the four shared modules plus a new `modules/runner/` tree. The runner is a plain systemd service (`services.gitea-actions-runner` with `package = pkgs.forgejo-runner`), not a container. Jobs get podman's socket as their container engine. One-way isolation is enforced structurally (no private NIC, no tailnet) and by an nftables ruleset whose VPS-drop rules sit *above* the broad container-accept rules in both the `output` and `forward` chains.
+**Architecture:** A second `nixosSystem` in the same flake (`runner-hetzner`) built from the four shared modules plus a new `modules/runner/` tree. The runner is a plain systemd service (`services.gitea-actions-runner` with `package = pkgs.forgejo-runner`), not a container. Jobs get podman's socket as their container engine. One-way isolation is enforced structurally (no private NIC, no tailnet) and by an nftables ruleset whose VPS-drop rules sit _above_ the broad container-accept rules in both the `output` and `forward` chains.
 
 **Tech Stack:** NixOS 26.05, disko, nixos-anywhere, deploy-rs, podman 5.8.6, forgejo-runner 13.1.0, nftables, OpenTofu + hcloud.
 
@@ -15,7 +15,7 @@
 ## Findings that amend the spec
 
 Four things were verified against the pinned nixpkgs and the live infrastructure
-*after* the spec was written. Each changes what gets built. Task 0 writes them
+_after_ the spec was written. Each changes what gets built. Task 0 writes them
 back into the spec so the two documents do not drift.
 
 **1. The tailnet defeats the entire one-way design.** The spec's topology and
@@ -114,26 +114,26 @@ removed in `5d0ae14`; `10.0.1.3` does not exist. The target is the public
 
 ## File Structure
 
-| path | responsibility |
-| --- | --- |
-| `runner/configuration.nix` | new — the runner's import list, nothing else |
-| `modules/runner/default.nix` | new — podman, the runner instance, store GC |
-| `modules/runner/identity.nix` | new — Hetzner user-data → `TOKEN=` EnvironmentFile |
-| `modules/runner/firewall.nix` | new — the one-way nftables ruleset |
-| `modules/runner/users.nix` | new — ssh keys, no passwords, no sops |
-| `modules/runner/networking.nix` | new — hostname and sshd; deliberately not `modules/services.nix` |
-| `tests/runner-firewall.nix` | new — NixOS VM test proving the one-way rules |
-| `flake.nix` | `mkRunner`, `nixosConfigurations.runner-hetzner`, the test check, deploy node |
-| `tofu/runner-firewall.tf` | drop the tailscale egress rules, correct the stale comment |
-| `modules/firewall.nix` | add `tcp dport 22` egress to the runner; bind the nine port-accepts to the public interface |
-| `modules/renovate.nix` | new — Renovate as a VPS timer, token in sops |
-| `modules/pages-pull.nix` | new — fetch pages artifacts into the pages volume |
-| `modules/options.nix` | add `infra.runnerIPs` and `infra.pagesRepos` |
-| `modules/containers/caddy.nix` | restrict runner addresses to the Actions API paths |
-| `.forgejo/workflows/renovate.yml` | deleted — moved to the host |
-| `modules/containers/forgejo-runner.nix` | deleted, last |
-| `modules/containers/default.nix` | drop the import |
-| `modules/secrets.nix` | drop `forgejo_runner_token`, add the two renovate tokens |
+| path                                    | responsibility                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `runner/configuration.nix`              | new — the runner's import list, nothing else                                                |
+| `modules/runner/default.nix`            | new — podman, the runner instance, store GC                                                 |
+| `modules/runner/identity.nix`           | new — Hetzner user-data → `TOKEN=` EnvironmentFile                                          |
+| `modules/runner/firewall.nix`           | new — the one-way nftables ruleset                                                          |
+| `modules/runner/users.nix`              | new — ssh keys, no passwords, no sops                                                       |
+| `modules/runner/networking.nix`         | new — hostname and sshd; deliberately not `modules/services.nix`                            |
+| `tests/runner-firewall.nix`             | new — NixOS VM test proving the one-way rules                                               |
+| `flake.nix`                             | `mkRunner`, `nixosConfigurations.runner-hetzner`, the test check, deploy node               |
+| `tofu/runner-firewall.tf`               | drop the tailscale egress rules, correct the stale comment                                  |
+| `modules/firewall.nix`                  | add `tcp dport 22` egress to the runner; bind the nine port-accepts to the public interface |
+| `modules/renovate.nix`                  | new — Renovate as a VPS timer, token in sops                                                |
+| `modules/pages-pull.nix`                | new — fetch pages artifacts into the pages volume                                           |
+| `modules/options.nix`                   | add `infra.runnerIPs` and `infra.pagesRepos`                                                |
+| `modules/containers/caddy.nix`          | restrict runner addresses to the Actions API paths                                          |
+| `.forgejo/workflows/renovate.yml`       | deleted — moved to the host                                                                 |
+| `modules/containers/forgejo-runner.nix` | deleted, last                                                                               |
+| `modules/containers/default.nix`        | drop the import                                                                             |
+| `modules/secrets.nix`                   | drop `forgejo_runner_token`, add the two renovate tokens                                    |
 
 `modules/options.nix`, `modules/boot.nix`, `modules/hardware.nix`,
 `modules/nix.nix`, `modules/security.nix` and `disk-config.nix` are shared
@@ -148,9 +148,11 @@ exist here.
 ### Task 0: Amend the spec with the five findings
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-09-18-ci-runner-host-design.md`
 
 **Interfaces:**
+
 - Consumes: nothing.
 - Produces: nothing in code. Later tasks cite the amended spec.
 
@@ -249,6 +251,7 @@ Produces a `runner-hetzner` configuration that evaluates, builds, and provably
 carries no sops. `modules/runner/default.nix` is a stub here; Task 2 fills it.
 
 **Files:**
+
 - Create: `runner/configuration.nix`
 - Create: `modules/runner/default.nix`
 - Create: `modules/runner/users.nix`
@@ -256,6 +259,7 @@ carries no sops. `modules/runner/default.nix` is a stub here; Task 2 fills it.
 - Modify: `flake.nix` (the `let` block after `vps-hetzner`, and `nixosConfigurations`)
 
 **Interfaces:**
+
 - Consumes: `config.infra.domain` from `modules/options.nix`;
   `config.disko.devices.disk.main.device` from `disk-config.nix`.
 - Produces: `self.nixosConfigurations.runner-hetzner`. Tasks 2-4 add modules to
@@ -502,7 +506,13 @@ nix eval --json .#nixosConfigurations.runner-hetzner.config --apply '
 Expected, exactly:
 
 ```json
-{"diskDevice":"/dev/sda","hasDocker":false,"hasSops":false,"hasTailscale":false,"hostName":"forgejo-runner"}
+{
+  "diskDevice": "/dev/sda",
+  "hasDocker": false,
+  "hasSops": false,
+  "hasTailscale": false,
+  "hostName": "forgejo-runner"
+}
 ```
 
 - [ ] **Step 9: Build the closure**
@@ -551,9 +561,11 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 > rather than the code blocks below. Task 7 is rewritten to match.
 
 **Files:**
+
 - Modify: `modules/runner/default.nix` (replace the stub body)
 
 **Interfaces:**
+
 - Consumes: `config.infra.domain`; `modules/runner/identity.nix`'s
   `TOKEN=` file at `/var/lib/forgejo-runner-token/token.env` (Task 3 creates the
   unit that writes it; this task only names the path).
@@ -878,9 +890,11 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 3: Identity from user-data
 
 **Files:**
+
 - Create: `modules/runner/identity.nix`
 
 **Interfaces:**
+
 - Consumes: the unit name `gitea-runner-forgejo.service` from Task 2, and the
   path `/var/lib/forgejo-runner-token/token.env` that Task 2's `tokenFile`
   names.
@@ -918,7 +932,7 @@ bash /tmp/token-extract-test.sh
 Run: `bash /tmp/token-extract-test.sh`
 Expected: `OK`
 
-This one runs green first on purpose — it is proving the *sed expression*, which
+This one runs green first on purpose — it is proving the _sed expression_, which
 is the part that fails silently. If it prints a FAIL line, fix the expression
 here and not after it is buried in a systemd unit on a remote box.
 
@@ -1107,9 +1121,11 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 4: The one-way firewall
 
 **Files:**
+
 - Create: `modules/runner/firewall.nix`
 
 **Interfaces:**
+
 - Consumes: `config.infra.publicIPv4` (default `167.233.24.58`, declared in
   `modules/options.nix`) — **the VM test in Task 5 overrides this option**, so
   it must not be inlined as a literal. Cache proxy port 34567 from Task 2.
@@ -1119,7 +1135,7 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing test**
 
-The real test is the VM test in Task 5. The gate for *this* task is that the
+The real test is the VM test in Task 5. The gate for _this_ task is that the
 ruleset is syntactically valid nftables, which `nft -c` checks without loading:
 
 ```bash
@@ -1465,10 +1481,12 @@ sibling check added alongside it that greps the evaluated ruleset for the same
 rule-order regression and needs no KVM.
 
 **Files:**
+
 - Create: `tests/runner-firewall.nix`
 - Modify: `flake.nix` (`checks.${system}`)
 
 **Interfaces:**
+
 - Consumes: `modules/runner/firewall.nix`, `modules/options.nix`, and the four
   named counters from Task 4.
 - Produces: `checks.x86_64-linux.runner-firewall`.
@@ -1634,7 +1652,7 @@ Expected: the test script's subtests print in order and the build exits 0.
 
 This is the guard on the guard, in the same spirit as
 `deploy-schema-rejects-bad-input`. Temporarily move the two VPS rules in the
-`forward` chain to *below* `iifname "podman*" accept` in
+`forward` chain to _below_ `iifname "podman*" accept` in
 `modules/runner/firewall.nix`, then:
 
 ```bash
@@ -1689,12 +1707,14 @@ here because it is the cheapest thing in the plan that closes a real hole.
 ### Task 5a: Move Renovate off the runner
 
 **Files:**
+
 - Delete: `.forgejo/workflows/renovate.yml`
 - Create: `modules/renovate.nix`
 - Modify: `configuration.nix` (import it), `modules/secrets.nix`, `secrets.yaml`,
   `secrets.example.yaml`
 
 **Interfaces:**
+
 - Consumes: the existing `devShells.${system}.renovate` in `flake.nix`, unchanged.
 - Produces: `renovate.service` + `renovate.timer` on the VPS, and the absence of
   any write-scoped Forgejo credential on the runner — which Task 5b depends on.
@@ -1715,8 +1735,8 @@ Expected: the workflow still exists; `{"service":false,"timer":false}`.
 - [ ] **Step 3: Move the token into sops**
 
 The workflow's header says the token is an Actions secret rather than a sops
-secret *"because this runs in a job container, which cannot read the host's
-filesystem"*. Running it on the host removes that constraint, which is the
+secret _"because this runs in a job container, which cannot read the host's
+filesystem"_. Running it on the host removes that constraint, which is the
 whole point — the credential stops travelling to an untrusted box.
 
 Add `renovate_token` and `renovate_github_com_token` to `secrets.yaml`
@@ -1929,11 +1949,13 @@ Nothing in Phase 4 works until this deploys. The cloud egress rule already
 exists; the VPS's own output chain drops the connection before it leaves.
 
 **Files:**
+
 - Modify: `modules/firewall.nix` (the `output` chain's tcp allow-list)
 - Modify: `tofu/runner-firewall.tf` (remove the tailscale egress rules, correct
   the stale comment)
 
 **Interfaces:**
+
 - Consumes: finding 1 (no tailnet) and finding 3 (the missing host rule).
 - Produces: a working `ssh -J vps root@46.225.61.172`, which Task 7 requires.
 
@@ -2108,11 +2130,13 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 7: user-data, then nixos-anywhere onto the runner
 
 **Files:**
+
 - `tofu/terraform.tfvars` (gitignored, operator-supplied)
 - `modules/firewall.nix`, `tofu/modules/hetzner-firewall/main.tf` — the runner
   IPv4 is pinned in both and the box gets a new one.
 
 **Interfaces:**
+
 - Consumes: `.#runner-hetzner` from Tasks 1-4, the jump path from Task 6.
 - Produces: a running NixOS runner declared against `https://git.hu-tao.dev/`,
   which Phase 5 verifies and Phase 6 snapshots.
@@ -2157,7 +2181,7 @@ of at boot. Both maps are keyed by server name, not correlated by index.
 
 **This value does not reach THIS box.** `user_data` is replace-forces-new and
 the box is delete-protected, so tofu holds it in `ignore_changes`: it applies to
-runners tofu *creates*, and the existing one takes its identity from the file
+runners tofu _creates_, and the existing one takes its identity from the file
 staged in Step 3. The entry still belongs here — it is what a from-scratch
 rebuild would use, and `runner_names` needs a matching key.
 
@@ -2184,9 +2208,9 @@ The runner's IPv4 does not change, so nothing needs repointing:
 cd tofu && tofu apply runner.tfplan
 ```
 
-*(A full plan currently also reports `401 Unauthorized` from the Cloudflare
+_(A full plan currently also reports `401 Unauthorized` from the Cloudflare
 provider on every DNS resource. Unrelated credential problem, but it blocks an
-untargeted apply — resolve it, or target the runner resources, first.)*
+untargeted apply — resolve it, or target the runner resources, first.)_
 
 - [x] **Step 3: Stage the identity for the install**
 
@@ -2303,12 +2327,12 @@ Site Administration → Actions → Runners. Expected: a runner named
 
 > **TASK 7 DONE, 2026-09-19.** Installed and verified live on 166488672. The
 > identity unit reports `composed from staged file
-> (/var/lib/forgejo-runner-identity/userdata)`, the daemon logs `runner:
-> forgejo-runner-1 ... with labels: [nix ubuntu-latest node-22 alpine],
-> declared successfully`, and `[poller] launched`. disko applied its layout
+(/var/lib/forgejo-runner-identity/userdata)`, the daemon logs `runner:
+forgejo-runner-1 ... with labels: [nix ubuntu-latest node-22 alpine],
+declared successfully`, and `[poller] launched`. disko applied its layout
 > (1M BIOS boot / 1G ESP at /boot / 75.3G root). `/var/lib/forgejo-runner/`
 > holds `config.yaml` 0440 and `token` 0400, no `.runner`, and `token_url:
-> file://` appears once with no bare `token:` key. podman 5.8.6 active.
+file://` appears once with no bare `token:` key. podman 5.8.6 active.
 >
 > THE ONE-WAY RULE, PROVEN ON THE REAL BOX rather than in the VM test:
 > `tcp/443` to the VPS returns HTTP 200 and increments `vps_allowed_out`;
@@ -2326,9 +2350,11 @@ Site Administration → Actions → Runners. Expected: a runner named
 The VM test proved the ruleset. This proves the machine.
 
 **Files:**
+
 - Create: `.forgejo/workflows/runner-smoke.yml` (temporary; removed in Step 6)
 
 **Interfaces:**
+
 - Consumes: the running runner from Task 7.
 - Produces: the evidence Phase 6 snapshots and Phase 7 acts on. Specifically it
   settles the one thing `modules/runner/default.nix` flags as unverified:
@@ -2441,13 +2467,13 @@ Forgejo → Actions → `runner smoke` → Run workflow, on `feat/ci-runner-host
 
 - [ ] **Step 4: Read the results**
 
-| job | expected | what a failure means |
-| --- | --- | --- |
-| `nix-label` | passes, hostname `forgejo-runner` | the runner is not picking up jobs, or the label is wrong |
-| `docker-in-job` | `docker-in-ci-ok` | `container.docker_host` is wrong, or the podman socket is not group-readable by the runner |
-| `service-dns` | `pg_isready` succeeds | `defaultNetwork.settings.dns_enabled` is not taking effect |
-| `cache-reachable` | a 2xx/4xx status code, not a timeout | the auto-detected `cache.host` is not reachable from a per-job network — see Step 5 |
-| `one-way` | 443 ok, **every other step prints `blocked`** | **stop everything**; the enforcement is not working on the real box |
+| job               | expected                                      | what a failure means                                                                       |
+| ----------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `nix-label`       | passes, hostname `forgejo-runner`             | the runner is not picking up jobs, or the label is wrong                                   |
+| `docker-in-job`   | `docker-in-ci-ok`                             | `container.docker_host` is wrong, or the podman socket is not group-readable by the runner |
+| `service-dns`     | `pg_isready` succeeds                         | `defaultNetwork.settings.dns_enabled` is not taking effect                                 |
+| `cache-reachable` | a 2xx/4xx status code, not a timeout          | the auto-detected `cache.host` is not reachable from a per-job network — see Step 5        |
+| `one-way`         | 443 ok, **every other step prints `blocked`** | **stop everything**; the enforcement is not working on the real box                        |
 
 - [ ] **Step 5: If `cache-reachable` fails, pin the host explicitly**
 
@@ -2524,13 +2550,14 @@ acceptance test that matters, because it is the workload.
 > not under `/api/`. No upload has yet succeeded, so it never appeared in the
 > capture. A measured path set is complete only for the paths that already work.
 
-
 **Files:**
+
 - Modify: `modules/options.nix` (add `infra.runnerIPs`)
 - Modify: `modules/containers/caddy.nix` (the `git.${domain}` vhost)
 - Modify: `modules/firewall.nix` (read `infra.runnerIPs` for the egress rule)
 
 **Interfaces:**
+
 - Consumes: a runner with no write credential (Task 5a), and a live runner
   that has completed one CI run (Task 8) so the access log has real paths in it.
 - Produces: `config.infra.runnerIPs`, the single list every consumer reads.
@@ -2557,12 +2584,12 @@ for m,u in sorted(paths): print(m,u)
 
 Expected shape — confirm against the output before writing the matcher:
 
-| path | why |
-| --- | --- |
-| `/api/actions/*` | the `runner.v1.RunnerService` RPCs: Register, Declare, FetchTask, UpdateTask, UpdateLog |
-| `/api/actions_pipeline/*` | artifact upload, which is how pages publishes after Task 10 |
-| `/{owner}/{repo}/info/refs` | git discovery for `actions/checkout` and the workflows' own `git fetch` |
-| `/{owner}/{repo}/git-upload-pack` | the fetch itself |
+| path                              | why                                                                                     |
+| --------------------------------- | --------------------------------------------------------------------------------------- |
+| `/api/actions/*`                  | the `runner.v1.RunnerService` RPCs: Register, Declare, FetchTask, UpdateTask, UpdateLog |
+| `/api/actions_pipeline/*`         | artifact upload, which is how pages publishes after Task 10                             |
+| `/{owner}/{repo}/info/refs`       | git discovery for `actions/checkout` and the workflows' own `git fetch`                 |
+| `/{owner}/{repo}/git-upload-pack` | the fetch itself                                                                        |
 
 - [x] **Step 2: Add `infra.runnerIPs` to `modules/options.nix`**
 
@@ -2612,19 +2639,19 @@ Inside the `git.${domain}` site block, before the existing `reverse_proxy`:
 
 Three properties worth stating, because they are why this is sound:
 
-* **`remote_ip` is the TCP peer, never a header.** Caddy only consults
+- **`remote_ip` is the TCP peer, never a header.** Caddy only consults
   `X-Forwarded-For` when `trusted_proxies` is set, and it is not set anywhere in
   this file. Every DNS record in `tofu/modules/cloudflare-dns` is
   `proxied = false`, so nothing sits in front of caddy to launder the address.
-* **This grants nothing.** It is a pure restriction on one address; a request
+- **This grants nothing.** It is a pure restriction on one address; a request
   that fails to match just gets the ordinary public site. There is no incentive
   to evade the matcher and nothing gained by doing so.
-* **It denies `git-receive-pack`.** That converts the spec's accepted residual
+- **It denies `git-receive-pack`.** That converts the spec's accepted residual
   risk — "a compromised runner can push to repos it built" — into something
   actually blocked, which no packet filter can do: push and fetch share a port
   and a TLS session.
 
-- [x] **Step 4: Have the firewall read the same list**
+* [x] **Step 4: Have the firewall read the same list**
 
 Task 6 added `ip daddr 46.225.61.172 tcp dport 22 ct state new accept` as a
 literal. Replace it with a rule generated from the list, so the two can never
@@ -2700,10 +2727,12 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 9: Make the image a clone can come from
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-09-18-ci-runner-host-design.md` (record
   the snapshot id)
 
 **Interfaces:**
+
 - Consumes: the verified box from Task 8.
 - Produces: a snapshot id, and the documented `hcloud server create` incantation
   for a clone.
@@ -2722,7 +2751,7 @@ Stopping the runner first so the snapshot does not capture a half-written job.
 
 - [ ] **Step 2: Remove the machine-specific identity from the image**
 
-The `.runner` file holds the uuid Forgejo issued to *this* box. A clone booting
+The `.runner` file holds the uuid Forgejo issued to _this_ box. A clone booting
 with it would be a second daemon claiming one record — the exact failure the
 registration design exists to avoid.
 
@@ -2761,11 +2790,11 @@ running machine captures a dirty filesystem.
 
 Append to the spec's `## Snapshot and replication` section:
 
-```markdown
+````markdown
 ### The live image
 
-| snapshot | taken | from |
-| --- | --- | --- |
+| snapshot                        | taken  | from                                 |
+| ------------------------------- | ------ | ------------------------------------ |
 | `<id>` `nixos-ci-runner-<date>` | <date> | 166488672 after a verified smoke run |
 
 Create a clone with the token in user-data, which is the path
@@ -2780,6 +2809,7 @@ hcloud server create \
   --firewall runner-firewall \
   --user-data-from-file <(printf 'forgejo-runner-token: %s\n' "$TOKEN")
 ```
+````
 
 No deploy, no flake change, no commit. The snapshot carries a warm nix store,
 which is what keeps a fresh clone from paying a cold build.
@@ -2790,7 +2820,8 @@ attach) and a tailscale identity (it runs no tailscale). Its admin path is
 `tofu/modules/hetzner-firewall`'s scoped egress rule and to the VPS's own
 output chain in `modules/firewall.nix` — two edits per clone, deliberately, so
 a new box cannot be reached from the VPS until someone says so.
-```
+
+````
 
 - [ ] **Step 5: Power the original back on and restore its identity**
 
@@ -2806,7 +2837,7 @@ timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 '
   systemctl restart gitea-runner-forgejo.service
   systemctl is-active gitea-runner-forgejo.service
 '
-```
+````
 
 The host key changed, so the first connection will warn. Remove the stale entry
 from `~/.ssh/known_hosts` rather than disabling the check.
@@ -2833,22 +2864,22 @@ returns **200** today. Verified 2026-09-19.
 (`hutao/compress/.forgejo/workflows/pages.yml`, public repo, anonymous read):
 
 ```yaml
-    container:
-      image: node:22-bookworm
-      volumes:
-        - pages_data:/pages          # the one entry in valid_volumes
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm ci
-      - run: npm run build
-        env:
-          PAGES: '1'
-          BASE_PATH: '/${{ github.repository }}'
-      - name: Publish
-        run: |
-          dest="/pages/$GITHUB_REPOSITORY"
-          rm -rf "$dest" && mkdir -p "$dest"
-          cp -r build/. "$dest/"
+container:
+  image: node:22-bookworm
+  volumes:
+    - pages_data:/pages # the one entry in valid_volumes
+steps:
+  - uses: actions/checkout@v4
+  - run: npm ci
+  - run: npm run build
+    env:
+      PAGES: "1"
+      BASE_PATH: "/${{ github.repository }}"
+  - name: Publish
+    run: |
+      dest="/pages/$GITHUB_REPOSITORY"
+      rm -rf "$dest" && mkdir -p "$dest"
+      cp -r build/. "$dest/"
 ```
 
 The job writes straight into caddy's volume. On the new runner that volume does
@@ -2874,11 +2905,13 @@ keeps its contents and caddy keeps serving them, so an ordering mistake costs
 freshness, not availability.
 
 **Files:**
+
 - Modify: `hutao/compress/.forgejo/workflows/pages.yml` — **a different repo**
 - Create: `modules/pages-pull.nix`
 - Modify: `configuration.nix` (import it), `modules/options.nix` (`infra.pagesRepos`)
 
 **Interfaces:**
+
 - Consumes: `config.infra.pagesVolume` (`pages_data`), `config.infra.domain`.
 - Produces: `pages-pull.service` + `.timer`. Task 11 requires this verified.
 
@@ -2918,12 +2951,12 @@ this task.
 Replace the `volumes:` block and the whole `Publish` step with:
 
 ```yaml
-      - name: Upload
-        uses: actions/upload-artifact@v4
-        with:
-          name: pages
-          path: build/
-          retention-days: 90
+- name: Upload
+  uses: actions/upload-artifact@v4
+  with:
+    name: pages
+    path: build/
+    retention-days: 90
 ```
 
 Delete the `container.volumes` entry entirely. `ubuntu-latest` is
@@ -3158,6 +3191,7 @@ working first. Deleting the runner before then does not take pages down, but it
 freezes it at whatever build the volume already holds.
 
 **Files:**
+
 - Delete: `modules/containers/forgejo-runner.nix`
 - Modify: `modules/containers/default.nix` (drop the import)
 - Modify: `modules/secrets.nix` (drop `forgejo_runner_token`)
@@ -3166,13 +3200,14 @@ freezes it at whatever build the volume already holds.
 - Modify: `modules/firewall.nix` (bind the nine port-accepts to the public NIC)
 
 **Interfaces:**
+
 - Consumes: a verified runner from Phase 5 and a resolved Task 10.
 - Produces: a VPS with no runner and a corrected input chain.
 
 - [ ] **Step 1: Disable the old runner in Forgejo first, not last**
 
 Site Administration → Actions → Runners → the `hu-tao` runner → delete it. Do
-this *before* the deploy, so that any job queued in between goes to the new box
+this _before_ the deploy, so that any job queued in between goes to the new box
 rather than to a runner about to disappear mid-job.
 
 - [ ] **Step 2: Bind the nine port-accepts to the public interface**
@@ -3342,16 +3377,17 @@ Commit as `docs: describe the runner as its own host`.
 **Spec coverage.** Every section of
 `docs/superpowers/specs/2026-09-18-ci-runner-host-design.md` maps to a task:
 "The runner is not a container" → Task 2; "Jobs get a container engine" → Task 2
-+ Task 8's `docker-in-job`; "Identity is registered" → Task 3; "may not initiate
-anything toward the VPS" → Tasks 4, 5, 6, 8; Topology → Task 0; private NIC →
-already done in `5d0ae14`; "What no firewall closes" → unchanged, accepted;
-podman + DNS trap → Task 2 + Task 8's `service-dns`; runner settings table →
-Task 2 Step 5; one-way enforcement → Tasks 4-5; disk and GC → Task 2's `nix.gc`
-override and `autoPrune`; snapshot and replication → Task 9; VPS-side changes →
-Tasks 6, 10, 11; Files table → the File Structure section, extended with
-`modules/runner/networking.nix` and `tests/runner-firewall.nix`, which the spec
-did not name; Secrets → Global Constraints + Task 1's assertion; Out of scope →
-untouched.
+
+- Task 8's `docker-in-job`; "Identity is registered" → Task 3; "may not initiate
+  anything toward the VPS" → Tasks 4, 5, 6, 8; Topology → Task 0; private NIC →
+  already done in `5d0ae14`; "What no firewall closes" → unchanged, accepted;
+  podman + DNS trap → Task 2 + Task 8's `service-dns`; runner settings table →
+  Task 2 Step 5; one-way enforcement → Tasks 4-5; disk and GC → Task 2's `nix.gc`
+  override and `autoPrune`; snapshot and replication → Task 9; VPS-side changes →
+  Tasks 6, 10, 11; Files table → the File Structure section, extended with
+  `modules/runner/networking.nix` and `tests/runner-firewall.nix`, which the spec
+  did not name; Secrets → Global Constraints + Task 1's assertion; Out of scope →
+  untouched.
 
 **Gaps the spec left that this plan fills:** the tailnet hole (Task 0/6), the
 EnvironmentFile format (Task 0/3), the VPS's own output chain (Task 6), IPv6
@@ -3367,7 +3403,7 @@ publishers beyond `hutao/compress` — and getting it wrong costs one un-migrate
 page, not an outage.
 
 **Ordering constraints worth keeping.** Task 5a is independent and can run any
-time before Task 8b. Task 8b must run *after* Task 8, because its first step
+time before Task 8b. Task 8b must run _after_ Task 8, because its first step
 derives the allowlist from a real CI run's access log rather than guessing. Task
 11 must run after Task 10 is verified. Task 6 must precede Task 7, because
 nothing installs until the jump works.

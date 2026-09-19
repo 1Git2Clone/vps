@@ -124,7 +124,8 @@ resource "hcloud_server" "vps" {
 #   installing NixOS onto a blank machine              -> nixos-anywhere, by hand
 #   updating a machine that already runs NixOS         -> deploy .#vps
 #
-# Both commands are in docs/deploying.md. Neither can be triggered by an
+# Both commands are in docs/src/operations/deploying.md. Neither can be
+# triggered by an
 # `apply`, which is the point.
 
 # ==============================================================================

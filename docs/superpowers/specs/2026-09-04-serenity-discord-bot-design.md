@@ -125,7 +125,7 @@ moves back is intermittent and load-dependent, not a startup error.
 
 pgbouncer permits exactly four startup parameters — `client_encoding`,
 `datestyle`, `timezone`, `standard_conforming_strings` — and rejects anything
-else at protocol level, *before* authentication. sqlx sends
+else at protocol level, _before_ authentication. sqlx sends
 `extra_float_digits`, so every connection died with:
 
 ```
@@ -134,7 +134,7 @@ PgDatabaseError { severity: Fatal, code: "08P01",
 ```
 
 which surfaced as a panic on `connect_to_db().await.unwrap()` at
-`src/main.rs:162`. That call sits inside poise's `setup`, which runs *after*
+`src/main.rs:162`. That call sits inside poise's `setup`, which runs _after_
 `register_globally` — so the bot was connected to Discord and looked healthy
 from Discord's side, with only the database leg dead.
 
@@ -164,8 +164,8 @@ hand-written ruleset like every other port here.
 
 The tempting choice is `listen_addr = "172.30.0.1"` — bind only to the bridge.
 That reintroduces the bug `modules/containers/tempo.nix` documents: a specific
-bind address that does not exist yet fails with *cannot assign requested
-address*, and the docker bridge is created by a unit pgbouncer would then have to
+bind address that does not exist yet fails with _cannot assign requested
+address_, and the docker bridge is created by a unit pgbouncer would then have to
 be ordered against. Binding `*` and letting the input chain be the boundary is
 the posture this repo already takes for tempo's 4317/4318 and grafana's 3000, and
 it removes the ordering dependency entirely.
@@ -192,7 +192,7 @@ docker image inspect ${tag} >/dev/null 2>&1 && exit 0
 docker build --build-arg RUSTFLAGS='…' --build-arg FEATURES='…' -t ${tag} ${src}
 ```
 
-The rev is *in the tag*, so bumping `rev` changes the image string, which changes
+The rev is _in the tag_, so bumping `rev` changes the image string, which changes
 the container unit, which is what makes systemd recreate the container. This is
 the same store-path-changes-recreate-the-container mechanism
 `modules/containers/default.nix` already relies on for config files. An unchanged
@@ -304,7 +304,7 @@ this module reads them, and `modules/options.nix` is explicitly for values more
 than one module needs.
 
 **`instances` defaults to 1 on purpose.** Serenity's `start_shard_range` runs
-multiple shards *inside one process*, sharing one cache and one connection pool.
+multiple shards _inside one process_, sharing one cache and one connection pool.
 On a single host that beats N processes on memory and on log legibility.
 `instances` only earns its keep for multi-host or blue-green, which is what
 upstream uses it for.
@@ -314,7 +314,7 @@ the module emits no shard variables at all, so `src/main.rs:253` falls to the
 `else` branch — `client.start()`, the single-shard path that has been running in
 production. Only `shards > 1` or `instances > 1` sets the triple. This matters
 because the explicit path leans on a quirk: `main.rs:252` passes Rust's exclusive
-`start..end` and relies on serenity treating `range.end` as *inclusive*. That is
+`start..end` and relies on serenity treating `range.end` as _inclusive_. That is
 upstream's documented intent and they run it, but there is no reason to route the
 default deploy through it.
 
@@ -423,28 +423,28 @@ already applied rather than running them.
 
 ## Files
 
-| File | Change |
-|---|---|
-| `modules/postgres.nix` | **new** — postgres, role password unit, pgbouncer, postgresqlBackup |
-| `modules/containers/serenity-bot.nix` | **new** — fetchgit, build unit, bot instances, redis |
-| `modules/containers/default.nix` | generalise the network unit to an attrset; fix start-ordering to cover both networks |
-| `modules/options.nix` | `infra.botNetwork`, `infra.botSubnet`, `infra.botGateway` |
-| `modules/firewall.nix` | one input rule |
-| `modules/backups.nix` | one restic path plus the scheduling comment |
-| `configuration.nix` | import `./modules/postgres.nix` |
-| `secrets.yaml` | three values, added with `sops` |
-| `docs/deploying.md` | secret count 17 → 20 (two places), container health-check list |
-| `README.md` | service table, secrets inventory, backup section |
+| File                                  | Change                                                                               |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| `modules/postgres.nix`                | **new** — postgres, role password unit, pgbouncer, postgresqlBackup                  |
+| `modules/containers/serenity-bot.nix` | **new** — fetchgit, build unit, bot instances, redis                                 |
+| `modules/containers/default.nix`      | generalise the network unit to an attrset; fix start-ordering to cover both networks |
+| `modules/options.nix`                 | `infra.botNetwork`, `infra.botSubnet`, `infra.botGateway`                            |
+| `modules/firewall.nix`                | one input rule                                                                       |
+| `modules/backups.nix`                 | one restic path plus the scheduling comment                                          |
+| `configuration.nix`                   | import `./modules/postgres.nix`                                                      |
+| `secrets.yaml`                        | three values, added with `sops`                                                      |
+| `docs/deploying.md`                   | secret count 17 → 20 (two places), container health-check list                       |
+| `README.md`                           | service table, secrets inventory, backup section                                     |
 
 ### Secrets
 
 Three, following the observable `<service>_<thing>` naming with an explicit
 nested `key`:
 
-| Nix name | `secrets.yaml` key |
-|---|---|
-| `serenity_bot_token` | `serenity/bot_token` |
-| `serenity_ai_api_key` | `serenity/ai_api_key` |
+| Nix name               | `secrets.yaml` key     |
+| ---------------------- | ---------------------- |
+| `serenity_bot_token`   | `serenity/bot_token`   |
+| `serenity_ai_api_key`  | `serenity/ai_api_key`  |
 | `serenity_db_password` | `serenity/db_password` |
 
 Plus a sops **template** for the pgbouncer userlist, built from the

@@ -20,7 +20,7 @@ daemon has root-equivalent access to the machine that also serves mail, git and
 every sops secret. The module's header argues that trade honestly and the
 mitigations hold — `docker_host: "-"`, a one-entry `valid_volumes` allow-list,
 `privileged: false`, registration disabled. But every one of them is a lock
-placed *around* a primitive that should not have been on that machine.
+placed _around_ a primitive that should not have been on that machine.
 
 ## Why the shape is what it is
 
@@ -29,11 +29,11 @@ the old context and is not in the new one.
 
 **The runner is not a container.** A plain `systemd.services.forgejo-runner`
 unit runs it as an ordinary systemd service. On a dedicated host there is
-nothing to isolate it *from*, so the containerised daemon buys nothing and
+nothing to isolate it _from_, so the containerised daemon buys nothing and
 costs the socket mount that started this. No socket is mounted into anything,
-because there is no "into". *(Not `services.gitea-actions-runner` — that
+because there is no "into". _(Not `services.gitea-actions-runner` — that
 module's `ExecStartPre` calls the now-deprecated `forgejo-runner register`; see
-Identity below.)*
+Identity below.)_
 
 **Jobs get a container engine on purpose.** `container.docker_host` changes from
 `"-"` to podman's socket, which is the exact access the old allow-list existed
@@ -44,12 +44,12 @@ token — no mail, no git, no sops key, no other service — and the box is a
 snapshot away from replacement. The isolation boundary moved from the container
 to the VM, which is what buying a second VM was for.
 
-**Identity is declared, delivered per-instance.** *(Revised — see below.)* The
+**Identity is declared, delivered per-instance.** _(Revised — see below.)_ The
 VPS runner is declared: a uuid+secret pair in config, no `.runner` state file,
 nothing imperative. The first draft of this document argued that pattern was
 right for exactly one permanent runner and impossible for N clones — a uuid
 identifies exactly one runner record, two daemons claiming the same record is
-undefined — and reached for a *registration token* instead, because a token
+undefined — and reached for a _registration token_ instead, because a token
 can be reused and each clone could self-register on first boot to get its own
 record.
 
@@ -143,9 +143,9 @@ Two paths survive by construction and are accepted, not mitigated:
 
 ## Identity — `modules/runner/identity.nix`
 
-*(Revised along with the section above — this mechanism replaced a
+_(Revised along with the section above — this mechanism replaced a
 registration-token design after `forgejo-runner register` turned out to be
-deprecated upstream.)*
+deprecated upstream.)_
 
 A oneshot unit, ordered before the runner, reads the Hetzner metadata service
 and composes the runner's config.yaml from what it finds — a uuid and secret,
@@ -183,12 +183,12 @@ The latter looks right, sits beside the keys that do work, and survived five
 review rounds in the implementation — and it 404s. Probed against the live
 instance 166488672:
 
-| path | result |
-|------|--------|
-| `/hetzner/v1/metadata` | 200, the instance-id/hostname/network document |
-| `/hetzner/v1/metadata/userdata` | **404** |
-| `/latest/user-data` | 404 — no EC2-compatible alias on this service |
-| `/hetzner/v1/userdata` | 204 with none set, 200 with |
+| path                            | result                                         |
+| ------------------------------- | ---------------------------------------------- |
+| `/hetzner/v1/metadata`          | 200, the instance-id/hostname/network document |
+| `/hetzner/v1/metadata/userdata` | **404**                                        |
+| `/latest/user-data`             | 404 — no EC2-compatible alias on this service  |
+| `/hetzner/v1/userdata`          | 204 with none set, 200 with                    |
 
 The 204-when-unset is why `identity.nix` distinguishes a transport failure from
 an empty body: "the service did not answer" must retry, and "it answered and has
@@ -235,7 +235,7 @@ that will fail three layers downstream. Neither value is ever echoed.
 `user_data` is server metadata, not image content. A box built from a snapshot
 of a runner is a NEW server and serves its OWN user-data, so N clones of one
 image come up as N distinct runners carrying no identity state between them.
-That is the preferred channel and every runner tofu *creates* uses it.
+That is the preferred channel and every runner tofu _creates_ uses it.
 
 It cannot be the only one. hcloud treats `user_data` as replace-forces-new, and
 these boxes must not be replaced: CX server types are limited-availability, so
@@ -358,16 +358,16 @@ without any workflow change — which was the requirement.
 
 Mirrors the live VPS config except where noted:
 
-| setting | value | note |
-| --- | --- | --- |
-| labels | `nix`, `ubuntu-latest`, `node-22`, `alpine` | unchanged, so no workflow edits |
-| `capacity` | 2 | 4 vCPU at cx33; was going to be 1 at cx23 |
-| `timeout` | 30m | unchanged |
-| cache | enabled, `/var/lib/.../cache` | the 375s-vs-15s cargo case |
-| `container.network` | `""` | per-job network, as today |
-| `container.privileged` | false | unchanged |
-| `container.valid_volumes` | empty | the pages volume is gone from this box |
-| `container.docker_host` | podman's socket | **changed**, deliberately |
+| setting                   | value                                       | note                                      |
+| ------------------------- | ------------------------------------------- | ----------------------------------------- |
+| labels                    | `nix`, `ubuntu-latest`, `node-22`, `alpine` | unchanged, so no workflow edits           |
+| `capacity`                | 2                                           | 4 vCPU at cx33; was going to be 1 at cx23 |
+| `timeout`                 | 30m                                         | unchanged                                 |
+| cache                     | enabled, `/var/lib/.../cache`               | the 375s-vs-15s cargo case                |
+| `container.network`       | `""`                                        | per-job network, as today                 |
+| `container.privileged`    | false                                       | unchanged                                 |
+| `container.valid_volumes` | empty                                       | the pages volume is gone from this box    |
+| `container.docker_host`   | podman's socket                             | **changed**, deliberately                 |
 
 ## One-way enforcement — `modules/runner/firewall.nix`
 
@@ -402,7 +402,7 @@ boot, not added after the first ENOSPC.
 1. `tofu apply`. The `moved` block in `imports.tf` migrates
    `hcloud_server.runner` to `hcloud_server.runner["forgejo-runner"]` — a state
    rename with no infrastructure change, verified as `0 to add, 0 to change, 0
-   to destroy`. Without it, `for_each` reads as destroy-and-create, which on a
+to destroy`. Without it, `for_each` reads as destroy-and-create, which on a
    protected box fails the apply outright and on an unprotected one would have
    destroyed a limited-availability server to rename a state key.
 2. Stage the identity for the install. The box exists already and can never be
@@ -434,6 +434,7 @@ boot, not added after the first ENOSPC.
    them, and shipping one inside a disk image means every place that image is
    stored, copied or backed up also holds a working secret. Don't put a real key
    in a template, independent of whether the template would misuse it.
+
 5. Power off, snapshot.
 6. A new runner is two lines in `terraform.tfvars` — an entry in `runner_names`
    and its pair in `runner_identities` — plus `tofu apply`. It gets its identity
@@ -480,18 +481,18 @@ one, the staged identity it is derived from.
 
 ## Files
 
-| path | change |
-| --- | --- |
-| `tofu/network.tf` | remove `hcloud_server_network.runner` |
-| `flake.nix` | `mkRunner`, `nixosConfigurations.runner-hetzner`, deploy node |
-| `runner/configuration.nix` | new; imports the shared four plus runner modules |
-| `modules/runner/default.nix` | new; podman + a plain `systemd.services.forgejo-runner` |
-| `modules/runner/identity.nix` | new; user-data → composed config.yaml + secret file |
-| `modules/runner/firewall.nix` | new; one-way rules, forward and output |
-| `modules/runner/users.nix` | new; ssh keys only, no sops passwords |
-| `modules/firewall.nix` | bind port-accepts to the public interface |
-| `modules/containers/forgejo-runner.nix` | deleted |
-| `configuration.nix` | drop the runner import |
+| path                                    | change                                                        |
+| --------------------------------------- | ------------------------------------------------------------- |
+| `tofu/network.tf`                       | remove `hcloud_server_network.runner`                         |
+| `flake.nix`                             | `mkRunner`, `nixosConfigurations.runner-hetzner`, deploy node |
+| `runner/configuration.nix`              | new; imports the shared four plus runner modules              |
+| `modules/runner/default.nix`            | new; podman + a plain `systemd.services.forgejo-runner`       |
+| `modules/runner/identity.nix`           | new; user-data → composed config.yaml + secret file           |
+| `modules/runner/firewall.nix`           | new; one-way rules, forward and output                        |
+| `modules/runner/users.nix`              | new; ssh keys only, no sops passwords                         |
+| `modules/firewall.nix`                  | bind port-accepts to the public interface                     |
+| `modules/containers/forgejo-runner.nix` | deleted                                                       |
+| `configuration.nix`                     | drop the runner import                                        |
 
 Shared unchanged: `modules/nix.nix`, `modules/boot.nix`, `modules/hardware.nix`,
 `modules/security.nix`, and `disk-config.nix` — the last is already generic

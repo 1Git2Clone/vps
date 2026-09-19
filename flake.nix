@@ -518,6 +518,12 @@
               # is what CI runs, so the two cannot drift.
               pre-commit
               gitleaks
+              markdownlint-cli2
+              # The handbook in docs/. mdbook-mermaid is the preprocessor that
+              # turns a ```mermaid fence into a rendered diagram; without it
+              # the fence ships as a code block. See docs/book.toml.
+              mdbook
+              mdbook-mermaid
             ];
           };
 
@@ -532,6 +538,9 @@
               opentofu # tofu fmt
               git
               gitleaks
+              markdownlint-cli2
+              mdbook
+              mdbook-mermaid
             ];
           };
 
@@ -579,6 +588,38 @@
       packages.${system}.default = vps.config.system.build.toplevel;
 
       apps.${system} = {
+        # ── The handbook, served locally ───────────────────────────────────────
+        #   nix run .#docs
+        #
+        # Two commands rather than one, and the first is the one that is easy
+        # to forget: `mdbook-mermaid install` writes mermaid.min.js and
+        # mermaid-init.js next to docs/book.toml, which references them in
+        # `additional-js`. Those files are gitignored — 2.6 MB of vendored
+        # minified JS whose version is already pinned by this flake.lock — so a
+        # fresh clone does not have them and `mdbook build` fails outright on
+        # the missing paths.
+        #
+        # Wrapping it is worth the lines because the failure is confusing in
+        # exactly the wrong way: the error names a file nobody wrote, in a
+        # directory that looks complete.
+        docs = {
+          type = "app";
+          program = nixpkgs.lib.getExe (
+            pkgs.writeShellApplication {
+              name = "serve-docs";
+              runtimeInputs = with pkgs; [
+                mdbook
+                mdbook-mermaid
+              ];
+              text = ''
+                cd "''${MDBOOK_ROOT:-.}"
+                mdbook-mermaid install docs
+                exec mdbook serve docs "$@"
+              '';
+            }
+          );
+        };
+
         # ── Initial install, in one command ────────────────────────────────────
         #   nix run .#install -- root@<ip>
         #
