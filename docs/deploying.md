@@ -42,11 +42,11 @@ previous generation without being asked.
 
 What it protects and what it does not:
 
-| Failure | Caught by |
-|---|---|
-| firewall / sshd / networking change locks you out | **deploy-rs auto-rollback** |
-| unbootable kernel or initrd | GRUB generation menu, 5s timeout at boot |
-| a container fails to start | *not* auto-rolled back — see below |
+| Failure                                           | Caught by                                |
+| ------------------------------------------------- | ---------------------------------------- |
+| firewall / sshd / networking change locks you out | **deploy-rs auto-rollback**              |
+| unbootable kernel or initrd                       | GRUB generation menu, 5s timeout at boot |
+| a container fails to start                        | _not_ auto-rolled back — see below       |
 
 The last row is deliberate. deploy-rs confirms reachability, not service health.
 A crashlooping container is visible and you still have ssh, so:
@@ -121,7 +121,7 @@ nix run .#install -- root@$(tofu -chdir=tofu output -raw vps_ipv4)
 ```
 
 tofu used to own the install through nixos-anywhere's module. That was removed:
-the module declares a `null_resource` whose *creation* runs a full install, so
+the module declares a `null_resource` whose _creation_ runs a full install, so
 any plan made without it already in state — a fresh clone, a lost state file, a
 `state rm` — quietly proposes reinstalling a running mail server. Infrastructure
 and OS installation are now separate on purpose.
@@ -153,7 +153,7 @@ nix run github:nix-community/nixos-anywhere -- \
 **`--extra-files` is not optional.** Without the age key at
 `/var/lib/sops-nix/key.txt`, `sops-install-secrets` fails during activation and
 the machine boots with no credentials at all — including its own root and user
-passwords. Check the key decrypts *before* installing:
+passwords. Check the key decrypts _before_ installing:
 
 ```sh
 SOPS_AGE_KEY_FILE=~/.sops-nix/key.txt sops -d --extract '["email"]["postmaster"]' secrets.yaml
@@ -176,10 +176,10 @@ nixos-anywhere wants.
 
 ### Which configuration to install
 
-| Attr | Disk | Use |
-|---|---|---|
-| `.#vps` | `/dev/vda` | the local QEMU VM (`nix run .#default`) |
-| `.#vps-hetzner` | `/dev/sda` | **anything on Hetzner Cloud** |
+| Attr            | Disk       | Use                                     |
+| --------------- | ---------- | --------------------------------------- |
+| `.#vps`         | `/dev/vda` | the local QEMU VM (`nix run .#default`) |
+| `.#vps-hetzner` | `/dev/sda` | **anything on Hetzner Cloud**           |
 
 They are the same closure; only the disk device differs, and `boot.loader.grub.device`
 is derived from disko so the two can never disagree. Installing `.#vps` on
@@ -193,14 +193,14 @@ Every item below is now in the config. They are listed because each one, when
 missing, produces a machine that installs with no error and then does not work —
 the worst failure shape there is.
 
-| Setting | Where | Without it |
-|---|---|---|
-| `boot.initrd.availableKernelModules` with **virtio** | `modules/hardware.nix` | NixOS's default set is bare-metal only. The initrd cannot see `/dev/sda`, root never mounts, and the box sits in an emergency shell while the provider still reports it `running`. |
-| **GRUB**, not systemd-boot | `modules/boot.nix` | Hetzner Cloud boots legacy BIOS — there is no `/sys/firmware/efi`. systemd-boot installs cleanly and leaves an unbootable machine. |
-| `efiInstallAsRemovable`, `canTouchEfiVariables = false` | `modules/boot.nix` | There is no efivarfs in BIOS mode; bootloader installation fails outright if it tries to write NVRAM. |
-| `time.timeZone` | `modules/boot.nix` | Unset means NixOS does not manage `/etc/localtime`, so docker creates a *directory* there and every container that bind-mounts it dies with "not a directory". |
-| `nix.settings.trusted-users = @wheel` | `modules/nix.nix` | `deploy-rs` cannot push: "lacks a signature by a trusted key". |
-| ssh on **2222** | `modules/services.nix` | Port 22 is forgejo's. Also needs a matching rule in the **Hetzner edge firewall**, which is separate from the host's nftables. |
+| Setting                                                 | Where                  | Without it                                                                                                                                                                         |
+| ------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `boot.initrd.availableKernelModules` with **virtio**    | `modules/hardware.nix` | NixOS's default set is bare-metal only. The initrd cannot see `/dev/sda`, root never mounts, and the box sits in an emergency shell while the provider still reports it `running`. |
+| **GRUB**, not systemd-boot                              | `modules/boot.nix`     | Hetzner Cloud boots legacy BIOS — there is no `/sys/firmware/efi`. systemd-boot installs cleanly and leaves an unbootable machine.                                                 |
+| `efiInstallAsRemovable`, `canTouchEfiVariables = false` | `modules/boot.nix`     | There is no efivarfs in BIOS mode; bootloader installation fails outright if it tries to write NVRAM.                                                                              |
+| `time.timeZone`                                         | `modules/boot.nix`     | Unset means NixOS does not manage `/etc/localtime`, so docker creates a _directory_ there and every container that bind-mounts it dies with "not a directory".                     |
+| `nix.settings.trusted-users = @wheel`                   | `modules/nix.nix`      | `deploy-rs` cannot push: "lacks a signature by a trusted key".                                                                                                                     |
+| ssh on **2222**                                         | `modules/services.nix` | Port 22 is forgejo's. Also needs a matching rule in the **Hetzner edge firewall**, which is separate from the host's nftables.                                                     |
 
 **The VM test cannot catch any of these.** `nixos-anywhere --flake .#vps
 --vm-test` validates disko, GRUB and that the system boots — genuinely useful,
@@ -264,7 +264,7 @@ sudo -u postgres psql -d serenity_bot -c 'table _sqlx_migrations order by versio
 ## Growing the disk after a Hetzner resize
 
 Resizing the volume in the Hetzner console changes the block device and nothing
-else. `disk-config.nix` declares root as `size = "100%"`, so a *fresh install*
+else. `disk-config.nix` declares root as `size = "100%"`, so a _fresh install_
 fills the new disk correctly — but disko only partitions at install time, so a
 running machine needs this once, by hand.
 
@@ -314,7 +314,7 @@ sudo resize2fs /dev/sda3     # 4. grow ext4 online; safe while mounted
 ```
 
 Step 1 is the one that is easy to skip and impossible to work around: without
-it, step 2 finds no free space. Step 2 only changes the partition's *end*
+it, step 2 finds no free space. Step 2 only changes the partition's _end_
 offset, so no data moves — this works because root is the last partition. Step 4
 needs the `resize_inode` feature, which is present.
 
@@ -352,7 +352,7 @@ to the kernel command line for one boot, or run it from rescue mode.
 
 ### Why not LVM
 
-It would not have helped much *here*. Growing into new space would still need
+It would not have helped much _here_. Growing into new space would still need
 the GPT header relocated and the partition extended before `pvresize`,
 `lvextend`, `resize2fs` — three commands instead of two, for the same outcome.
 Where it would pay is snapshots before a risky migration, and reallocating space

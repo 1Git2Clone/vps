@@ -15,20 +15,20 @@ upgrade — see `server_type` in `tofu/variables.tf` for why not to take the dis
 The old box bind-mounts host directories; this config uses named docker volumes.
 That makes the transfer a mapping, not an rsync of one tree. ~27 GB total.
 
-| Source (old box) | Size | Destination (new box) | Entries |
-|---|---|---|---|
-| `/srv/minecraft/data/` | 15 G | volume `minecraft_data` | 8107 |
-| `~/syncthing/` | 11 G | `~/syncthing/` (host path) | — |
-| `/srv/forgejo/data/` | 271 M | volume `forgejo_data` | 1151 |
-| `~/data/navidrome/` | 123 M | volume `navidrome_data` | 5020 |
-| `/srv/mailserver/data/dms/mail-state/` | **95 M** | volume `dms_state` | — |
-| volume `grafana-data` | 50 M | volume `grafana_data` | — |
-| volume `tempo-data` | 16 M | volume `tempo_data` | — |
-| `/srv/kuma/data/` | 8.7 M | volume `kuma_data` | 9 |
-| `/srv/mailserver/data/dms/mail-data/` | 2.5 M | volume `dms_mail` | — |
-| `/srv/mailserver/data/roundcube/db/` | 1.3 M | volume `roundcube_db` | — |
-| `/srv/mailserver/data/dms/config/` | 12 K | volume `dms_config` | 1 account |
-| `~/.config/syncthing/` | small | `~/.config/syncthing/` (host path) | — |
+| Source (old box)                       | Size     | Destination (new box)              | Entries   |
+| -------------------------------------- | -------- | ---------------------------------- | --------- |
+| `/srv/minecraft/data/`                 | 15 G     | volume `minecraft_data`            | 8107      |
+| `~/syncthing/`                         | 11 G     | `~/syncthing/` (host path)         | —         |
+| `/srv/forgejo/data/`                   | 271 M    | volume `forgejo_data`              | 1151      |
+| `~/data/navidrome/`                    | 123 M    | volume `navidrome_data`            | 5020      |
+| `/srv/mailserver/data/dms/mail-state/` | **95 M** | volume `dms_state`                 | —         |
+| volume `grafana-data`                  | 50 M     | volume `grafana_data`              | —         |
+| volume `tempo-data`                    | 16 M     | volume `tempo_data`                | —         |
+| `/srv/kuma/data/`                      | 8.7 M    | volume `kuma_data`                 | 9         |
+| `/srv/mailserver/data/dms/mail-data/`  | 2.5 M    | volume `dms_mail`                  | —         |
+| `/srv/mailserver/data/roundcube/db/`   | 1.3 M    | volume `roundcube_db`              | —         |
+| `/srv/mailserver/data/dms/config/`     | 12 K     | volume `dms_config`                | 1 account |
+| `~/.config/syncthing/`                 | small    | `~/.config/syncthing/` (host path) | —         |
 
 **Read these sizes as root.** Measured as `hutao`, `/srv/mailserver/data` reports
 15 M; as root it is 110 M, because 24 paths under `/srv` are owned by container
@@ -44,16 +44,16 @@ zero.
 
 Deliberately **not** transferred:
 
-| Skipped | Why |
-|---|---|
-| `/srv/certbot/data` | `security.acme` issues a fresh certificate; the certbot lineage layout is not the same and is not read any more |
-| `/srv/dozzle/data` | just `users.yml`, rendered from sops by `dozzle-users.service` |
-| `/srv/caddy`, `caddy_caddy_*` volumes | ACME state caddy no longer manages |
-| `/srv/mailserver/data/dms/mail-logs` | 11 M of logs |
-| `roundcube/config` | rendered from the Nix store |
-| `postgres-data`, `serenity-discord-bot_postgres-data` | both 0 bytes, 0 links — dead volumes |
-| `deploy_*` volumes, `/srv/camofox-browser` | expenses app and camofox, staying on the old box |
-| docker build cache | 3.8 G of nothing |
+| Skipped                                               | Why                                                                                                             |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `/srv/certbot/data`                                   | `security.acme` issues a fresh certificate; the certbot lineage layout is not the same and is not read any more |
+| `/srv/dozzle/data`                                    | just `users.yml`, rendered from sops by `dozzle-users.service`                                                  |
+| `/srv/caddy`, `caddy_caddy_*` volumes                 | ACME state caddy no longer manages                                                                              |
+| `/srv/mailserver/data/dms/mail-logs`                  | 11 M of logs                                                                                                    |
+| `roundcube/config`                                    | rendered from the Nix store                                                                                     |
+| `postgres-data`, `serenity-discord-bot_postgres-data` | both 0 bytes, 0 links — dead volumes                                                                            |
+| `deploy_*` volumes, `/srv/camofox-browser`            | expenses app and camofox, staying on the old box                                                                |
+| docker build cache                                    | 3.8 G of nothing                                                                                                |
 
 `~/.config/syncthing` carries the node's TLS keypair, which **is** its device ID.
 Copy it and every paired device keeps working; regenerate it and you re-pair by
@@ -83,10 +83,10 @@ land under a different role than the Ubuntu one that owns it today.
 
 There are two, with different jobs, and confusing them costs an hour:
 
-| Where | Used by | Token ID |
-|---|---|---|
-| `secrets.yaml` → `cloudflare.api_token` | lego / `security.acme` on the VPS | `a13f8e29ba9ebe4201e5aef3d1723ec7` |
-| `tofu/terraform.tfvars` → `cloudflare_api_token` | tofu, from a workstation | `c91db61e8b430d39e780fd5e6098c225` |
+| Where                                            | Used by                           | Token ID                           |
+| ------------------------------------------------ | --------------------------------- | ---------------------------------- |
+| `secrets.yaml` → `cloudflare.api_token`          | lego / `security.acme` on the VPS | `a13f8e29ba9ebe4201e5aef3d1723ec7` |
+| `tofu/terraform.tfvars` → `cloudflare_api_token` | tofu, from a workstation          | `c91db61e8b430d39e780fd5e6098c225` |
 
 The VPS token carries an **IP filter** pinned to the old server, so DNS-01 fails
 from anywhere else with `403 9109: Cannot use the access token from location:
@@ -123,7 +123,7 @@ behaviour rather than faults to chase:
   `forgejo_data` is what makes it the real instance; do NOT click through the
   wizard first, or you create a second one.
 - **DMS loops** on `You need at least one mail account to start Dovecot (120s
-  left...)` and then exits, so systemd restarts it. Accounts live in
+left...)` and then exits, so systemd restarts it. Accounts live in
   `postfix-accounts.cf` inside the `dms_config` volume. Until that volume is
   restored there is no account, and DMS refuses to run Dovecot or Postfix —
   which is why ports 25/465/587/993 have no banner yet. Restoring `dms_config`

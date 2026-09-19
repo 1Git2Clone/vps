@@ -12,7 +12,7 @@ minecraft worlds was down, mail included.
 ## 1. What we set out to do
 
 Clear all seven pending items on the Renovate Dependency Dashboard (#12) inside
-one 30-minute maintenance window: three container bumps, one container *major*
+one 30-minute maintenance window: three container bumps, one container _major_
 (docker-mailserver 15.1.0 → 16.0.1), `lockFileMaintenance`, and two tofu
 provider bumps.
 
@@ -22,27 +22,27 @@ Six of the seven landed. The seventh took the box down on its way in.
 
 All times EEST. The box logs UTC; subtract three hours.
 
-| Time | Event |
-|---|---|
-| 22:00:40 | Cold-stop grafana + navidrome. Local tar, then restic `a3534fdf`. |
-| 22:02:44 | **Deploy 1** (gen 58): dozzle v11.1.0, grafana 13.2.2, navidrome 0.64.0. Clean, 40s. |
-| 22:11:24 | Cold-stop mail. Local tar, then restic `63564755`. |
-| 22:12:43 | **Deploy 2** (gen 59): docker-mailserver 16.0.1 + the opendkim gid fix. Clean, 37s. |
-| 22:16:39 | **Deploy 3** starts: `flake.lock` only. |
-| 22:19:28 | New nixpkgs changes every unit → every container restarts at once. Runner stopped. |
+| Time     | Event                                                                                                                                          |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 22:00:40 | Cold-stop grafana + navidrome. Local tar, then restic `a3534fdf`.                                                                              |
+| 22:02:44 | **Deploy 1** (gen 58): dozzle v11.1.0, grafana 13.2.2, navidrome 0.64.0. Clean, 40s.                                                           |
+| 22:11:24 | Cold-stop mail. Local tar, then restic `63564755`.                                                                                             |
+| 22:12:43 | **Deploy 2** (gen 59): docker-mailserver 16.0.1 + the opendkim gid fix. Clean, 37s.                                                            |
+| 22:16:39 | **Deploy 3** starts: `flake.lock` only.                                                                                                        |
+| 22:19:28 | New nixpkgs changes every unit → every container restarts at once. Runner stopped.                                                             |
 | 22:19:52 | Runner starts, declares against `https://git.hu-tao.dev/`, caddy is not listening yet: `fail to invoke Declare … connection refused`. Exits 1. |
-| 22:19:53 | deploy-rs samples unit state, sees one failed unit. |
-| 22:19:55 | Deploy 3 aborts. De-activation stops every container. **Outage begins.** |
-| 22:19:58 | The runner's own `Restart=always` brings it up successfully — **3 seconds after the abort decision.** |
-| 22:20:08 | `kuma-check` fails: `Failed to connect to status.hu-tao.dev:443`. |
-| 22:25:01 | `kuma-check` fails again. |
-| 22:25:03 | `systemctl restart docker` (§12's documented recovery). |
-| 22:25:09 | `switch-to-configuration switch` → `Could not acquire lock`. Fell back to starting units directly. |
-| 22:25:39 | Mail answering. **Outage ends.** |
-| 22:30:27 | `kuma-check` green again. |
-| 22:33:16 | **Deploy 4** (gen 60): `flake.lock` + the readiness gate. Clean, 40s. |
-| 22:34:54 | Reboot complete on kernel 6.18.52. 38 seconds down. |
-| ~22:38 | `tofu apply`: 0 added, 0 changed, 0 destroyed. |
+| 22:19:53 | deploy-rs samples unit state, sees one failed unit.                                                                                            |
+| 22:19:55 | Deploy 3 aborts. De-activation stops every container. **Outage begins.**                                                                       |
+| 22:19:58 | The runner's own `Restart=always` brings it up successfully — **3 seconds after the abort decision.**                                          |
+| 22:20:08 | `kuma-check` fails: `Failed to connect to status.hu-tao.dev:443`.                                                                              |
+| 22:25:01 | `kuma-check` fails again.                                                                                                                      |
+| 22:25:03 | `systemctl restart docker` (§12's documented recovery).                                                                                        |
+| 22:25:09 | `switch-to-configuration switch` → `Could not acquire lock`. Fell back to starting units directly.                                             |
+| 22:25:39 | Mail answering. **Outage ends.**                                                                                                               |
+| 22:30:27 | `kuma-check` green again.                                                                                                                      |
+| 22:33:16 | **Deploy 4** (gen 60): `flake.lock` + the readiness gate. Clean, 40s.                                                                          |
+| 22:34:54 | Reboot complete on kernel 6.18.52. 38 seconds down.                                                                                            |
+| ~22:38   | `tofu apply`: 0 added, 0 changed, 0 destroyed.                                                                                                 |
 
 ## 3. Impact, measured
 
@@ -97,7 +97,7 @@ branch entirely would have changed nothing about this failure.
 
 What actually mattered is a property of the system update **on its own**: a new
 nixpkgs changes the store path of every systemd unit, so `switch-to-configuration`
-restarts *every container simultaneously*. That is the condition the runner
+restarts _every container simultaneously_. That is the condition the runner
 cannot survive, and it needs no container bump to arrive. The same thing
 happened in September for an unrelated reason — commit `4caf61b` pinned the
 docker daemon's `bip`, which restarted `docker.service`, which stopped every
@@ -109,10 +109,10 @@ checklist. The dashboard listed `lock file maintenance` directly beneath
 `update amir20/dozzle docker tag to v11.1.0`, as though they were the same kind
 of change. They are not, and the difference is blast radius:
 
-| | restarts | reboot | rollback |
-|---|---|---|---|
-| a container tag bump | 1 unit | no | re-deploy, unless it migrated its own data |
-| `lockFileMaintenance` | **every unit** | **yes, if the kernel moves** | re-deploy, cleanly |
+|                       | restarts       | reboot                       | rollback                                   |
+| --------------------- | -------------- | ---------------------------- | ------------------------------------------ |
+| a container tag bump  | 1 unit         | no                           | re-deploy, unless it migrated its own data |
+| `lockFileMaintenance` | **every unit** | **yes, if the kernel moves** | re-deploy, cleanly                         |
 
 A window sized and sequenced for the first kind is not a window for the second.
 So: not "don't combine them in a PR" — they combine in a PR fine, and did. It
@@ -150,8 +150,8 @@ last."**
 - **deploy-rs's abort path leaves the box worse than either config.** This is
   the most surprising finding here and deserves its own line: when activation
   fails, the de-activation stops the containers and the rollback does **not**
-  restart them. The box does not return to the old generation's *running state*
-  — it returns to the old generation's *configuration*, with nothing running.
+  restart them. The box does not return to the old generation's _running state_
+  — it returns to the old generation's _configuration_, with nothing running.
   A 3-second transient in one non-critical unit therefore cost fifteen healthy
   services.
 - **`switch-to-configuration switch` failed with `Could not acquire lock`**
@@ -163,7 +163,7 @@ last."**
 - `fix(forgejo-runner)`: a `forgejo-runner-ready.service` oneshot, in the same
   shape as `forgejo-runner-token`, that probes `/api/v1/version` and waits
   before the runner starts. Ordering alone would not have been enough — a
-  `docker-*` unit counts as started when the container is *created*, not when
+  `docker-*` unit counts as started when the container is _created_, not when
   the service inside it answers. It exits 0 on timeout deliberately: its job is
   to close the race, not to become a new way for a deploy to fail.
 
@@ -180,10 +180,10 @@ last."**
 
 ## 9. Action items
 
-| # | Action | Why |
-|---|---|---|
-| 1 | Audit every container unit for an unexpressed runtime dependency on another container. The runner was found the hard way; it is unlikely to be the only one. | Same class of bug, same trigger. |
-| 2 | Deploy `lockFileMaintenance` **alone**, first in a window, never last. | §5. |
-| 3 | Decide whether a failed activation should de-activate at all. `magicRollback` protects against losing SSH; it is not obviously the right tool for one crashlooping non-critical unit, and its abort is more destructive than the failure it responds to. | §7. |
-| 4 | Confirm the healthchecks.io grace period is short enough that two missed pings actually page. The probe failed correctly; whether that produced an alert is configured outside this repo. | §6 is only half-verified. |
-| 5 | Create `postmaster@hu-tao.dev`. See §10. | RFC 5321 §4.5.1. |
+| #   | Action                                                                                                                                                                                                                                                   | Why                              |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| 1   | Audit every container unit for an unexpressed runtime dependency on another container. The runner was found the hard way; it is unlikely to be the only one.                                                                                             | Same class of bug, same trigger. |
+| 2   | Deploy `lockFileMaintenance` **alone**, first in a window, never last.                                                                                                                                                                                   | §5.                              |
+| 3   | Decide whether a failed activation should de-activate at all. `magicRollback` protects against losing SSH; it is not obviously the right tool for one crashlooping non-critical unit, and its abort is more destructive than the failure it responds to. | §7.                              |
+| 4   | Confirm the healthchecks.io grace period is short enough that two missed pings actually page. The probe failed correctly; whether that produced an alert is configured outside this repo.                                                                | §6 is only half-verified.        |
+| 5   | Create `postmaster@hu-tao.dev`. See §10.                                                                                                                                                                                                                 | RFC 5321 §4.5.1.                 |

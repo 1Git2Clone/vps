@@ -1,6 +1,6 @@
 # Architecture
 
-How this box is put together and *why* it is put together that way. [README.md](README.md)
+How this box is put together and _why_ it is put together that way. [README.md](README.md)
 is the operator's manual — quick start, per-service exposure, day-to-day
 commands. This document is the map: the trust boundaries, the data paths, the
 deploy and state model, and the failure modes that shaped the design.
@@ -16,10 +16,10 @@ would otherwise have to remember to run is a systemd unit instead.
 
 `flake.nix` builds one system two ways through `mkVps`:
 
-| Config | Root disk | Used by |
-|---|---|---|
-| `nixosConfigurations.vps` | `/dev/vda` (virtio) | the local QEMU test VM (`nix run .#default`) |
-| `nixosConfigurations.vps-hetzner` | `/dev/sda` | what tofu/nixos-anywhere installs, and what `deploy .#vps` activates |
+| Config                            | Root disk           | Used by                                                              |
+| --------------------------------- | ------------------- | -------------------------------------------------------------------- |
+| `nixosConfigurations.vps`         | `/dev/vda` (virtio) | the local QEMU test VM (`nix run .#default`)                         |
+| `nixosConfigurations.vps-hetzner` | `/dev/sda`          | what tofu/nixos-anywhere installs, and what `deploy .#vps` activates |
 
 They differ in exactly one attribute — the disko device — and share every
 module, every container, every secret. `vps-hetzner` is the real system;
@@ -37,22 +37,22 @@ partition, a 1 G `EF00` ESP mounted at `/boot`, and ext4 root filling the rest.
 
 Two hardware facts drive this and are not preferences:
 
-- **GRUB, configured for BIOS *and* UEFI** (`boot.nix`). Hetzner Cloud boots
+- **GRUB, configured for BIOS _and_ UEFI** (`boot.nix`). Hetzner Cloud boots
   these VMs in **legacy BIOS mode** — the running machine has no
   `/sys/firmware/efi`. systemd-boot is EFI-only and would install cleanly, then
   leave an unbootable box on first reboot. GRUB embeds its core image in the
-  `EF02` partition (BIOS chain-loads it) *and* writes `/EFI/BOOT/BOOTX64.EFI`
+  `EF02` partition (BIOS chain-loads it) _and_ writes `/EFI/BOOT/BOOTX64.EFI`
   (the fallback UEFI firmware looks for with no NVRAM entry), so the same
   closure boots either way. `canTouchEfiVariables = false`, because there is no
   efivarfs in BIOS mode.
 - **virtio kernel modules in the initrd** (`hardware.nix`). NixOS's default
-  `availableKernelModules` targets bare metal and contains *no* virtio drivers.
+  `availableKernelModules` targets bare metal and contains _no_ virtio drivers.
   Hetzner presents the disk over virtio, so without these the initrd cannot see
   `/dev/sda`, cannot mount root, and drops to an emergency shell — while the
   provider still reports the server `running`. The nixos-anywhere `--vm-test`
   cannot catch this; the test harness injects its own virtio modules.
 
-The ESP is 1 G, not 512 M, because it *is* `/boot` and holds a kernel + initrd
+The ESP is 1 G, not 512 M, because it _is_ `/boot` and holds a kernel + initrd
 per generation. It cannot be grown without a reinstall, and filling it breaks
 the next deploy rather than the current boot.
 
@@ -95,7 +95,7 @@ is unreachable, check both.
 
 A published container port is **DNAT'd in prerouting and then forwarded** — it
 never touches the input hook. Docker writes its own accepts into the `ip filter`
-table; in nftables *every* table's chain runs, and an accept in docker's table
+table; in nftables _every_ table's chain runs, and an accept in docker's table
 cannot rescue a packet that `table inet nixos-fw` drops. So:
 
 - A service's **published port belongs in the forward allow-list**, not input.
@@ -106,7 +106,7 @@ cannot rescue a packet that `table inet nixos-fw` drops. So:
 - `networking.nftables.flushRuleset` **must stay false**. The default flushes
   the entire ruleset — including the tables docker owns — on every reload, and
   docker only rebuilds them when `dockerd` starts. The symptom is latent: running
-  containers keep working, the *next* container start fails with
+  containers keep working, the _next_ container start fails with
   `iptables: No chain/target/match by that name`, and recovery is
   `systemctl restart docker`.
 
@@ -115,9 +115,9 @@ This boundary is also why fail2ban jails for containerised services set
 
 ### Docker networks
 
-| Network | Subnet | Purpose |
-|---|---|---|
-| `proxy` | docker's pool | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile |
+| Network  | Subnet                   | Purpose                                                                                                                                                                                         |
+| -------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxy`  | docker's pool            | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                               |
 | `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule |
 
 `modules/containers/default.nix` creates each network as a oneshot systemd unit
@@ -129,7 +129,7 @@ network that does not exist yet.
 `--ssh` is on, so administrative access is Tailscale SSH. The tailnet interface
 is accepted wholesale on the input hook, which is how the tailnet-only services
 (grafana, tempo, dozzle, pgbouncer, syncthing GUI) are kept private — by the
-*absence* of an internet rule, not by their bind address. Several bind
+_absence_ of an internet rule, not by their bind address. Several bind
 `0.0.0.0` and rely entirely on this.
 
 Three of them also answer by name — `dozzle.`, `grafana.` and `syncthing.` —
@@ -139,7 +139,7 @@ like every other private port it is published on `0.0.0.0` and kept private by
 being in neither allow-list. What makes the URL portless is a `nat` chain at
 priority **-110**, ten ahead of docker's `dstnat`, rewriting port 443 arriving
 on `tailscale0` onto it. Getting that priority wrong is silent: docker DNATs the
-packet to caddy's *public* listener first and the name 404s.
+packet to caddy's _public_ listener first and the name 404s.
 
 The names are plain A records to the box's `100.x` address
 (`tofu/modules/cloudflare-dns`). A CNAME to the node's MagicDNS name would
@@ -163,7 +163,7 @@ The full port/exposure map is the Services table in [README.md](README.md#servic
 
 Certificates are `security.acme` (`acme.nix`): **one** certificate named
 `hu-tao.dev` with every `infra.certSubdomains` entry as a SAN, issued over
-DNS-01 through Cloudflare. Because the certificate is *named* after the apex (not
+DNS-01 through Cloudflare. Because the certificate is _named_ after the apex (not
 after the first domain, as certbot does), reordering the SAN list cannot silently
 issue a second lineage.
 
@@ -228,11 +228,11 @@ official image used — and keeps the full container hardening (non-root uid fro
 **Not containers** — three host services, deliberately:
 
 - **postgres + pgbouncer** (`postgres.nix`) — the first service whose data is
-  *not* a docker volume, so its backup (pg_dumpall) is not optional; it is the
+  _not_ a docker volume, so its backup (pg_dumpall) is not optional; it is the
   only thing covering that data. On the host so a second service can share it
   without either owning the other's volume. postgres is unix-socket/loopback
   only; pgbouncer (6432) is reachable from `botnet` and the tailnet.
-- **syncthing** (`syncthing.nix`) — a *user* service with state in
+- **syncthing** (`syncthing.nix`) — a _user_ service with state in
   `~/.config/syncthing` and folders under `~/syncthing`, paths kept
   byte-identical to the old box because navidrome bind-mounts
   `~/syncthing/Music` and the node's device ID is derived from the TLS keypair in
@@ -248,7 +248,7 @@ The base clears every allocator the host uses (system users, nixbld, DynamicUser
 subuid blocks); the ceiling (2097151) is the largest uid a ustar/tar header can
 hold, which matters because these uids end up in restic snapshots.
 
-The numbers are *assigned*, not hashed from the service name: a hash becomes
+The numbers are _assigned_, not hashed from the service name: a hash becomes
 immutable the moment the first file is written and a rename silently orphans it.
 Read `config.infra.serviceId.<name>`, never a literal — so `grep -rn serviceId`
 finds every use.
@@ -263,14 +263,14 @@ Today only `caddy` has an id (offset 1). A group per id is created so
 Every service has exactly one gate, and they differ by what the service itself
 supports:
 
-| Service | Gate |
-|---|---|
-| grafana | real login from sops; anonymous-Admin off, sign-up off |
-| dozzle | bcrypt hash from sops, in a `users.yml` copied to a stable path |
-| minecraft RCON | password from sops, loopback only; one password per world (25575 / 25576) |
-| serenity bot | discord token + AI key + db password, all sops |
-| **kuma** | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy. |
-| **searxng** | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file |
+| Service        | Gate                                                                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| grafana        | real login from sops; anonymous-Admin off, sign-up off                                                                                          |
+| dozzle         | bcrypt hash from sops, in a `users.yml` copied to a stable path                                                                                 |
+| minecraft RCON | password from sops, loopback only; one password per world (25575 / 25576)                                                                       |
+| serenity bot   | discord token + AI key + db password, all sops                                                                                                  |
+| **kuma**       | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy. |
+| **searxng**    | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file    |
 
 searxng is the interesting one. It has no concept of a user, so authentication
 is the proxy's job:
@@ -281,14 +281,14 @@ is the proxy's job:
   because the Caddyfile is a world-readable store path and a bcrypt hash there is
   one anyone with a shell could crack.
 - basic_auth runs a cost-14 bcrypt on **every** request, and searxng's
-  `image_proxy` pulls many thumbnails per results page *through* caddy — so a
+  `image_proxy` pulls many thumbnails per results page _through_ caddy — so a
   password flood could turn bcrypt into CPU exhaustion. caddy's `rate_limit`
-  (the compiled-in module, §5) caps hits per client IP and returns 429 *before*
+  (the compiled-in module, §5) caps hits per client IP and returns 429 _before_
   the bcrypt runs, ordered `before basic_auth`. It is in-process: a misconfig
   throttles requests, it cannot take the box down (contrast §11).
 
-The env file is read by docker at container *start*, so it re-resolves the sops
-generation symlink each time — a *mounted* template would pin a stale inode (§10).
+The env file is read by docker at container _start_, so it re-resolves the sops
+generation symlink each time — a _mounted_ template would pin a stale inode (§10).
 
 ---
 
@@ -348,13 +348,13 @@ Two kinds of consumer:
 
 **Every key in `secrets.nix` must exist in `secrets.yaml`** or
 `sops-install-secrets` fails during activation. `acme_email` is deliberately
-*not* a secret — `security.acme` needs it at eval time and a contact address is
+_not_ a secret — `security.acme` needs it at eval time and a contact address is
 not a credential; it is `infra.acmeEmail`.
 
 The stale-symlink trap: a rendered template's real path is under a generation
 directory and `.path` only symlinks to it. Docker resolves a symlink at mount
 time and holds that inode forever, so a rotated secret never reaches a container
-that *mounts* the template. The fixes are either copy-to-a-stable-path first
+that _mounts_ the template. The fixes are either copy-to-a-stable-path first
 (`dozzle-users.service`, `mailserver-dkim.service`) or pass it as an **env file**
 that docker re-reads at start (caddy, cloudflared).
 
@@ -391,14 +391,14 @@ an ABORTED notice — silence and "no findings" must never look the same.
 
 Three separate mechanisms, split on purpose so none can trigger another:
 
-| Task | Tool |
-|---|---|
-| create server, IPs, edge firewall, DNS, rDNS | `tofu` |
-| install NixOS onto a blank machine | `nixos-anywhere` (`nix run .#install`), by hand |
-| update a machine already running NixOS | `deploy .#vps` |
+| Task                                         | Tool                                            |
+| -------------------------------------------- | ----------------------------------------------- |
+| create server, IPs, edge firewall, DNS, rDNS | `tofu`                                          |
+| install NixOS onto a blank machine           | `nixos-anywhere` (`nix run .#install`), by hand |
+| update a machine already running NixOS       | `deploy .#vps`                                  |
 
 The nixos-anywhere module used to live in `tofu/` and was **removed**: its
-`null_resource` runs a full install on *creation*, which any plan without it in
+`null_resource` runs a full install on _creation_, which any plan without it in
 state (a fresh clone, a lost state file, a `state rm`) silently proposes —
 i.e. "reinstall the running mail server." Infrastructure and OS install are now
 separate so an `apply` can never do it.
@@ -410,7 +410,7 @@ on a fresh connection to confirm the box is still reachable**. If it cannot, the
 machine rolls itself back unattended. That is the whole reason it is here — it is
 the only thing that saves you from a firewall/sshd/networking change that locks
 you out. It confirms **reachability, not service health**: a crashlooping
-container is *not* rolled back (you still have ssh; fix it forward). `nixos-rebuild
+container is _not_ rolled back (you still have ssh; fix it forward). `nixos-rebuild
 --target-host` is the dependency-free fallback, minus the confirmation step.
 
 deploy reaches the host sshd on **2222** with a real key — Tailscale SSH's
@@ -419,7 +419,7 @@ interactive re-auth cannot be scripted, so it is bypassed for deploys.
 ### tofu state recovery
 
 State is gitignored (it holds every value tofu ever read). A clone has none, and
-`apply` from no state builds a *second* server and moves DNS to it. `tofu/imports.tf`
+`apply` from no state builds a _second_ server and moves DNS to it. `tofu/imports.tf`
 prevents that declaratively: an `import` block per live resource, inert while
 state tracks it, active when it does not. `tofu init && tofu plan` then rebuilds
 state. A correct recovery plan is **`20 to import, 0 to add, 1 to change, 0 to
@@ -427,7 +427,7 @@ destroy`** — the one change being three provider-side booleans on
 `hcloud_server.vps` that the importer never sets. **Anything else means stop.**
 
 The sharp edge here (learned the hard way, 2026-09-05): the hcloud provider never
-reads `public_net` into state, so a post-import plan proposes *adding* it — and on
+reads `public_net` into state, so a post-import plan proposes _adding_ it — and on
 this resource that detaches the primary IPs before reattaching. Applying it once
 took the mail IP off a running host. `server.tf` now carries
 `lifecycle.ignore_changes = [public_net]` so the block can never become an action.
@@ -440,16 +440,16 @@ here is minutes of downtime, not a lost address.
 
 The design is shaped by which failures roll back automatically and which do not.
 
-| Failure | Caught by | Recovery |
-|---|---|---|
-| firewall / sshd / networking change locks you out | **deploy-rs auto-rollback** | automatic |
-| unbootable kernel / initrd | GRUB generation menu (5 s at boot) | pick previous generation |
-| a container fails to start | nothing — deploy confirms reachability, not health | `nixos-rebuild --rollback` or fix forward |
-| `nftables` reload wiped docker's chains | nothing automatic; symptom is the *next* container start failing | `systemctl restart docker` (and keep `flushRuleset = false`) |
-| a rotated sops secret didn't reach a container | nothing — the container holds a stale inode | copy-to-stable-path or env-file pattern (§9) |
-| tofu plan shows an unexpected diff on unchanged infra | you, reading the plan | **the state is wrong, not the infra** — never `apply`; `refresh`/`import`, verify on the box |
-| a fail2ban jail bans a docker/bridge address | nothing — a forward-chain `reject` on an internal IP downs **every** container | `systemctl stop fail2ban`; keep private ranges in `ignoreIP`, or don't ban on the forward chain for low-value targets |
-| a deploy restarts every container at once (any `nix flake update`) and one racy unit exits non-zero | **deploy-rs aborts** — and its de-activation stops every container while the rollback restores the old *configuration*, not the old *running state* | `systemctl restart docker`, then start the container units by hand — `switch-to-configuration` will refuse with `Could not acquire lock` while deploy-rs still holds it. Order fragile units behind a readiness gate, as `forgejo-runner-ready` does |
+| Failure                                                                                             | Caught by                                                                                                                                           | Recovery                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| firewall / sshd / networking change locks you out                                                   | **deploy-rs auto-rollback**                                                                                                                         | automatic                                                                                                                                                                                                                                            |
+| unbootable kernel / initrd                                                                          | GRUB generation menu (5 s at boot)                                                                                                                  | pick previous generation                                                                                                                                                                                                                             |
+| a container fails to start                                                                          | nothing — deploy confirms reachability, not health                                                                                                  | `nixos-rebuild --rollback` or fix forward                                                                                                                                                                                                            |
+| `nftables` reload wiped docker's chains                                                             | nothing automatic; symptom is the _next_ container start failing                                                                                    | `systemctl restart docker` (and keep `flushRuleset = false`)                                                                                                                                                                                         |
+| a rotated sops secret didn't reach a container                                                      | nothing — the container holds a stale inode                                                                                                         | copy-to-stable-path or env-file pattern (§9)                                                                                                                                                                                                         |
+| tofu plan shows an unexpected diff on unchanged infra                                               | you, reading the plan                                                                                                                               | **the state is wrong, not the infra** — never `apply`; `refresh`/`import`, verify on the box                                                                                                                                                         |
+| a fail2ban jail bans a docker/bridge address                                                        | nothing — a forward-chain `reject` on an internal IP downs **every** container                                                                      | `systemctl stop fail2ban`; keep private ranges in `ignoreIP`, or don't ban on the forward chain for low-value targets                                                                                                                                |
+| a deploy restarts every container at once (any `nix flake update`) and one racy unit exits non-zero | **deploy-rs aborts** — and its de-activation stops every container while the rollback restores the old _configuration_, not the old _running state_ | `systemctl restart docker`, then start the container units by hand — `switch-to-configuration` will refuse with `Could not acquire lock` while deploy-rs still holds it. Order fragile units behind a readiness gate, as `forgejo-runner-ready` does |
 
 The last three rows are recent scars.
 
@@ -460,8 +460,8 @@ banned in nftables — an in-process limiter can only throttle, it cannot take t
 forward plane down.
 
 The newest row is the widest of the three, and the least intuitive: a failed
-activation does not leave the box on the previous generation *running*. It
-leaves it on the previous generation's *configuration*, with nothing started. On
+activation does not leave the box on the previous generation _running_. It
+leaves it on the previous generation's _configuration_, with nothing started. On
 2026-09-16 a three-second transient in one non-critical container therefore cost
 fifteen healthy services, mail included, for six minutes — the abort was more
 destructive than the failure it was responding to. Full writeup in

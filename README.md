@@ -35,27 +35,27 @@ nothing to remember to run.
 
 ## Services
 
-| Service | Exposure |
-|---|---|
-| `caddy` | 80/443 (+443/udp) for the public sites, and 8880/8443 for the tailnet-only ones — the second pair is kept private by its absence from the firewall's allow-lists, and nftables rewrites tailscale0's 80/443 onto it so those URLs carry no port. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
-| `cloudflared` | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly |
-| `mailserver` | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host |
-| `webmail` | roundcube, proxied at `mail.` |
-| `forgejo` | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.` |
-| `forgejo-runner` | **nothing published**; polls forgejo for Actions jobs and asks the host's docker for a container per job |
-| `navidrome` | `127.0.0.1:4533`, reached only through caddy at `music.` |
-| `kuma` | proxy network only, reached at `status.` |
-| `searxng` | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt |
-| `dozzle` | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part |
-| `grafana` | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS |
-| `tempo` | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address |
-| `minecraft` | 25565; RCON on loopback only (25575) |
-| `minecraft2` | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576) |
-| `serenity-bot-0` | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669` |
-| `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback |
-| `postgres` | not a container — a host service; unix socket + loopback only, never on `botnet` |
-| `pgbouncer` | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain |
-| `syncthing` | not a container — a host service; GUI on 8384, tailnet only; also `syncthing.`, where caddy must rewrite the `Host` header or syncthing's rebinding check answers 403 |
+| Service          | Exposure                                                                                                                                                                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caddy`          | 80/443 (+443/udp) for the public sites, and 8880/8443 for the tailnet-only ones — the second pair is kept private by its absence from the firewall's allow-lists, and nftables rewrites tailscale0's 80/443 onto it so those URLs carry no port. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
+| `cloudflared`    | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly                                                                                                                                                                                |
+| `mailserver`     | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host                                                                                                                                                                                                                                                                           |
+| `webmail`        | roundcube, proxied at `mail.`                                                                                                                                                                                                                                                                                                               |
+| `forgejo`        | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.`                                                                                                                                                                                                                                                                         |
+| `forgejo-runner` | **nothing published**; polls forgejo for Actions jobs and asks the host's docker for a container per job                                                                                                                                                                                                                                    |
+| `navidrome`      | `127.0.0.1:4533`, reached only through caddy at `music.`                                                                                                                                                                                                                                                                                    |
+| `kuma`           | proxy network only, reached at `status.`                                                                                                                                                                                                                                                                                                    |
+| `searxng`        | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt                                                                                                                                                                                                          |
+| `dozzle`         | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
+| `grafana`        | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
+| `tempo`          | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address                                                                                                                                                                                                                     |
+| `minecraft`      | 25565; RCON on loopback only (25575)                                                                                                                                                                                                                                                                                                        |
+| `minecraft2`     | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576)                                                                                                                                                  |
+| `serenity-bot-0` | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669`                                                                                                                                                                                                                       |
+| `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback                                                                                                                                                                                                                                                               |
+| `postgres`       | not a container — a host service; unix socket + loopback only, never on `botnet`                                                                                                                                                                                                                                                            |
+| `pgbouncer`      | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain                                                                                                                                                                                                                 |
+| `syncthing`      | not a container — a host service; GUI on 8384, tailnet only; also `syncthing.`, where caddy must rewrite the `Host` header or syncthing's rebinding check answers 403                                                                                                                                                                       |
 
 Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is over
 Tailscale SSH. Keeping 22 is what lets git remotes stay portless: ssh has no
@@ -71,14 +71,14 @@ DNAT'd in prerouting and then forwarded, so it never touches the input hook.
 Docker writes its own accepts into the `ip filter` table, and in nftables every
 table's chain runs — an accept over there cannot rescue a packet `table inet
 nixos-fw` drops. So a policy-drop forward chain with no rules leaves every
-container unreachable *and* without egress. When adding a service, its port goes
+container unreachable _and_ without egress. When adding a service, its port goes
 in the forward allow-list; getting that backwards gives you a port the internet
 can reach that the firewall never authorised.
 
 **fail2ban's `chain = DOCKER-USER` does not translate.** That is the right answer
 for iptables. With `networking.nftables` on, NixOS resolves
 `banaction-allports` to `nftables-allports`, where `chain` is only the nftables
-*chain name* — so `DOCKER-USER` would name an input-hooked chain and ban nothing
+_chain name_ — so `DOCKER-USER` would name an input-hooked chain and ban nothing
 that reaches a container. `chain_hook = forward` is the part that moves it. See
 the `forgejo-ssh` jail in `modules/services.nix`, and check the live result with
 `nft list table inet f2b-table`.
@@ -94,7 +94,7 @@ symlink at mount time and holds that inode forever. `dozzle-users.service` and
 `mailserver-dkim.service` copy to a stable path first, which is why they exist.
 
 **A sops env file changes without restarting anything.** `sops.templates.<n>.path`
-is a stable path, so rotating a value changes the file's *content* and nothing
+is a stable path, so rotating a value changes the file's _content_ and nothing
 else — the unit text is byte-identical and `switch-to-configuration` finds no
 unit to restart. The container keeps the old value in its environment until
 something unrelated recreates it, which can be weeks. `restartUnits` on the
@@ -125,7 +125,7 @@ Not a 1:1 translation. The deliberate departures:
   `recreate: always` was working around.
 
 - **Certificates are `security.acme`**, not a certbot container plus cron. The
-  certificate is *named* `hu-tao.dev` with the subdomains as SANs, so reordering
+  certificate is _named_ `hu-tao.dev` with the subdomains as SANs, so reordering
   the list cannot silently issue a second lineage the way certbot's
   name-after-the-first-`-d` behaviour could. Note NixOS calls the key
   `key.pem`, not certbot's `privkey.pem`, and DMS reads it with
@@ -191,17 +191,17 @@ credentials at all, its own login included.
 
 Beyond what the Ansible vault held, this port needs:
 
-| Key | Why |
-|---|---|
-| `forgejo/runner_token` | one-time Actions runner registration token; the runner trades it for its own secret on first start |
-| `grafana/admin_user`, `grafana/admin_password` | anonymous Admin is off, so this is the only way in |
-| `kuma/healthcheck_url` | the out-of-band status-page probe; a separate check from the backup one because they fail for different reasons |
-| `minecraft/rcon_password` | RCON is loopback-only but it is still a remote console |
-| `minecraft2/rcon_password` | the second world's console. A separate password on purpose — one leak should not reach both worlds |
-| `serenity/bot_token`, `serenity/ai_api_key` | the Discord bot's gateway token and its DeepSeek key |
-| `searxng/secret_key` | signs searxng's session cookies; upstream's default is the literal `ultrasecretkey` |
-| `searxng/admin_user`, `searxng/admin_password_hash` | searxng has no accounts, so caddy's `basic_auth` is the whole access control. bcrypt, same shape as dozzle's |
-| `serenity/db_password` | one password, two consumers: `ALTER ROLE` in postgres and the pgbouncer userlist, both rendered from this key |
+| Key                                                   | Why                                                                                                                                                                                                      |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forgejo/runner_token`                                | one-time Actions runner registration token; the runner trades it for its own secret on first start                                                                                                       |
+| `grafana/admin_user`, `grafana/admin_password`        | anonymous Admin is off, so this is the only way in                                                                                                                                                       |
+| `kuma/healthcheck_url`                                | the out-of-band status-page probe; a separate check from the backup one because they fail for different reasons                                                                                          |
+| `minecraft/rcon_password`                             | RCON is loopback-only but it is still a remote console                                                                                                                                                   |
+| `minecraft2/rcon_password`                            | the second world's console. A separate password on purpose — one leak should not reach both worlds                                                                                                       |
+| `serenity/bot_token`, `serenity/ai_api_key`           | the Discord bot's gateway token and its DeepSeek key                                                                                                                                                     |
+| `searxng/secret_key`                                  | signs searxng's session cookies; upstream's default is the literal `ultrasecretkey`                                                                                                                      |
+| `searxng/admin_user`, `searxng/admin_password_hash`   | searxng has no accounts, so caddy's `basic_auth` is the whole access control. bcrypt, same shape as dozzle's                                                                                             |
+| `serenity/db_password`                                | one password, two consumers: `ALTER ROLE` in postgres and the pgbouncer userlist, both rendered from this key                                                                                            |
 | `navidrome/lastfm/api_key`, `navidrome/lastfm/secret` | one Last.fm application registration, reaching the container as `ND_LASTFM_APIKEY` / `ND_LASTFM_SECRET`. Enables scrobbling server-side; each user still links their own account under Personal Settings |
 
 `acme_email` is **gone** from the secret set: `security.acme` needs it at
@@ -259,7 +259,7 @@ Two manual steps, both once:
    ```
 
    Do this **before** the deploy: `sops-install-secrets` validates the manifest
-   at *build* time, so a missing key fails `nix build`, not just activation.
+   at _build_ time, so a missing key fails `nix build`, not just activation.
 
 2. **Point `pages.<domain>` at the box** — an unproxied A record to the same
    address as `git.`, like the other seven.
@@ -333,7 +333,7 @@ Identical build, push and activation — NixOS calls the same
 nftables or networking and nothing rolls back; you recover from the Hetzner
 console, or by picking the previous generation in the GRUB menu at boot.
 
-Worth using deliberately when you *want* no supervision — e.g. deploying from
+Worth using deliberately when you _want_ no supervision — e.g. deploying from
 the box itself.
 
 ### If deploy-rs ever disappears from GitHub
@@ -362,11 +362,11 @@ Three mitigations, in order of effort:
 
 ## Documentation
 
-| Doc | For |
-|---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | How the box fits together and why: trust boundaries, the two firewalls, TLS/DNS/mail chain, data flow, the deploy and state model, and the failure modes that shaped it |
-| [docs/deploying.md](docs/deploying.md) | The three paths: redeploy, first deploy, bare metal — and the settings that make a bare-metal install actually automatic |
-| [docs/migration.md](docs/migration.md) | Moving this stack from the old Ubuntu/Ansible box: data mapping, ordering, the primary-IP cutover, rollback |
+| Doc                                    | For                                                                                                                                                                     |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ARCHITECTURE.md](ARCHITECTURE.md)     | How the box fits together and why: trust boundaries, the two firewalls, TLS/DNS/mail chain, data flow, the deploy and state model, and the failure modes that shaped it |
+| [docs/deploying.md](docs/deploying.md) | The three paths: redeploy, first deploy, bare metal — and the settings that make a bare-metal install actually automatic                                                |
+| [docs/migration.md](docs/migration.md) | Moving this stack from the old Ubuntu/Ansible box: data mapping, ordering, the primary-IP cutover, rollback                                                             |
 
 ## Development
 
@@ -383,7 +383,7 @@ The devShell is built for all four mainstream systems — `x86_64-linux`,
 `nixos-anywhere`, `nixos-rebuild` and `deploy-rs` included, exists on each.
 Secrets, formatting, `statix` and the hooks work unchanged.
 
-What does *not* carry over is building the system closure. The outputs that
+What does _not_ carry over is building the system closure. The outputs that
 describe the box — `nixosConfigurations`, `packages`, `apps` — are
 `x86_64-linux` only, so `nix build .`, `nix run .` (the QEMU VM) and
 `nix run .#install` fail on anything else: a Mac has no Linux builder at all,
@@ -454,14 +454,14 @@ Forgejo off the GitHub file. Delete it and Forgejo silently starts running a
 workflow written for GitHub, which is how this repo ended up with a red run
 on git.hu-tao.dev.
 
-| File | Runs on | Jobs |
-|---|---|---|
-| `.forgejo/workflows/ci.yml` | the VPS runner | one: `check` — the same checks, in a single job |
-| `.github/workflows/ci.yml` | the GitHub mirror | two: `lint` and `evaluate` |
+| File                        | Runs on           | Jobs                                            |
+| --------------------------- | ----------------- | ----------------------------------------------- |
+| `.forgejo/workflows/ci.yml` | the VPS runner    | one: `check` — the same checks, in a single job |
+| `.github/workflows/ci.yml`  | the GitHub mirror | two: `lint` and `evaluate`                      |
 
-| Check | What |
-|---|---|
-| lint | `pre-commit run --all-files`, then gitleaks across the full history |
+| Check    | What                                                                                                                                                                  |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| lint     | `pre-commit run --all-files`, then gitleaks across the full history                                                                                                   |
 | evaluate | evaluates both `nixosConfigurations`, then `nix flake check --no-build`, then builds deploy-rs's `deploy-schema` and the runner firewall's `runner-firewall-ordering` |
 
 The two differ in exactly two ways, both forced:
@@ -483,7 +483,7 @@ The two differ in exactly two ways, both forced:
   takes without systemd runs `sudo mkdir -p /etc/nix` and that image has no
   sudo. The job is already root, so the sudo bought nothing to begin with.
 
-  A workflow here that *does* want an action must name the host:
+  A workflow here that _does_ want an action must name the host:
   `uses: owner/repo` alone resolves against `[actions] DEFAULT_ACTIONS_URL`,
   which defaults to `https://data.forgejo.org` — that host mirrors `actions/*`
   and nothing third-party, so a bare `cachix/install-nix-action` fails with
@@ -502,13 +502,13 @@ asking a CI runner to realise a multi-gigabyte closure.
 `--no-build` is load-bearing. deploy-rs's `deploy-activate` check references the
 system closure, so a plain `nix flake check` builds the whole system, and since
 deploy-rs `follows` our nixpkgs its binary is a cache miss and is compiled from
-source — 5+ minutes on *every* run, on both forges, because neither runner
+source — 5+ minutes on _every_ run, on both forges, because neither runner
 keeps a nix store between runs. `deploy-schema` is built separately: it is the half that
 validates `deploy.json` and it needs only check-jsonschema.
 
 **The mirror is push-only.** Commit here and let it flow across; anything edited
 on GitHub is overwritten by the next sync, and CI can lag a push until Forgejo's
-mirror job runs (*Synchronize Now* in the repo's mirror settings).
+mirror job runs (_Synchronize Now_ in the repo's mirror settings).
 
 ## Running
 
@@ -571,7 +571,7 @@ Three things worth knowing before the first apply:
 ### State recovery — a fresh clone, or a lost state file
 
 The state file is gitignored, so a clone has none. `apply` from no state builds a
-*second* server and moves DNS to it. Nothing is typed by hand to prevent that:
+_second_ server and moves DNS to it. Nothing is typed by hand to prevent that:
 `tofu/imports.tf` carries an `import` block for every live resource, inert while
 state already tracks them, active when it does not.
 
@@ -602,15 +602,15 @@ now ignores that block for exactly this reason.
 
 Restore or regenerate these. Without them a clone will not deploy.
 
-| What | Where | Notes |
-|---|---|---|
-| `secrets.yaml` | committed but encrypted | Template is `secrets.example.yaml`; the age key it is encrypted to is not here |
-| age private key | `~/.sops-nix/key.txt`, and `/var/lib/sops-nix/key.txt` on the host | Must be a recipient in `.sops.yaml`. Lose every recipient and the secrets are unreadable |
-| restic password | `backups/restic_password` in `secrets.yaml` | The repository password **is** the encryption key. Lose it and every snapshot is permanently unrecoverable — keep a copy outside this repo |
-| DKIM private key | `email/dkim_private_key` | Its public half is published from `tofu/`. Cannot be regenerated without republishing DNS, and a mismatch fails DKIM at every recipient |
-| `tofu/terraform.tfvars` | gitignored | Template is `tofu/terraform.tfvars.example` |
-| Mail store, forgejo repos, minecraft world | docker volumes under `/var/lib/docker/volumes` | Restore before the first boot of a rebuilt host, or the services initialise blank |
-| Every postgres database | `pg_dumpall` under `/var/backup/postgresql`, inside the same restic repository | `zstd -d < all.sql.zstd \| psql -U postgres`. Restore **before** the bot's first start, or its sqlx migrations initialise an empty schema and the dump then collides |
+| What                                       | Where                                                                          | Notes                                                                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `secrets.yaml`                             | committed but encrypted                                                        | Template is `secrets.example.yaml`; the age key it is encrypted to is not here                                                                                       |
+| age private key                            | `~/.sops-nix/key.txt`, and `/var/lib/sops-nix/key.txt` on the host             | Must be a recipient in `.sops.yaml`. Lose every recipient and the secrets are unreadable                                                                             |
+| restic password                            | `backups/restic_password` in `secrets.yaml`                                    | The repository password **is** the encryption key. Lose it and every snapshot is permanently unrecoverable — keep a copy outside this repo                           |
+| DKIM private key                           | `email/dkim_private_key`                                                       | Its public half is published from `tofu/`. Cannot be regenerated without republishing DNS, and a mismatch fails DKIM at every recipient                              |
+| `tofu/terraform.tfvars`                    | gitignored                                                                     | Template is `tofu/terraform.tfvars.example`                                                                                                                          |
+| Mail store, forgejo repos, minecraft world | docker volumes under `/var/lib/docker/volumes`                                 | Restore before the first boot of a rebuilt host, or the services initialise blank                                                                                    |
+| Every postgres database                    | `pg_dumpall` under `/var/backup/postgresql`, inside the same restic repository | `zstd -d < all.sql.zstd \| psql -U postgres`. Restore **before** the bot's first start, or its sqlx migrations initialise an empty schema and the dump then collides |
 
 ## Operations
 
