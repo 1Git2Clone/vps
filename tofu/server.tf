@@ -175,6 +175,17 @@ resource "hcloud_server" "runner" {
     runner = ""
   }
 
+  # The Forgejo uuid+secret, and the ONLY per-instance value this box gets.
+  # modules/runner/identity.nix reads it back at every boot from
+  # http://169.254.169.254/hetzner/v1/userdata — note that path, not the
+  # plausible-looking /hetzner/v1/metadata/userdata, which 404s.
+  #
+  # REPLACE-FORCES-NEW, deliberately. hcloud cannot attach user_data to a server
+  # that already exists, and the alternative — staging the pair on disk during
+  # install — is duplicated by every snapshot taken of this box, which is the
+  # one thing a per-instance credential must never be. See var.runner_identity.
+  user_data = var.runner_identity
+
   # Same reason as the VPS: the firewall is attached by
   # hcloud_firewall_attachment, so a rule change never reads as a server change.
   ignore_remote_firewall_ids = true
