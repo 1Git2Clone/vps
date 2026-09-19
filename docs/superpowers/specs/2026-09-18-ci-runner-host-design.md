@@ -260,9 +260,17 @@ Recreating it once is cheaper than carrying the workaround, and none of those
 four holes exist in code that is not there.
 
 The cost, stated plainly: rotating the runner's secret now means replacing the
-box, and the box's public IPv4 changes with it. Two places pin that address —
-the `output`-chain rule in `modules/firewall.nix` and the ingress rule in
-`tofu/runner-firewall.tf`.
+box, and the box's public IPv4 changes with it. Two places pin that address and
+both are on the VPS side, so both need the new value and a VPS deploy before the
+jump works again:
+
+- `modules/firewall.nix` — the `output`-chain `ip daddr <runner> tcp dport 22`
+  accept, in a policy-drop chain.
+- `tofu/modules/hetzner-firewall/main.tf` — the `destination_ips` on the VPS's
+  cloud-firewall egress rule for `tcp/22`.
+
+`tofu/runner-firewall.tf` does NOT need touching: it filters the runner's own
+public NIC and pins the VPS's address as the source, which does not change.
 
 Each declared record still has to be created in Forgejo by hand. Destroying a
 clone does not delete it; stale records accumulate in Site Administration →
