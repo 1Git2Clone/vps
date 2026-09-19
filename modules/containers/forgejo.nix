@@ -64,6 +64,33 @@ in
       FORGEJO__admin__DISABLE_REGULAR_ORG_CREATION = "true";
       FORGEJO__actions__ENABLED = "true";
 
+      # WITHOUT THIS, THE PAGES WEBHOOK SILENTLY NEVER FIRES.
+      #
+      # ALLOWED_HOST_LIST defaults to `external` (Gitea 1.16 and later), which
+      # permits public addresses and BLOCKS private ones. modules/pages-hook.nix
+      # listens on infra.dockerBridgeGateway — 172.17.0.1, RFC1918 — so every
+      # delivery is refused by Forgejo's own policy before a socket is opened.
+      #
+      # That last part is what makes it nasty to diagnose. There is no dropped
+      # packet, no connection refused, nothing in the kernel log and nothing in
+      # the receiver's journal, because nothing is ever sent. Everything on the
+      # receiving side looks perfect: the socket is listening, the nftables rule
+      # matches, the host itself gets a 200. The refusal is in the sender, and
+      # its only trace is the delivery history inside the hook's own settings
+      # page.
+      #
+      # THE EXACT ADDRESS, not `private` and certainly not `*`. This is an
+      # outbound-request allow-list, so widening it turns the Forgejo instance
+      # into a more capable SSRF tool for anyone who can create a webhook.
+      #
+      # Even at one address the trade is real and worth naming: the list matches
+      # hosts, not host:port, so this permits a webhook aimed at ANYTHING bound
+      # to the bridge address — grafana on 3000 and syncthing's GUI on 8384 bind
+      # 0.0.0.0 and are reachable there. What bounds it is that registration is
+      # disabled on this instance, so the set of people who can create a webhook
+      # is the set who can already reach those services over the tailnet.
+      FORGEJO__webhook__ALLOWED_HOST_LIST = config.infra.dockerBridgeGateway;
+
       FORGEJO__server__DOMAIN = fqdn;
       FORGEJO__server__SSH_DOMAIN = fqdn;
       FORGEJO__server__HTTP_PORT = "4242";

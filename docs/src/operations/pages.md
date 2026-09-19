@@ -146,6 +146,24 @@ mid-deploy, Forgejo's retries can run out, the hook can be switched off in a
 web form nothing here can see. Each of those leaves a site frozen with no error
 anywhere. The sweep makes the worst case "stale for up to an hour".
 
+### Forgejo has to be told the address is allowed
+
+`ALLOWED_HOST_LIST` defaults to `external`, which permits public addresses and
+**blocks private ones** — so out of the box Forgejo refuses to deliver to
+`172.17.0.1` and the webhook silently never fires.
+
+`modules/containers/forgejo.nix` sets it to that exact address. Not `private`,
+and certainly not `*`: this is an outbound-request allow-list, so widening it
+makes the instance a more capable SSRF tool for anyone who can create a
+webhook.
+
+The failure mode is worth knowing because everything on the receiving side
+looks correct while it happens. The socket is listening, the nftables rule
+matches, the host itself gets a 200, and there is no dropped packet, no
+connection refused, nothing in the kernel log and nothing in the receiver's
+journal — because nothing is ever sent. The only trace is the delivery history
+on the hook's own settings page.
+
 ### The one hand-kept value
 
 The hook's Target URL and secret live in a web form, so nothing in this repo
