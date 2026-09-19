@@ -10,12 +10,13 @@ converge run from a workstation) is one layer here: systemd units built from thi
 flake. There is no state on the server that this repo does not describe, and
 nothing to remember to run.
 
-```
+```text
 .
 ├── configuration.nix     # the import list, nothing else
 ├── disk-config.nix       # disko layout + the local QEMU VM
 ├── flake.nix             # nixosConfigurations.vps and .vps-hetzner
 ├── .pre-commit-config.yaml  # the checks, shared by the commit hook and CI
+├── .markdownlint-cli2.yaml  # what the markdown linter checks, and what it skips
 ├── .github/workflows/    # CI, run on the GitHub mirror
 ├── modules/
 │   ├── options.nix       # infra.* — domain, tailnet IP, proxy network
@@ -217,7 +218,7 @@ workflows write into.
 
 The URL layout is the directory layout, with no rewriting anywhere:
 
-```
+```text
 /srv/pages/<owner>/<repo>/index.html   →   https://pages.hu-tao.dev/<owner>/<repo>/
 ```
 
@@ -400,7 +401,7 @@ nixos-rebuild switch --flake .#vps-hetzner \
 check in this flake reaches `nixosConfigurations.*.system.build.toplevel`, so
 the check itself is an `x86_64-linux` build:
 
-```
+```text
 error: build of '…-10-acme.conf.drv^*' failed: platform mismatch
        Required system: 'x86_64-linux'   Current system: 'aarch64-darwin'
 ```
@@ -437,8 +438,15 @@ nix develop -c pre-commit run --all-files
 
 `.pre-commit-config.yaml` is the single definition — the local commit hook and CI
 run the same file, so a check cannot pass here and fail there. It covers nixfmt,
-statix, `tofu fmt`, the usual whitespace/YAML/merge-conflict hooks, and
-**gitleaks** over the staged diff.
+statix, `tofu fmt`, **markdownlint-cli2**, the usual whitespace/YAML/merge-conflict
+hooks, and **gitleaks** over the staged diff.
+
+markdownlint is a linter, not a formatter: it reports a code fence with no
+language or a paragraph past 80 columns, and changes nothing. Formatting is
+prettier's, run by an editor on save rather than by a hook, and
+`.markdownlint-cli2.yaml` is tuned so that prettier's output passes it
+untouched. That file also lists what it deliberately does not lint — the
+generated plan and spec documents under `docs/superpowers/`.
 
 gitleaks scans the staged diff rather than the working directory on purpose:
 `gitleaks dir` reads gitignored files, and `tofu/terraform.tfvars` legitimately
@@ -503,8 +511,8 @@ asking a CI runner to realise a multi-gigabyte closure.
 system closure, so a plain `nix flake check` builds the whole system, and since
 deploy-rs `follows` our nixpkgs its binary is a cache miss and is compiled from
 source — 5+ minutes on _every_ run, on both forges, because neither runner
-keeps a nix store between runs. `deploy-schema` is built separately: it is the half that
-validates `deploy.json` and it needs only check-jsonschema.
+keeps a nix store between runs. `deploy-schema` is built separately: it is the
+half that validates `deploy.json` and it needs only check-jsonschema.
 
 **The mirror is push-only.** Commit here and let it flow across; anything edited
 on GitHub is overwritten by the next sync, and CI can lag a push until Forgejo's
@@ -570,8 +578,9 @@ Three things worth knowing before the first apply:
 
 ### State recovery — a fresh clone, or a lost state file
 
-The state file is gitignored, so a clone has none. `apply` from no state builds a
-_second_ server and moves DNS to it. Nothing is typed by hand to prevent that:
+The state file is gitignored, so a clone has none. `apply` from no state
+builds a _second_ server and moves DNS to it. Nothing is typed by hand to
+prevent that:
 `tofu/imports.tf` carries an `import` block for every live resource, inert while
 state already tracks them, active when it does not.
 
@@ -582,7 +591,7 @@ tofu -chdir=tofu plan
 
 A correct recovery plan reads **exactly**
 
-```
+```text
 Plan: 20 to import, 0 to add, 1 to change, 0 to destroy.
 ```
 
@@ -655,8 +664,8 @@ A scan that cannot run reports a failure — it never degrades into an all-clear
 If a run dies before reporting, an exit trap posts an ABORTED notice, because
 silence and "no findings" must not look the same.
 
-The weekly minecraft job stops both worlds' servers, snapshots, and starts them
-again from `ExecStopPost` — so they come back whether restic succeeded or not. A live
-world is not consistent on disk: the server holds region files open and writes
-them in place, which is why the daily backup excludes that volume and this job
-exists.
+The weekly minecraft job stops both worlds' servers, snapshots, and starts
+them again from `ExecStopPost` — so they come back whether restic succeeded or
+not. A live world is not consistent on disk: the server holds region files open
+and writes them in place, which is why the daily backup excludes that volume and
+this job exists.

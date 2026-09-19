@@ -518,6 +518,7 @@
               # is what CI runs, so the two cannot drift.
               pre-commit
               gitleaks
+              markdownlint-cli2
             ];
           };
 
@@ -532,6 +533,7 @@
               opentofu # tofu fmt
               git
               gitleaks
+              markdownlint-cli2
             ];
           };
 

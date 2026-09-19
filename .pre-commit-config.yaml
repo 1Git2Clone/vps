@@ -56,6 +56,37 @@ repos:
         files: \.tf$
         pass_filenames: false
 
+      # markdown. This is a LINTER ONLY — it reports missing code-fence
+      # languages and over-long prose, and does not reformat anything.
+      #
+      # Formatting is prettier's, and prettier is deliberately NOT a hook here.
+      # An editor runs it on save, so it wins every race regardless of what
+      # this file says; the rules in .markdownlint-cli2.yaml are instead tuned
+      # so that prettier's output passes untouched. Where the two genuinely
+      # disagreed — MD004, because prettier alternates `-` and `*` between
+      # adjacent lists on purpose — the rule is off, and says so.
+      #
+      # The other reason prettier is not here: nixpkgs-26.05 carries 3.8.3,
+      # which MANGLES a paragraph containing both an intraword underscore and
+      # an emphasis span. `a basic_auth thing and _through_ it` comes back as
+      # `a basic*auth thing and \_through* it` — silent corruption of
+      # ARCHITECTURE.md, found by running it. Fixed by 3.9.6, so this becomes
+      # viable after a flake bump — re-run that one-liner through
+      # `nix develop .#ci -c prettier` before trusting it.
+      #
+      # pass_filenames: false, like statix and tofu-fmt above: the file set is
+      # already declared in .markdownlint-cli2.yaml, so `markdownlint-cli2`
+      # typed by hand checks exactly what the hook checks, and a change to the
+      # CONFIG re-checks every document rather than only the ones staged with
+      # it. `files` still gates the hook, so it runs only when markdown is
+      # staged.
+      - id: markdownlint
+        name: markdownlint-cli2
+        entry: nix develop .#ci -c markdownlint-cli2
+        language: system
+        files: \.md$
+        pass_filenames: false
+
       # gitleaks over a hand-rolled "is it still encrypted" grep: it scans the
       # staged diff against a maintained ruleset, so it catches a pasted token
       # anywhere in the tree rather than only a decrypted secrets.yaml.
