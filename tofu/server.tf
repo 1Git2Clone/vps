@@ -172,9 +172,10 @@ resource "hcloud_server" "runner" {
   server_type = var.runner_server_type
 
   # nbg1, NOT var.location. The VPS is pinned to fsn1 because its primary IP is
-  # location-bound and carries the mail reputation; this box has no such tie, and
-  # a private network spans the whole eu-central zone, so the two being in
-  # different cities costs nothing. See network.tf.
+  # location-bound and carries the mail reputation; this box has no such tie. The
+  # two being in different cities costs nothing because they only ever speak over
+  # the public internet: HTTPS to git.<domain> one way, ssh the other. There is
+  # no private link to keep them in a zone for.
   location = "nbg1"
 
   # What the console booted it with. Ignored below, like the VPS's: nixos-anywhere
