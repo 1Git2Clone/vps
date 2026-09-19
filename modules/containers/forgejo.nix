@@ -71,11 +71,20 @@ in
       # a container on this same network, so every delivery is refused by
       # Forgejo's own policy before a socket is opened.
       #
-      # That last part is what makes it nasty to diagnose. There is no dropped
-      # packet, no connection refused, nothing in the kernel log and nothing in
-      # the receiver's journal, because nothing is ever sent. Everything on the
-      # receiving side looks perfect. The refusal is in the SENDER, and its only
-      # trace is the delivery history inside the hook's own settings page.
+      # That last part is what makes it nasty to diagnose: everything on the
+      # RECEIVING side looks perfect. The socket is listening, the rule matches,
+      # and there is no dropped packet, no connection refused and nothing in the
+      # receiver's journal, because nothing is ever sent.
+      #
+      # LOOK AT THE SENDER. Forgejo logs the refusal as an error on its own
+      # service, which is the fastest way to identify this:
+      #
+      #   journalctl -u docker-forgejo | grep -i 'unable to deliver webhook'
+      #
+      # An earlier version of this comment claimed the hook's settings page was
+      # the only trace. That was wrong, and wrong in the direction that costs an
+      # hour: it sends you looking at a web form instead of at the log line that
+      # names the URL and the reason.
       #
       # THE CONTAINER NAME, not an address. This was `infra.dockerBridgeGateway`
       # while the receiver ran on the host, and that was too wide: the list
