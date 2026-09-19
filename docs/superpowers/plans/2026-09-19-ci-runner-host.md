@@ -2229,16 +2229,17 @@ before: stop and check, because a reinstall repartitions the disk.
 - [ ] **Step 5: Dry-run the install**
 
 ```bash
-nix run nixpkgs#nixos-anywhere -- \
-  --flake .#runner-hetzner \
-  --ssh-option ProxyJump=vps \
-  --extra-files "$stage" \
-  --vm-test
+nix run nixpkgs#nixos-anywhere -- --flake .#runner-hetzner --vm-test
 ```
 
-Expected: a VM boots the closure and exits 0. The `--extra-files` tree carries
-the identity and nothing else: this host holds no age key and decrypts nothing,
-which `checks.runner-has-no-secrets` asserts. Note what this does **not** catch —
+**No `--extra-files` here, and no `--ssh-option`.** nixos-anywhere prints
+`--vm-test is not supported with --extra-files` and then **exits 0**, so passing
+it produces a green dry-run that tested nothing. Read the log, not the exit
+code. The identity unit is therefore untested by this step — it has no metadata
+service and no staged file in the VM and will fail there, which is expected; its
+decision table is covered by the harness instead.
+
+Expected: a VM boots the closure. What this does **not** catch —
 `modules/hardware.nix` explains that the harness injects its own virtio modules,
 so a missing driver passes here and fails on the real machine. The module list
 is shared with the VPS, which boots, so the risk is low.
