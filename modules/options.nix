@@ -59,6 +59,44 @@
       '';
     };
 
+    pagesRepos = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "hutao/compress"
+        "skavex/skavex"
+      ];
+      description = ''
+        The repositories whose published pages are served at `pages.<domain>`,
+        as `<owner>/<repo>`. Read by modules/pages-pull.nix, which fetches each
+        one's newest artifact named `pages` and unpacks it into
+        `<pagesVolume>/<owner>/<repo>` — the layout IS the URL, so this list is
+        also the list of paths that answer under pages.<domain>.
+
+        THE LIST EXISTS BECAUSE THE DIRECTION REVERSED. While the runner lived
+        on this box a publishing workflow mounted the pages volume and wrote
+        into it, so nothing here had to know which repos published; the set was
+        whatever had ever run the job. A runner on its own box cannot reach this
+        volume and must not, so the pull side has to be told what to look for.
+
+        Defaulted to what the volume already held on 2026-09-19 rather than left
+        empty: an empty list is a silently no-op timer, which is the failure
+        this repo keeps writing comments about.
+
+        `hutao/critical-forest` is deliberately NOT here even though the volume
+        holds a tree for it: the repo 404s under both `hutao` and `skavex`, so
+        it was renamed or deleted at some point and nothing can be pulled for
+        it. The served tree is left in place — caddy keeps answering that path
+        — but a name that cannot resolve would fail this unit every five
+        minutes forever. A repo that genuinely disappears belongs out of this
+        list, not permanently red in the journal.
+
+        A repo listed here that has never uploaded a `pages` artifact is not an
+        error — the unit logs "no live pages artifact" and leaves any existing
+        tree alone, which is also exactly what it does for a repo whose
+        artifacts have aged out.
+      '';
+    };
+
     publicIPv4 = lib.mkOption {
       type = lib.types.str;
       default = "167.233.24.58";
