@@ -95,19 +95,20 @@ arriving on `tailscale0` onto it.
 
 ```mermaid
 sequenceDiagram
-    participant C as tailnet client
-    participant N as nftables nat, prio -110
-    participant D as docker dstnat
-    participant P as caddy :8443 (tailnet vhosts)
-    participant X as caddy :443 (public vhosts)
+    participant C as client
+    participant N as nat -110
+    participant D as dstnat
+    participant P as caddy
 
-    C->>N: GET https://grafana.hu-tao.dev (:443 on tailscale0)
-    N->>P: rewrite dport 443 → 8443
-    P-->>C: 200
-    Note over N,D: get the priority wrong and docker wins the race
-    C->>D: GET https://grafana.hu-tao.dev
-    D->>X: DNAT to the public listener
-    X-->>C: 404 — no site for this name
+    Note over N: ours
+    Note over D: docker's
+    C->>N: :443 on tailscale0
+    N->>P: rewrite 443 → 8443
+    P-->>C: 200 from the :8443 vhost
+    Note over N,D: wrong priority → docker first
+    C->>D: :443 on tailscale0
+    D->>P: DNAT to the :443 listener
+    P-->>C: 404, no site for this name
 ```
 
 Getting that priority wrong is silent: docker DNATs the packet to caddy's

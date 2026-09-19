@@ -18,7 +18,7 @@ It has no concept of a user, so authentication is the proxy's job — and that
 turns out to have a second-order problem.
 
 ```mermaid
-flowchart LR
+flowchart TB
     c(("client")) --> rl["caddy rate_limit<br/>per client IP"]
     rl -- "over limit" --> r429["429<br/>before any bcrypt"]
     rl -- "under limit" --> ba["basic_auth<br/>cost-14 bcrypt"]

@@ -21,23 +21,24 @@ So the job uploads an artifact and the VPS fetches it.
 
 ```mermaid
 sequenceDiagram
-    participant J as job (runner box)
-    participant F as Forgejo (VPS)
-    participant P as pages-pull.timer (VPS)
-    participant V as pages_data volume
-    participant C as caddy
+    participant J as job
+    participant F as Forgejo
+    participant P as pages-pull
+    participant V as volume
 
-    J->>F: upload artifact named "pages"
-    loop every 5 minutes
-        P->>F: GET /api/v1/repos/<owner>/<repo>/actions/artifacts
-        alt newer artifact than the one on disk
+    Note over J: on the runner box
+    J->>F: upload artifact "pages"
+    Note over F,V: the rest is on the VPS
+    loop every 5 min
+        P->>F: list artifacts
+        alt newer than on disk
             P->>F: download zip
-            P->>V: unpack into <owner>/<repo>
+            P->>V: unpack into owner/repo
         else same artifact
-            Note over P: "already at artifact N", no write
+            Note over P: "already at artifact N"
         end
     end
-    C->>V: read-only
+    Note over V: caddy reads it, read-only
 ```
 
 **Every connection is initiated on the VPS**, and in fact never leaves the host

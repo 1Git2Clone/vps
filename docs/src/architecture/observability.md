@@ -1,16 +1,18 @@
 # Observability
 
 ```mermaid
-flowchart LR
-    bot["serenity bot"] -- OTLP --> tempo["tempo<br/>host net :4317/4318"]
-    tempo --> graf["grafana<br/>host net :3000<br/>tailnet only"]
+flowchart TB
+    bot["serenity bot"] -- OTLP --> tempo["tempo :4317/4318<br/>host net"]
+    tempo --> graf["grafana :3000<br/>tailnet only"]
 
+    graf ~~~ cont
     cont["every container"] -- journald --> doz["dozzle :8080<br/>tailnet"]
     cont -- journald --> jctl["journalctl"]
 
+    doz ~~~ kuma
     kuma["kuma<br/>proxy net"] --> cad["caddy"] --> status["status.hu-tao.dev"]
-    check["kuma-check timer<br/>every 5 min"] -- "probes the PUBLIC page" --> status
-    check -- "ping" --> hc(("healthchecks.io"))
+    check["kuma-check<br/>every 5 min"] -- "probes the PUBLIC page" --> status
+    check -- ping --> hc(("healthchecks.io"))
 
     classDef alert fill:#8c5a1f,stroke:#4d330d,color:#fff
     class check,hc alert
