@@ -126,6 +126,24 @@
       '';
     };
 
+    cacheProxyPort = lib.mkOption {
+      type = lib.types.port;
+      default = 34567;
+      description = ''
+        The Actions cache proxy port, shared by the two things that must agree
+        on it and would otherwise only agree by comment: the runner's own
+        `cache.proxy_port` (modules/runner/default.nix — job containers reach
+        the cache here via ACTIONS_CACHE_URL), and the runner's firewall
+        (modules/runner/firewall.nix — an input rule has to admit exactly this
+        port from the podman bridges).
+
+        Fixed rather than left at the runner's default (random), because a
+        firewall rule cannot name a port the daemon chooses at startup. Same
+        number as the VPS runner's cache port, so it means the same thing on
+        both boxes.
+      '';
+    };
+
     botNetwork = lib.mkOption {
       type = lib.types.str;
       default = "botnet";

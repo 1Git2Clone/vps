@@ -16,8 +16,10 @@
 # with read:repository and not before — do not add one speculatively.
 #
 # NOT a gh-pages branch, which would be the idiomatic shape. That needs
-# git-receive-pack, which modules/containers/caddy.nix denies to runner
-# addresses. Artifacts ride /api/actions_pipeline/*, which it permits.
+# git-receive-pack, which modules/containers/caddy.nix is DESIGNED to deny to
+# runner addresses — not yet built, so treat this as the reason that module
+# exists rather than a control already in force. Artifacts ride
+# /api/actions_pipeline/*, sidestepping the need for it entirely.
 {
   config,
   lib,
