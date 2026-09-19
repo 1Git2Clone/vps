@@ -169,7 +169,7 @@ last."**
 
   It earned its place on the first cold boot after the reboot:
 
-  ```
+  ```text
   curl: (7) Failed to connect to git.hu-tao.dev:443 after 83 ms: Could not connect to server
   forgejo answered after 2 attempt(s)
   ```

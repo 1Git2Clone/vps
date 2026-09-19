@@ -70,8 +70,10 @@ points at database `serenity_discord_bot`, 8.4 MB, 9 tables — and only
 Dumped read-only with `pg_dump --no-owner --no-privileges`, and held in two
 places so it does not live only on the box being retired:
 
-    old box:     ~/migration-dumps/serenity-<timestamp>.sql
-    workstation: ~/migration-dumps/serenity-<timestamp>.sql
+```text
+old box:     ~/migration-dumps/serenity-<timestamp>.sql
+workstation: ~/migration-dumps/serenity-<timestamp>.sql
+```
 
 The bot itself stays on the old box for now. When it is ported, the NixOS side
 needs `services.postgresql` (package 18 to match the source), the database
@@ -94,17 +96,21 @@ from anywhere else with `403 9109: Cannot use the access token from location:
 dependent services anyway, so caddy and DMS come up serving a placeholder and
 nothing looks broken until you check the issuer:
 
-    ssh -p 2222 hutao@<host> sudo cat /var/lib/acme/hu-tao.dev/cert.pem \
-      | openssl x509 -noout -issuer
-    # issuer=CN=minica root ca …   <- placeholder
-    # issuer=C=US, O=Let's Encrypt …  <- real
+```sh
+ssh -p 2222 hutao@<host> sudo cat /var/lib/acme/hu-tao.dev/cert.pem \
+  | openssl x509 -noout -issuer
+# issuer=CN=minica root ca …   <- placeholder
+# issuer=C=US, O=Let's Encrypt …  <- real
+```
 
 Test the token directly rather than by triggering ACME — Let's Encrypt caps
 failed validations at 5 per account per hostname per hour, and lego burns one
 per attempt:
 
-    curl -sS -H "Authorization: Bearer $TOKEN" \
-      'https://api.cloudflare.com/client/v4/zones?name=hu-tao.dev'
+```sh
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  'https://api.cloudflare.com/client/v4/zones?name=hu-tao.dev'
+```
 
 This resolves itself at cutover, when the box inherits the old server's address.
 
@@ -118,8 +124,8 @@ the containers, load the data, start.
 Observed on the freshly installed box, and both are the CORRECT empty-state
 behaviour rather than faults to chase:
 
-- **forgejo** serves HTTP 200 but `/api/v1/version` 404s and `repos: 0` — it is a
-  blank instance that has not been through its install wizard. Restoring
+- **forgejo** serves HTTP 200 but `/api/v1/version` 404s and `repos: 0` — it
+  is a blank instance that has not been through its install wizard. Restoring
   `forgejo_data` is what makes it the real instance; do NOT click through the
   wizard first, or you create a second one.
 - **DMS loops** on `You need at least one mail account to start Dovecot (120s
@@ -219,7 +225,8 @@ but the swap.
 
 ## After it settles
 
-- Attach firewall `11483636` to `163906050` (currently attached only to the old box)
+- Attach firewall `11483636` to `163906050` (currently attached only to the
+  old box)
 - Enable `delete` + `rebuild` protection on `163906050`
 - Import into tofu: server, primary IPs, firewall, rDNS, and the 11 Cloudflare
   records. **Read the plan** — abort if it shows `destroy and then create` on

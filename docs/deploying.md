@@ -280,7 +280,7 @@ after a resize the table still describes the old geometry — `last-lba` points 
 the old final sector, and within that table the last partition genuinely does
 fill the disk. `sfdisk` says so out loud if you read past the numbers:
 
-```
+```text
 GPT PMBR size mismatch (160006143 != 320004095) will be corrected by write.
 The backup GPT table is not on the end of the device.
 ```

@@ -63,7 +63,7 @@ the next deploy rather than the current boot.
 Traffic reaches this box through three doors, and each service sits behind
 exactly one of them.
 
-```
+```text
                     Internet
                        │
         ┌──────────────┼───────────────────────────┐
@@ -182,7 +182,7 @@ issue a second lineage.
 **Mail deliverability depends on three things agreeing**, and they are set in
 three different places:
 
-```
+```text
    PTR (rDNS)              ==   DMS container hostname   ==   MX target
    tofu/rdns.tf                 mailserver.nix                Cloudflare MX
    smtp.hu-tao.dev              smtp.hu-tao.dev               smtp.hu-tao.dev
@@ -294,7 +294,7 @@ generation symlink each time — a _mounted_ template would pin a stale inode (�
 
 ## 8. Data and backups
 
-```
+```text
   docker volumes ─────────────┐
   /var/lib/docker/volumes      │
                                ├──▶ restic ──▶ Backblaze B2   (daily, 00:00–01:00)
@@ -362,7 +362,7 @@ that docker re-reads at start (caddy, cloudflared).
 
 ## 10. Observability
 
-```
+```text
   bot ──OTLP──▶ tempo (host net, :4317/4318) ──▶ grafana (host net, :3000)
                                                    reads tempo; tailnet-only
 
@@ -426,11 +426,12 @@ state. A correct recovery plan is **`20 to import, 0 to add, 1 to change, 0 to
 destroy`** — the one change being three provider-side booleans on
 `hcloud_server.vps` that the importer never sets. **Anything else means stop.**
 
-The sharp edge here (learned the hard way, 2026-09-05): the hcloud provider never
-reads `public_net` into state, so a post-import plan proposes _adding_ it — and on
-this resource that detaches the primary IPs before reattaching. Applying it once
-took the mail IP off a running host. `server.tf` now carries
-`lifecycle.ignore_changes = [public_net]` so the block can never become an action.
+The sharp edge here (learned the hard way, 2026-09-05): the hcloud provider
+never reads `public_net` into state, so a post-import plan proposes _adding_
+it — and on this resource that detaches the primary IPs before reattaching.
+Applying it once took the mail IP off a running host. `server.tf` now carries
+`lifecycle.ignore_changes = [public_net]` so the block can never become an
+action.
 The primary IP is its own resource with delete protection precisely so a mistake
 here is minutes of downtime, not a lost address.
 
