@@ -141,6 +141,6 @@ import {
 # stay Hetzner-managed and auto-delete with the server, which is the right
 # lifecycle for an address that carries neither DNS nor a PTR.
 import {
-  to = hcloud_server.runner
+  to = hcloud_server.runner["forgejo-runner"]
   id = "166488672"
 }

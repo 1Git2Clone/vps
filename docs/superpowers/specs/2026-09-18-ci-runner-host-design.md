@@ -254,20 +254,44 @@ self-consistent stamp, then a reuse branch that trusted `config.yaml`'s
 contents.
 
 **That entire mechanism is deleted.** `tofu/server.tf` sets `user_data` on
-`hcloud_server.runner` from `var.runner_identity`, which replaces the box — an
-empty box holding a nix store and an Actions cache, both caches by definition.
-Recreating it once is cheaper than carrying the workaround, and none of those
-four holes exist in code that is not there.
+`hcloud_server.runner` from `var.runner_identities[each.key]`, which replaces
+the box — an empty box holding a nix store and an Actions cache, both caches by
+definition. Recreating it once is cheaper than carrying the workaround, and none
+of those four holes exist in code that is not there.
+
+### The fleet is in tofu, not just in the image
+
+`hcloud_server.runner` is `for_each = toset(var.runner_names)`. Nothing in
+`modules/runner/` is per-box — the same closure boots on every runner and each
+learns its own identity from its own `user_data` — so adding one is two lines in
+`terraform.tfvars` and an apply: no flake change, no deploy, no commit.
+
+Identities live in a SEPARATE `var.runner_identities` map rather than one map of
+name => identity, because OpenTofu refuses to use a sensitive value as a
+`for_each` argument and marking a map sensitive marks its keys too. Splitting
+keeps the keys usable for iteration and the secrets marked. A `validation` block
+on the map rejects anything that is not `forgejo-runner: <uuid> <secret>` at
+plan time, which is a much faster way to find a typo than a boot-time refusal.
+
+The addresses are a third list, `var.runner_ipv4s`, deliberately NOT derived
+from `hcloud_server.runner[*].ipv4_address`. Deriving them would make every
+firewall rule depend on the servers, so a plan that replaces a box rewrites the
+firewall in the same apply — and the VPS's own copy (`infra.runnerIPv4s`, which
+`modules/firewall.nix` expands into one `ip daddr` accept per entry) is a NixOS
+deploy that tofu cannot sequence anyway. Two explicit lists an operator updates
+together beat one clever list that updates half the control and leaves the other
+half stale.
 
 The cost, stated plainly: rotating the runner's secret now means replacing the
 box, and the box's public IPv4 changes with it. Two places pin that address and
 both are on the VPS side, so both need the new value and a VPS deploy before the
 jump works again:
 
-- `modules/firewall.nix` — the `output`-chain `ip daddr <runner> tcp dport 22`
-  accept, in a policy-drop chain.
-- `tofu/modules/hetzner-firewall/main.tf` — the `destination_ips` on the VPS's
-  cloud-firewall egress rule for `tcp/22`.
+- `infra.runnerIPv4s` in `modules/options.nix` — `modules/firewall.nix` expands
+  it into one `ip daddr <addr> tcp dport 22` accept per entry, in a policy-drop
+  chain. Needs a VPS deploy to take effect.
+- `var.runner_ipv4s` in `tofu/terraform.tfvars` — the `destination_ips` on the
+  VPS's cloud-firewall egress rule for `tcp/22`. Needs a `tofu apply`.
 
 `tofu/runner-firewall.tf` does NOT need touching: it filters the runner's own
 public NIC and pins the VPS's address as the source, which does not change.
@@ -374,8 +398,13 @@ boot, not added after the first ENOSPC.
    secret. Don't put a real key in a template, independent of whether the
    template would misuse it if you forgot.
 4. Power off, snapshot.
-5. A new runner is a server created from that snapshot with its own uuid+secret
-   pair in `user_data`. No deploy, no flake change, no commit.
+5. A new runner is two lines in `terraform.tfvars` — an entry in `runner_names`
+   and its pair in `runner_identities` — plus `tofu apply`. No deploy, no flake
+   change, no commit. Its address then goes into `runner_ipv4s` and
+   `infra.runnerIPv4s` so the jump works, which does need a VPS deploy.
+
+   Pointing new boxes at the snapshot instead of `ubuntu-26.04` is a separate
+   change to `image` in `tofu/server.tf`, once a snapshot exists.
 
 The snapshot carries a warm nix store, which is what keeps a fresh clone from
 paying a cold build — and is the reason the ephemeral follow-up stays cheap if

@@ -143,15 +143,69 @@ variable "bsky_record" {
   description = "Bluesky AT Protocol DID."
 }
 
-variable "runner_server_name" {
+variable "runner_names" {
   description = <<-EOT
-    Name of the CI runner box in the Hetzner console. Like var.server_name this
-    is a label and nothing more — not networking.hostName, not the tailnet node
-    name — and it is kept equal to the live value so a plan never proposes a
-    cosmetic rename.
+    The CI runners, by Hetzner server name. One box per entry; every entry needs
+    a matching key in var.runner_identities.
+
+    A LIST rather than a single name because the runners are meant to be
+    interchangeable. Nothing in `modules/runner/` is per-box: the same closure
+    boots on every one of them and each learns its own identity from its own
+    user_data, so a second runner is an entry here plus its pair in
+    runner_identities -- no flake change, no deploy, no commit.
+
+    Deliberately SEPARATE from runner_identities rather than one map of
+    name => identity: OpenTofu refuses to use a sensitive value as a `for_each`
+    argument, and marking a map sensitive marks its keys too. Splitting keeps
+    the keys usable for iteration and the secrets marked.
+
+    The name here is cosmetic in Forgejo. A runner's display name in Site
+    Administration -> Actions -> Runners comes from networking.hostName, baked
+    into the shared image, and Forgejo tells runners apart by the uuid in
+    `server.connections` regardless. Keep the first entry equal to the live
+    server name so a plan never proposes a cosmetic rename.
   EOT
-  type        = string
-  default     = "forgejo-runner"
+  type        = list(string)
+  default     = ["forgejo-runner"]
+
+  validation {
+    condition     = length(var.runner_names) == length(toset(var.runner_names))
+    error_message = "runner_names must be unique: each entry is one hcloud server."
+  }
+}
+
+variable "runner_identities" {
+  description = <<-EOT
+    Each runner's Forgejo identity, keyed by the same name used in
+    runner_names, as the single line
+
+        forgejo-runner: <uuid> <secret>
+
+    Created by hand at Site Administration -> Actions -> Runners -> Create new
+    runner, which shows the uuid and the secret together exactly once. A record
+    is server-side state with no tie to any machine and is NOT a registration
+    token -- not one-shot, and it does not expire from non-use -- so replacing
+    or reinstalling a box reuses the same pair. Only deleting the record
+    invalidates it, and that invalidates both halves at once.
+
+    `forgejo-runner:` there is a KEY, not a name: modules/runner/identity.nix
+    searches the user-data body for a line starting with it, so the blob may
+    hold other things (a #cloud-config document, other keys) in any order.
+
+    CHANGING AN ENTRY REPLACES THAT BOX. hcloud has no way to set user_data on
+    an existing server, so the provider marks the attribute
+    replace-forces-new. That is acceptable here and nowhere else in this
+    config: a runner holds a nix store and an Actions cache, both caches by
+    definition. Note the box's public IPv4 changes with it -- see
+    var.runner_ipv4s for the two places that pin it.
+  EOT
+  type        = map(string)
+  sensitive   = true
+
+  validation {
+    condition     = alltrue([for v in values(var.runner_identities) : can(regex("^forgejo-runner: [0-9a-fA-F-]{36} [A-Za-z0-9]{32,}$", v))])
+    error_message = "Each identity must be exactly 'forgejo-runner: <uuid> <secret>' -- a 36-char uuid then 32+ alphanumerics. modules/runner/identity.nix refuses anything else at boot, which is a much slower way to find a typo."
+  }
 }
 
 variable "runner_server_type" {
@@ -202,4 +256,26 @@ variable "runner_identity" {
   EOT
   type        = string
   sensitive   = true
+}
+
+variable "runner_ipv4s" {
+  description = <<-EOT
+    The runners' public IPv4 addresses, as /32 CIDRs, for the VPS's egress
+    allow-list: `ssh -J vps root@<runner>` is the permanent admin path, and the
+    runners are deliberately not on the tailnet.
+
+    NOT derived from hcloud_server.runner[*].ipv4_address, though it could be.
+    That would make every firewall rule depend on the servers, so a plan that
+    replaces a box also rewrites the firewall in the same apply -- and the VPS's
+    own nftables copy in modules/firewall.nix (infra.runnerIPv4s) is a NixOS
+    deploy that tofu cannot sequence anyway. Two explicit lists an operator
+    updates together beat one clever list that updates half the control and
+    silently leaves the other half stale.
+
+    Keep this equal to infra.runnerIPv4s in modules/options.nix. A rule here
+    without the matching nftables line is not sufficient: the VPS output chain
+    is policy-drop and swallows the connection before it leaves the box.
+  EOT
+  type        = list(string)
+  default     = ["46.225.61.172/32"]
 }

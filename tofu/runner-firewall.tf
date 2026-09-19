@@ -132,5 +132,5 @@ resource "hcloud_firewall" "runner" {
 # console's web terminal, not a rebuild.
 resource "hcloud_firewall_attachment" "runner" {
   firewall_id = hcloud_firewall.runner.id
-  server_ids  = [hcloud_server.runner.id]
+  server_ids  = [for s in hcloud_server.runner : s.id]
 }

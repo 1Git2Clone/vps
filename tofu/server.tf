@@ -153,7 +153,12 @@ resource "hcloud_server" "vps" {
 #     a nix store and an Actions cache, both of which are caches by definition.
 #     Rescaling it to a CX33 is a normal thing to do to it.
 resource "hcloud_server" "runner" {
-  name        = var.runner_server_name
+  # One box per entry in var.runner_names. Every runner is the same closure with
+  # the same settings; the only thing that differs between them is the identity
+  # in user_data below, which each box reads back from its own metadata service.
+  for_each = toset(var.runner_names)
+
+  name        = each.key
   server_type = var.runner_server_type
 
   # nbg1, NOT var.location. The VPS is pinned to fsn1 because its primary IP is
@@ -184,7 +189,7 @@ resource "hcloud_server" "runner" {
   # that already exists, and the alternative — staging the pair on disk during
   # install — is duplicated by every snapshot taken of this box, which is the
   # one thing a per-instance credential must never be. See var.runner_identity.
-  user_data = var.runner_identity
+  user_data = var.runner_identities[each.key]
 
   # Same reason as the VPS: the firewall is attached by
   # hcloud_firewall_attachment, so a rule change never reads as a server change.

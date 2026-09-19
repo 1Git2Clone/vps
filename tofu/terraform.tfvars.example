@@ -35,14 +35,33 @@ tailnet_ipv4 = "100.101.102.103"
 # Get it from Settings -> Account on BlueSky.
 bsky_record = "did=did:plc:..."
 
-# The CI runner's Forgejo identity, as one line: the uuid and secret shown
-# together exactly once at Site Administration -> Actions -> Runners -> Create
-# new runner. Delivered to the box as Hetzner user_data, which is per-server —
-# that is what lets N clones of one snapshot come up as N distinct runners.
+# === CI runners ===
+# One entry per box, in BOTH lists, keyed by the Hetzner server name. Adding a
+# runner is two lines here and an apply -- nothing in modules/runner/ is
+# per-box, so there is no flake change, no deploy and no commit.
+runner_names = ["forgejo-runner"]
+
+# Each runner's Forgejo identity: the uuid and secret shown together exactly
+# once at Site Administration -> Actions -> Runners -> Create new runner.
+# Delivered to the box as Hetzner user_data, which is per-SERVER -- that is what
+# lets N clones of one snapshot come up as N distinct runners with no state.
 #
-# CHANGING THIS REPLACES THE BOX (hcloud cannot set user_data on an existing
-# server) and its public IPv4 changes with it. See var.runner_identity.
-runner_identity = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 CHANGEME32AlphanumericCharsOrMore"
+# `forgejo-runner:` is a KEY the boot-time parser searches for, not a name; the
+# blob may hold other lines in any order.
+#
+# Separate from runner_names because OpenTofu refuses to use a sensitive value
+# as a for_each argument. CHANGING AN ENTRY REPLACES THAT BOX (hcloud cannot set
+# user_data on an existing server) and its public IPv4 changes with it.
+runner_identities = {
+  "forgejo-runner" = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 CHANGEME32AlphanumericCharsOrMore"
+}
+
+# The same boxes' public IPv4s as /32, for the VPS's egress allow-list -- `ssh
+# -J vps root@<runner>` is the only admin path, since the runners are off the
+# tailnet. Keep equal to infra.runnerIPv4s in modules/options.nix: the cloud
+# firewall and the VPS's nftables are each what survives a misconfiguration of
+# the other, so a rule in one alone is not sufficient.
+runner_ipv4s = ["46.225.61.172/32"]
 
 # Optional overrides:
 # domain      = "hu-tao.dev"

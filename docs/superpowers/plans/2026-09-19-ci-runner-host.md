@@ -2144,8 +2144,18 @@ In `tofu/terraform.tfvars` (gitignored — never in a `.tf` file, never in a
 commit):
 
 ```hcl
-runner_identity = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 <secret>"
+runner_names = ["forgejo-runner"]
+runner_identities = {
+  "forgejo-runner" = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 <secret>"
+}
+runner_ipv4s = ["46.225.61.172/32"]
 ```
+
+Three lists rather than one variable because the runners are meant to multiply:
+adding a second box is an entry in each and an apply. `runner_identities` is
+separate from `runner_names` because OpenTofu will not `for_each` over a
+sensitive value, and it carries a `validation` block that rejects a malformed
+pair at plan time instead of at boot.
 
 - [ ] **Step 2: Plan, and read what it proposes**
 
@@ -2168,16 +2178,17 @@ cd tofu && tofu apply runner.tfplan && tofu output
 Both are on the VPS side, and until both are updated and the VPS is deployed the
 jump in Step 7 cannot connect:
 
-- `modules/firewall.nix` — the `output`-chain accept
-  `ip daddr <runner> tcp dport 22 ct state new accept`. The chain is
-  policy-drop, so a stale address here silently blackholes the jump.
-- `tofu/modules/hetzner-firewall/main.tf` — `destination_ips` on the VPS's
+- `infra.runnerIPv4s` in `modules/options.nix` — `modules/firewall.nix` expands
+  it into one accept per entry. The chain is policy-drop, so a stale address
+  here silently blackholes the jump.
+- `runner_ipv4s` in `tofu/terraform.tfvars` — `destination_ips` on the VPS's
   `tcp/22` egress rule.
 
 `tofu/runner-firewall.tf` needs nothing: it filters the RUNNER's public NIC and
 pins the VPS's address as the source, which has not changed.
 
-Commit the Nix change, `tofu apply` the firewall change, then deploy the VPS:
+`tofu output runner_ipv4s` prints the new address. Commit the Nix change,
+`tofu apply` the firewall change, then deploy the VPS:
 
 ```bash
 deploy .#vps-hetzner
