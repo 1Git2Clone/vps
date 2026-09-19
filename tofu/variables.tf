@@ -239,35 +239,6 @@ variable "runner_server_type" {
   default     = "cx33"
 }
 
-variable "runner_identity" {
-  description = <<-EOT
-    The CI runner's Forgejo identity, as the single line
-
-        forgejo-runner: <uuid> <secret>
-
-    Created by hand at Site Administration -> Actions -> Runners -> Create new
-    runner, which shows the uuid and the secret together exactly once. Consumed
-    at boot by modules/runner/identity.nix, which composes config.yaml from it.
-
-    IT ARRIVES AS user_data BECAUSE user_data IS PER-SERVER. A box built from a
-    snapshot of the runner is a new server and serves its OWN user-data, so N
-    clones of one image come up as N distinct runners with no state, no identity
-    stamping and no provenance checks on disk. That property is the entire
-    reason this is not baked into the image or handed over with
-    nixos-anywhere --extra-files, either of which a snapshot would duplicate.
-
-    CHANGING THIS REPLACES THE BOX. hcloud has no way to set user_data on an
-    existing server, so the provider marks the attribute replace-forces-new.
-    That is acceptable here and nowhere else in this config: the runner holds a
-    nix store and an Actions cache, both caches by definition. Rotating the
-    secret means deleting the Forgejo record, creating a new one, and letting
-    the box be rebuilt — note the public IPv4 changes with it, which
-    modules/firewall.nix and tofu/runner-firewall.tf both pin.
-  EOT
-  type        = string
-  sensitive   = true
-}
-
 variable "runner_ipv4s" {
   description = <<-EOT
     The runners' public IPv4 addresses, as /32 CIDRs, for the VPS's egress
