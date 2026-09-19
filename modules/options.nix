@@ -183,6 +183,28 @@
       '';
     };
 
+    pagesHookPort = lib.mkOption {
+      type = lib.types.port;
+      default = 9000;
+      description = ''
+        Where modules/pages-hook.nix listens for Forgejo's system webhook, and
+        the third place that has to agree on the number: the receiver binds it,
+        modules/firewall.nix admits it from the podman/docker bridges, and the
+        hook's Target URL in Site Administration names it. A shared option is
+        what makes the first two agree structurally; the third is a string in a
+        web form and can only be kept in step by hand.
+
+        Bound to `dockerBridgeGateway` ALONE, never 0.0.0.0. Forgejo is a
+        container on this host, so its delivery never leaves the box — there is
+        no public listener to secure, and the bind address is a second control
+        that would have to fail alongside the firewall rule before anything
+        off-host could reach it.
+
+        Same value as webhook's own default, so `webhook -port` and this agree
+        on the obvious number rather than an arbitrary one.
+      '';
+    };
+
     botNetwork = lib.mkOption {
       type = lib.types.str;
       default = "botnet";
