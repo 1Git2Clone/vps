@@ -230,34 +230,57 @@ characters) before writing anything, and fails the unit — loudly, with a
 message naming which field was wrong — rather than handing the daemon a value
 that will fail three layers downstream. Neither value is ever echoed.
 
-### One source: user-data, because user-data is per-server
+### Two channels, because these boxes are never re-created
 
 `user_data` is server metadata, not image content. A box built from a snapshot
-of the runner is a NEW server and serves its OWN user-data, so N clones of one
+of a runner is a NEW server and serves its OWN user-data, so N clones of one
 image come up as N distinct runners carrying no identity state between them.
-That property is the whole design: it is what makes clone-safety structural
-instead of procedural, and it needs no stamping, no provenance checks, and no
-scrub step to hold.
+That is the preferred channel and every runner tofu *creates* uses it.
 
-An earlier version of this document specified a SECOND source — a file staged
-by `nixos-anywhere --extra-files`, read when the metadata service had nothing —
-for one reason: hcloud cannot attach `user_data` to a server that already
-exists (the provider marks it replace-forces-new), and the first box had been
-created in the console without any. That single workaround cost roughly 400
-lines in `identity.nix`: the staged path itself, an `instance-id:` line to bind
-the file to one machine, a persisted `instance-id` stamp to bind the derived
-state the same way, and a reuse branch for the box whose own user-data would be
-empty forever. Four consecutive adversarial review rounds each found a fresh
-hole in it — a clone inheriting the source box's pair, then a fix that depended
-on a manual scrub, then a staged path that laundered a stolen identity into a
-self-consistent stamp, then a reuse branch that trusted `config.yaml`'s
-contents.
+It cannot be the only one. hcloud treats `user_data` as replace-forces-new, and
+these boxes must not be replaced: CX server types are limited-availability, so
+destroying one to change an attribute risks not getting it back. They are
+delete- and rebuild-protected in the console and in `tofu/server.tf`, and
+`user_data` sits in `ignore_changes` — which suppresses diffs against prior
+state but not a create, so new runners stay self-configuring while existing ones
+are frozen. A box created before this design, including the current one, has
+empty user-data permanently.
 
-**That entire mechanism is deleted.** `tofu/server.tf` sets `user_data` on
-`hcloud_server.runner` from `var.runner_identities[each.key]`, which replaces
-the box — an empty box holding a nix store and an Actions cache, both caches by
-definition. Recreating it once is cheaper than carrying the workaround, and none
-of those four holes exist in code that is not there.
+So the second channel: `nixos-anywhere --extra-files` stages
+`/var/lib/forgejo-runner-identity/userdata`, and `identity.nix` reads it when
+user-data has nothing. The file carries two lines:
+
+```
+instance-id: 166488672
+forgejo-runner: <uuid> <secret>
+```
+
+**The staged file is never deleted, and that is a deliberate reversal.** An
+earlier draft consumed it — deleted it once a token had been derived — for
+credential hygiene. That forced a persisted uuid, an `instance-id` stamp binding
+that uuid to the machine, and an entire reuse branch for the boot after the
+deletion, because the box it was deleted on can never get user-data. Four
+consecutive adversarial review rounds each found a fresh hole in that machinery:
+a clone inheriting the source box's pair, a fix resting on a manual scrub, a
+staged path laundering a stolen identity into a self-consistent stamp, a reuse
+branch trusting `config.yaml`'s contents. Keeping the file makes it a plain,
+re-readable input — no derived state, no stamping, no reuse path — and
+`identity.nix` went from 638 lines to 353.
+
+**What the staged file still needs is a binding to one machine.** Unlike
+user-data it is a file on a disk, and a snapshot copies it. The `instance-id:`
+line is checked against the live metadata value BEFORE the pair is read, so a
+clone that comes up without its own user-data refuses to start rather than
+impersonating the box it was cloned from. The live value is validated as a bare
+number first: an HTTP-200 error page must be a retry, never a "mismatch" that
+refuses a healthy box.
+
+The precedence and every refusal are tested against the generated unit script
+rather than reviewed — eleven cases covering which channel wins, the clone case,
+a staged file with no provenance line, both endpoints failing, and CRLF.
+
+The credential-hygiene concern the deletion was meant to address is real and
+handled where it belongs: scrub the file before imaging, see Snapshot below.
 
 ### The fleet is in tofu, not just in the image
 
@@ -273,19 +296,23 @@ keeps the keys usable for iteration and the secrets marked. A `validation` block
 on the map rejects anything that is not `forgejo-runner: <uuid> <secret>` at
 plan time, which is a much faster way to find a typo than a boot-time refusal.
 
-The addresses are a third list, `var.runner_ipv4s`, deliberately NOT derived
+The addresses are a third map, `var.runner_ipv4s`, deliberately NOT derived
 from `hcloud_server.runner[*].ipv4_address`. Deriving them would make every
 firewall rule depend on the servers, so a plan that replaces a box rewrites the
 firewall in the same apply — and the VPS's own copy (`infra.runnerIPv4s`, which
-`modules/firewall.nix` expands into one `ip daddr` accept per entry) is a NixOS
-deploy that tofu cannot sequence anyway. Two explicit lists an operator updates
+`modules/firewall.nix` expands into one `ip daddr` accept per entry, in key
+order) is a NixOS deploy that tofu cannot sequence anyway. Two explicit lists an operator updates
 together beat one clever list that updates half the control and leaves the other
 half stale.
 
-The cost, stated plainly: rotating the runner's secret now means replacing the
-box, and the box's public IPv4 changes with it. Two places pin that address and
-both are on the VPS side, so both need the new value and a VPS deploy before the
-jump works again:
+The cost, stated plainly: an existing box's identity cannot be rotated through
+tofu at all. Deleting the Forgejo record invalidates the pair, and the new one
+has to be staged over ssh at `/var/lib/forgejo-runner-identity/userdata` (then
+restart `forgejo-runner-identity.service`) rather than applied. Only a box tofu
+creates from scratch takes its pair from `runner_identities`.
+
+The upside of never replacing a box is that its public IPv4 is stable, so the
+two places that pin it stay put:
 
 - `infra.runnerIPv4s` in `modules/options.nix` — `modules/firewall.nix` expands
   it into one `ip daddr <addr> tcp dport 22` accept per entry, in a policy-drop
@@ -293,8 +320,8 @@ jump works again:
 - `var.runner_ipv4s` in `tofu/terraform.tfvars` — the `destination_ips` on the
   VPS's cloud-firewall egress rule for `tcp/22`. Needs a `tofu apply`.
 
-`tofu/runner-firewall.tf` does NOT need touching: it filters the runner's own
-public NIC and pins the VPS's address as the source, which does not change.
+Both are keyed by server name rather than positional, so adding a runner cannot
+silently point an existing one at its neighbour's address.
 
 Each declared record still has to be created in Forgejo by hand, once per
 runner — not once per box. A record is server-side state with no tie to any
@@ -372,36 +399,47 @@ boot, not added after the first ENOSPC.
 
 ## Snapshot and replication
 
-1. Set `runner_identity` in `tofu/terraform.tfvars` to the line
-   `forgejo-runner: <uuid> <secret>` and apply. `user_data` is
-   replace-forces-new, so this destroys and recreates the box — intended, and
-   the reason the whole staged-file mechanism above could be deleted. **The
-   public IPv4 changes.** Update the `output`-chain rule in
-   `modules/firewall.nix` and the ingress rule in `tofu/runner-firewall.tf` to
-   the new address, and deploy the VPS, before the next step.
-2. Install with nixos-anywhere, jumped through the VPS:
-   `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps root@<new ip>`.
-   No `--extra-files`: this host holds no age key and stages no identity —
-   everything per-instance arrives from the metadata service at boot. The
-   private NIC was removed in 5d0ae14, so the target is the public address; the
-   jump is what makes the runner's single ingress rule — `tcp/22` from
-   `167.233.24.58/32` — sufficient.
-3. Before imaging, delete `/var/lib/forgejo-runner/{config.yaml,token}`.
+1. `tofu apply`. The `moved` block in `imports.tf` migrates
+   `hcloud_server.runner` to `hcloud_server.runner["forgejo-runner"]` — a state
+   rename with no infrastructure change, verified as `0 to add, 0 to change, 0
+   to destroy`. Without it, `for_each` reads as destroy-and-create, which on a
+   protected box fails the apply outright and on an unprotected one would have
+   destroyed a limited-availability server to rename a state key.
+2. Stage the identity for the install. The box exists already and can never be
+   given user-data, so this is its permanent source:
+
+   ```bash
+   stage=$(mktemp -d)
+   install -d -m 0700 "$stage/var/lib/forgejo-runner-identity"
+   umask 077
+   # instance-id FIRST, then the pair. Read the secret without echoing it.
+   { echo "instance-id: 166488672"; printf 'forgejo-runner: %s ' "$uuid"; } \
+     > "$stage/var/lib/forgejo-runner-identity/userdata"
+   ```
+
+3. Install, jumped through the VPS:
+   `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps --extra-files "$stage" root@46.225.61.172`.
+   The private NIC was removed in 5d0ae14, so the target is the public address;
+   the jump is what makes the runner's single ingress rule — `tcp/22` from
+   `167.233.24.58/32` — sufficient. The address does not change, because the box
+   is not replaced.
+4. Before imaging, delete `/var/lib/forgejo-runner/{config.yaml,token}` **and**
+   `/var/lib/forgejo-runner-identity/userdata`.
 
    NOT because it saves a failed boot — it does not. A clone created with its
-   own user-data composes cleanly on its first boot whether or not the image
-   carries the source box's stale state, because `identity.nix` reads user-data
-   unconditionally and overwrites both files every time. The reason is
-   credential hygiene: `token` is a LIVE, WORKING credential, valid against
-   Forgejo until someone revokes it, and shipping one inside a disk image means
-   every place that image is stored, copied or backed up also holds a working
-   secret. Don't put a real key in a template, independent of whether the
-   template would misuse it if you forgot.
-4. Power off, snapshot.
-5. A new runner is two lines in `terraform.tfvars` — an entry in `runner_names`
-   and its pair in `runner_identities` — plus `tofu apply`. No deploy, no flake
-   change, no commit. Its address then goes into `runner_ipv4s` and
-   `infra.runnerIPv4s` so the jump works, which does need a VPS deploy.
+   own user-data composes cleanly whether or not the image carries stale state,
+   and a clone created WITHOUT user-data refuses on the `instance-id` check
+   rather than misbehaving. The reason is credential hygiene: `token` and the
+   staged file are LIVE credentials, valid against Forgejo until someone revokes
+   them, and shipping one inside a disk image means every place that image is
+   stored, copied or backed up also holds a working secret. Don't put a real key
+   in a template, independent of whether the template would misuse it.
+5. Power off, snapshot.
+6. A new runner is two lines in `terraform.tfvars` — an entry in `runner_names`
+   and its pair in `runner_identities` — plus `tofu apply`. It gets its identity
+   from `user_data` at create time and needs no staged file at all. Its address
+   then goes into `runner_ipv4s` and `infra.runnerIPv4s` so the jump works,
+   which does need a VPS deploy.
 
    Pointing new boxes at the snapshot instead of `ubuntu-26.04` is a separate
    change to `image` in `tofu/server.tf`, once a snapshot exists.
@@ -425,7 +463,8 @@ unconditionally on every run, from the Nix-built static half
 (`modules/runner/default.nix`) plus the uuid it just read out of user-data.
 Tampering survives until the next boot and no longer, and a changed `capacity`,
 `labels` or `docker_host` in Nix reaches the box the way everything else does.
-The only file that persists between boots is `token`.
+The only files that persist between boots are `token` and, on a box that has
+one, the staged identity it is derived from.
 
 ## VPS-side changes
 

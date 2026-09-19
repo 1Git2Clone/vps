@@ -148,10 +148,20 @@ resource "hcloud_server" "vps" {
 #     that cost 167.233.24.58 on 2026-09-05. This box's addresses
 #     (46.225.61.172 / 2a01:4f8:1c19:cb62::/64) carry no reputation and no PTR,
 #     but churn on a live attachment is still churn.
-#   * protections stay OFF, matching live and matching intent. The VPS turns
-#     them on because a deleted mail server cannot be undeleted; this box holds
-#     a nix store and an Actions cache, both of which are caches by definition.
-#     Rescaling it to a CX33 is a normal thing to do to it.
+#   * protections are ON. An earlier revision of this comment argued they should
+#     stay off because the box holds only caches -- true of the DISK and false
+#     of the box: CX server types are limited-availability, so a destroyed
+#     runner may simply not be re-creatable when it is wanted back. The operator
+#     enabled protection live on 2026-09-19 for exactly that reason, and it is
+#     declared here so a plan never proposes removing it.
+#
+#     THE CONSEQUENCE IS user_data. hcloud treats it as replace-forces-new, and
+#     a protected server cannot be replaced -- so it is in ignore_changes below,
+#     and an already-created box can never be given or handed a new identity
+#     through it. That is what the staged-file channel in
+#     modules/runner/identity.nix exists for. New boxes still get user_data at
+#     CREATE time, where ignore_changes does not apply, so they stay
+#     self-configuring.
 resource "hcloud_server" "runner" {
   # One box per entry in var.runner_names. Every runner is the same closure with
   # the same settings; the only thing that differs between them is the identity
@@ -180,15 +190,20 @@ resource "hcloud_server" "runner" {
     runner = ""
   }
 
-  # The Forgejo uuid+secret, and the ONLY per-instance value this box gets.
+  # Delete and rebuild protection. See the header: CX types are
+  # limited-availability, so "it only holds caches" is an argument about the
+  # disk, not about whether the box can be got back.
+  #
+  # rebuild_protection blocks the hcloud rebuild-from-image action only.
+  # nixos-anywhere is unaffected — it kexecs from inside the running system and
+  # never calls that API.
+  delete_protection  = true
+  rebuild_protection = true
+
+  # The Forgejo uuid+secret. Applied at CREATE time only: see ignore_changes.
   # modules/runner/identity.nix reads it back at every boot from
   # http://169.254.169.254/hetzner/v1/userdata — note that path, not the
   # plausible-looking /hetzner/v1/metadata/userdata, which 404s.
-  #
-  # REPLACE-FORCES-NEW, deliberately. hcloud cannot attach user_data to a server
-  # that already exists, and the alternative — staging the pair on disk during
-  # install — is duplicated by every snapshot taken of this box, which is the
-  # one thing a per-instance credential must never be. See var.runner_identity.
   user_data = var.runner_identities[each.key]
 
   # Same reason as the VPS: the firewall is attached by
@@ -196,6 +211,20 @@ resource "hcloud_server" "runner" {
   ignore_remote_firewall_ids = true
 
   lifecycle {
-    ignore_changes = [ssh_keys, image, public_net]
+    # user_data is here because it is replace-forces-new and these boxes are
+    # protected: without it, editing an identity produces a plan that wants to
+    # destroy a protected server, which fails the apply outright rather than
+    # doing anything useful.
+    #
+    # ignore_changes suppresses diffs against PRIOR STATE, and a create has
+    # none — so a NEW runner still receives its user_data and comes up
+    # self-configuring. Only already-created boxes are frozen, and those take
+    # their identity from the staged file instead.
+    ignore_changes = [
+      ssh_keys,
+      image,
+      public_net,
+      user_data,
+    ]
   }
 }
