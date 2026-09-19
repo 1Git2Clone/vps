@@ -108,7 +108,7 @@ in
   # actually changes, so a no-op deploy does not bounce the listener.
   sops.templates."pages-hook.env" = {
     content = ''
-      PAGES_HOOK_SECRET=${config.sops.placeholder.pages_hook_secret}
+      PAGES_HOOK_SECRET=${config.sops.placeholder.forgejo_system_webhooks_pages_pull_secret}
     '';
     restartUnits = [ "pages-hook.service" ];
   };

@@ -149,7 +149,8 @@ anywhere. The sweep makes the worst case "stale for up to an hour".
 ### The one hand-kept value
 
 The hook's Target URL and secret live in a web form, so nothing in this repo
-can verify they match `infra.pagesHookPort` and `pages/hook_secret`. A mismatch
+can verify they match `infra.pagesHookPort` and
+`forgejo/system_webhooks/pages_pull/secret`. A mismatch
 is at least loud in two places: a 403 in `journalctl -u pages-hook`, and a
 failed delivery in the hook's own history in Site Administration.
 
