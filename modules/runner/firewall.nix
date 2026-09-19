@@ -124,6 +124,10 @@ in
         counter vps_allowed_out { }
         counter vps_allowed_fwd { }
 
+        # Job containers reaching aardvark-dns on the host. Named so the rule
+        # can be asserted rather than eyeballed, like the vps_* pair above.
+        counter dns_from_jobs { }
+
         chain input {
           type filter hook input priority filter; policy drop;
 
@@ -148,6 +152,38 @@ in
           # port rather than accepting the bridges wholesale: there is no reason
           # a job container should reach this host's sshd.
           iifname "podman*" tcp dport ${toString cacheProxyPort} ct state new accept
+
+          # DNS, AND WITHOUT IT NO JOB CAN CHECK OUT ANYTHING. Same input-not-
+          # forward shape as the cache proxy above, and the same shape the VPS's
+          # own firewall.nix documents for the Discord bot: netavark points each
+          # job container's resolv.conf at aardvark-dns, which listens on the
+          # HOST's address on that job's bridge (10.89.x.1). A container
+          # resolving a name is therefore addressing this host, so it arrives at
+          # the input hook and a policy-drop chain with no rule here swallows it.
+          #
+          # Observed rather than predicted. The first real workflow on this box
+          # failed at Checkout with `fatal: unable to access
+          # 'https://git.hu-tao.dev/...': Could not resolve host`, and the kernel
+          # log said exactly why:
+          #
+          #   DROP_in: IN=podman2 SRC=10.89.1.2 DST=10.89.1.1 PROTO=UDP DPT=53
+          #
+          # Note what this is NOT: the forward chain was never involved (its
+          # catch-all drop counter sat at 0 packets throughout), so every rule
+          # about egress and about reaching the VPS was working as designed and
+          # none of them explained the failure. `defaultNetwork.settings.
+          # dns_enabled = true` in modules/runner/default.nix is also not the
+          # fix and was already set — it makes aardvark SERVE the per-job
+          # network, which it was doing; nothing let the query REACH it.
+          #
+          # Scoped to the bridges and to port 53. Jobs get a resolver and
+          # nothing else on this host; the cloud firewall still bounds where the
+          # resolved addresses can be reached. tcp/53 as well as udp/53 because
+          # a response over 512 bytes sets TC and the resolver retries over TCP,
+          # which would otherwise be a slow intermittent failure on large
+          # answers rather than an outright one.
+          iifname "podman*" udp dport 53 ct state new counter name "dns_from_jobs" accept
+          iifname "podman*" tcp dport 53 ct state new counter name "dns_from_jobs" accept
 
           # IPv6's link layer, not a courtesy — path MTU discovery and neighbour
           # discovery break without it, and the failures are slow rather than
