@@ -292,6 +292,152 @@
                       "touch $out";
                 in
                 pkgs.runCommand "runner-has-no-secrets" { } script;
+
+              # The one-way rule, proven rather than asserted. See the header of
+              # tests/runner-firewall.nix — the property it protects is rule
+              # ORDER in two nftables chains, which review cannot see and which
+              # fails silently.
+              #
+              # HAND-RUN ONLY, NOT IN CI: `nix build
+              # .#checks.x86_64-linux.runner-firewall -L`, and it needs a host
+              # with /dev/kvm. It is not in the build step of
+              # .forgejo/workflows/ci.yml or .github/workflows/ci.yml — that
+              # runner is a shared-vCPU Hetzner box with no nested
+              # virtualisation, so a two-node NixOS VM test there falls back to
+              # qemu's TCG software emulation. Measured locally 2026-09-19:
+              # booting these same two nodes to multi-user (nothing else) took
+              # 20s under KVM and 1m40s under a forced-TCG run — 5x just to
+              # boot, before either behavioural subtest runs a single `nc`.
+              # That is not a per-push cost this repo's CI box should carry.
+              # `runner-firewall-ordering` below is the automated stand-in: it
+              # cannot prove the kernel enforces the order, only that the text
+              # is ordered correctly, which is why this check still exists for
+              # a human to run before trusting a change to firewall.nix.
+              runner-firewall = import ./tests/runner-firewall.nix {
+                inherit nixpkgs system;
+              };
+
+              # The static, CI-run counterpart to runner-firewall above. It
+              # cannot prove the kernel enforces the one-way rule — only a
+              # booted VM sending real packets can, which is what
+              # runner-firewall is for — but it catches the exact regression
+              # that check exists for (the VPS rules sinking below a broad
+              # accept) by grepping the EVALUATED ruleset for line order, needs
+              # no KVM, and builds in seconds. Wired into
+              # .forgejo/workflows/ci.yml's build step, so a reordering is
+              # caught on every push rather than only when someone remembers
+              # to hand-run the VM test.
+              #
+              # `ruleset` is a plain Nix string built from config values
+              # (infra.publicIPv4, infra.cacheProxyPort, a literal /64) with no
+              # package or derivation spliced in — confirmed with
+              # `builtins.hasContext` returning false — so writing it out with
+              # writeText does not drag in a closure the way deploy.json did
+              # above; nothing here is realised beyond this tiny derivation and
+              # the coreutils/gnugrep already in the closure.
+              #
+              # Anchored on the named counters and the literal accept lines
+              # rather than on infra.publicIPv4's value, so the pattern does
+              # not have to track the real address and stays meaningful against
+              # the test override in tests/runner-firewall.nix too. Every
+              # pattern is required to match EXACTLY ONCE, not just "at
+              # least once" — a rule that was renamed or deleted exits 1
+              # rather than silently comparing nothing, which would otherwise
+              # make "the rules are missing" look identical to "the rules are
+              # correctly ordered".
+              #
+              # Exactly-once is load-bearing, not belt-and-braces: a fix-round
+              # review found `counter name vps_blocked_fwd` also matching
+              # `counter name vps_blocked_fwd6` (same for _out), so deleting
+              # the v4 forward drop rule outright left the pattern satisfied by
+              # its v6 sibling and this check went GREEN over a deleted rule —
+              # the exact vacuous-pass class this check exists to prevent,
+              # relocated from comments (round 1's false positive) to a
+              # same-prefix sibling rule. Fixed two ways: the four
+              # `counter name vps_*` patterns below are anchored with a
+              # trailing space so `vps_blocked_fwd ` cannot match
+              # `vps_blocked_fwd6` (no `6` variant exists for the two
+              # `_allowed_*` counters today, but nothing stops one being added
+              # later, so all four got the anchor rather than only the two
+              # currently ambiguous); and `line()` itself now rejects ANY
+              # pattern matching more than once, so a future ambiguity this
+              # review did not think of fails loudly instead of silently
+              # picking a line.
+              runner-firewall-ordering =
+                let
+                  ruleset = self.nixosConfigurations.runner-hetzner.config.networking.nftables.ruleset;
+                  rulesetFile = pkgs.writeText "runner-nftables-ruleset.nft" ruleset;
+                in
+                pkgs.runCommand "runner-firewall-ordering" { } ''
+                  set -euo pipefail
+
+                  # firewall.nix's ruleset string carries its own `#` nft
+                  # comments (e.g. "`iifname \"podman*\" accept`, for the same
+                  # first-match reason"), and one of them literally quotes a
+                  # pattern this check greps for — a real false-positive found
+                  # while writing this, not a hypothetical. Blank full-line
+                  # comments (keep the line so numbers still line up with the
+                  # original file) before searching, so a comment can never be
+                  # mistaken for the rule it is describing.
+                  clean=$(mktemp)
+                  sed -E 's/^([[:space:]]*)#.*/\1/' ${rulesetFile} > "$clean"
+
+                  # Prints the one matching line number. Fails loudly — never
+                  # silently — both when the pattern is absent (renamed or
+                  # deleted) and when it matches more than once: an ambiguous
+                  # pattern is exactly how a deleted vps_blocked_fwd rule once
+                  # passed this check by having vps_blocked_fwd6 answer for it,
+                  # so "matches something" is not enough, it must match
+                  # exactly the one line it is meant to identify.
+                  line() {
+                    local pattern=$1
+                    local matches count n
+                    matches=$(grep -nF -- "$pattern" "$clean") || true
+                    count=$(printf '%s\n' "$matches" | grep -c . || true)
+                    if [ "$count" -eq 0 ]; then
+                      echo "runner-firewall-ordering: pattern not found (renamed or deleted?): $pattern" >&2
+                      exit 1
+                    fi
+                    if [ "$count" -gt 1 ]; then
+                      echo "runner-firewall-ordering: pattern matched $count lines, expected exactly 1 (tighten it so it identifies one rule): $pattern" >&2
+                      echo "$matches" >&2
+                      exit 1
+                    fi
+                    n=$(printf '%s\n' "$matches" | cut -d: -f1)
+                    echo "$n"
+                  }
+
+                  # Trailing space on the four counter-name patterns: without
+                  # it, "vps_blocked_fwd" is a PREFIX of "vps_blocked_fwd6"
+                  # and grep -F matches it there too — see the comment above.
+                  allowed_out=$(line 'counter name vps_allowed_out ')
+                  blocked_out=$(line 'counter name vps_blocked_out ')
+                  podman_out=$(line 'oifname "podman*" accept')
+                  portlist_out=$(line 'tcp dport { 53, 80, 443 }')
+
+                  allowed_fwd=$(line 'counter name vps_allowed_fwd ')
+                  blocked_fwd=$(line 'counter name vps_blocked_fwd ')
+                  podman_fwd=$(line 'iifname "podman*" accept')
+
+                  fail=0
+                  above() {
+                    local vpsLine=$1 broadLine=$2 chain=$3 broadName=$4
+                    if [ "$vpsLine" -ge "$broadLine" ]; then
+                      echo "runner-firewall-ordering: $chain chain: line $vpsLine does not sit above line $broadLine ($broadName) — the VPS rule and $broadName are in the wrong order" >&2
+                      fail=1
+                    fi
+                  }
+
+                  above "$allowed_out" "$podman_out" output 'oifname "podman*" accept'
+                  above "$blocked_out" "$podman_out" output 'oifname "podman*" accept'
+                  above "$allowed_out" "$portlist_out" output 'the port allow-list'
+                  above "$blocked_out" "$portlist_out" output 'the port allow-list'
+                  above "$allowed_fwd" "$podman_fwd" forward 'iifname "podman*" accept'
+                  above "$blocked_fwd" "$podman_fwd" forward 'iifname "podman*" accept'
+
+                  [ "$fail" -eq 0 ] || exit 1
+                  touch $out
+                '';
             };
           };
 
