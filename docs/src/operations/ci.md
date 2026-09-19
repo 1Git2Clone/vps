@@ -7,11 +7,11 @@ Forgejo off the GitHub file. Delete it and Forgejo silently starts running a
 workflow written for GitHub, which is how this repo once ended up with a red
 run on git.hu-tao.dev.
 
-| File                           | Runs on                  | Jobs                           |
-| ------------------------------ | ------------------------ | ------------------------------ |
-| `.forgejo/workflows/ci.yml`    | the dedicated runner box | one: `check`                   |
-| `.forgejo/workflows/pages.yml` | the dedicated runner box | one: `docs` — builds this book |
-| `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`     |
+| File                           | Runs on                  | Jobs                                         |
+| ------------------------------ | ------------------------ | -------------------------------------------- |
+| `.forgejo/workflows/ci.yml`    | the dedicated runner box | one: `check`                                 |
+| `.forgejo/workflows/pages.yml` | the dedicated runner box | one: `pages` — builds this book, `main` only |
+| `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                   |
 
 | Check    | What                                                                                                                                                              |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,13 +38,11 @@ Not tidiness — each difference is forced.
   its own `git fetch` in place of `actions/checkout`.
 
   `pages.yml` is the exception that proves it. It needs one action —
-  `upload-artifact`, which has no shell equivalent — so it installs node from
-  the flake's own nixpkgs into `/root/.nix-profile` first. That path is the
-  first entry of the image's own `PATH`, so the binary is found by the
-  container rather than by anything the runner has to agree to carry forward.
-  Skipping that step fails the job with
-  `crun: executable file 'node' not found in $PATH` before the action runs at
-  all.
+  `upload-artifact`, which has no shell equivalent — so it puts the dev shell's
+  node on `$GITHUB_PATH` first, which is why `nodejs` is in the `ci` shell
+  despite nothing here being a node project. Skipping that step fails the job
+  with `crun: executable file 'node' not found in $PATH` before the action runs
+  at all. `skavex` and `hutao/compress` publish the same way.
 
   The image is not only a saving, it is the fix: on `ubuntu-latest`
   (`node:22-bookworm`) `install-nix-action` exits 127, because the branch it

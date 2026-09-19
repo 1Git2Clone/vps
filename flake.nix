@@ -541,6 +541,13 @@
               markdownlint-cli2
               mdbook
               mdbook-mermaid
+              # NOT for building anything here — nothing in this repo is a node
+              # project. It is for .forgejo/workflows/pages.yml, which runs on
+              # the `nix` label (nixos/nix, no node) and needs one to execute
+              # forgejo/upload-artifact, a JavaScript action. Taking it from
+              # this shell is how skavex does it: pinned by flake.lock, rather
+              # than a second toolchain installed into the job container.
+              nodejs
             ];
           };
 
