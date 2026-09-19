@@ -2126,21 +2126,28 @@ box holds a nix store and an Actions cache and nothing else, so replacing it
 costs a rebuild of caches; its public IPv4 changes, which is the part that needs
 care.
 
-- [ ] **Step 1: Create the runner record in Forgejo**
+- [ ] **Step 1: Put the EXISTING pair in tfvars**
 
-Site Administration → Actions → Runners → Create new runner. It shows a uuid and
-a secret together exactly once. Nothing else needs doing there.
+The runner record for this box already exists —
+`187cde37-2e9b-4601-b431-b437e7f83bc4`. It does not need recreating, and
+replacing the Hetzner box does not invalidate it: a declared uuid+secret is
+server-side state in Forgejo, unrelated to any machine. It is NOT a
+registration token — not one-shot, and it does not expire from non-use — so a
+pair that was staged but never consumed is still live. Only deleting the record
+in Site Administration → Actions → Runners invalidates it, and that invalidates
+both halves at once.
 
-- [ ] **Step 2: Put the pair in tfvars**
+Create a NEW record only when adding another runner, or when deliberately
+rotating this one's secret.
 
 In `tofu/terraform.tfvars` (gitignored — never in a `.tf` file, never in a
 commit):
 
 ```hcl
-runner_identity = "forgejo-runner: <uuid> <secret>"
+runner_identity = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 <secret>"
 ```
 
-- [ ] **Step 3: Plan, and read what it proposes**
+- [ ] **Step 2: Plan, and read what it proposes**
 
 ```bash
 cd tofu && tofu plan -out=runner.tfplan
@@ -2150,13 +2157,13 @@ Expected: `hcloud_server.runner` **must be replaced**, and nothing else changes.
 A plan that touches `hcloud_server.main`, any DNS record, or any firewall is
 wrong — stop and read it rather than applying.
 
-- [ ] **Step 4: Apply, and capture the new address**
+- [ ] **Step 3: Apply, and capture the new address**
 
 ```bash
 cd tofu && tofu apply runner.tfplan && tofu output
 ```
 
-- [ ] **Step 5: Repoint the two places that pin the runner IPv4**
+- [ ] **Step 4: Repoint the two places that pin the runner IPv4**
 
 Both are on the VPS side, and until both are updated and the VPS is deployed the
 jump in Step 7 cannot connect:
@@ -2176,7 +2183,7 @@ Commit the Nix change, `tofu apply` the firewall change, then deploy the VPS:
 deploy .#vps-hetzner
 ```
 
-- [ ] **Step 6: Confirm the target is the fresh bootstrap image**
+- [ ] **Step 5: Confirm the target is the fresh bootstrap image**
 
 ```bash
 timeout 20 ssh -o BatchMode=yes -J vps root@<new ip> \
@@ -2190,7 +2197,7 @@ one is the whole point of this task and is worth seeing before the install, not
 after. A 204 means `user_data` did not reach the server and the install will
 come up with no identity.
 
-- [ ] **Step 7: Dry-run the install**
+- [ ] **Step 6: Dry-run the install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
@@ -2205,7 +2212,7 @@ holds no age key and stages no identity. Note what this does **not** catch —
 so a missing driver passes here and fails on the real machine. The module list
 is shared with the VPS, which boots, so the risk is low.
 
-- [ ] **Step 8: Install**
+- [ ] **Step 7: Install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
@@ -2217,7 +2224,7 @@ nix run nixpkgs#nixos-anywhere -- \
 Expected: kexec, disko partitions `/dev/sda`, the closure copies, the machine
 reboots. Several minutes. **Irreversible** — it repartitions the disk.
 
-- [ ] **Step 9: Verify the box came up as NixOS**
+- [ ] **Step 8: Verify the box came up as NixOS**
 
 ```bash
 timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> \
@@ -2227,7 +2234,7 @@ timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> \
 Expected: `Operating System: NixOS 26.05`, hostname `forgejo-runner`. A
 `degraded` state is not automatically a failure — check which unit next.
 
-- [ ] **Step 10: Verify the identity unit and the daemon**
+- [ ] **Step 9: Verify the identity unit and the daemon**
 
 ```bash
 timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> '
@@ -2252,7 +2259,7 @@ uuid and secret shapes before the daemon sees them, so a malformed pair fails
 loudly in the identity unit instead — a loop here means Forgejo rejected a
 well-formed credential, i.e. the record was deleted or the secret is stale.
 
-- [ ] **Step 11: Confirm it appears in Forgejo**
+- [ ] **Step 10: Confirm it appears in Forgejo**
 
 Site Administration → Actions → Runners. Expected: a runner named
 `forgejo-runner`, status **Idle**, carrying the four labels.
