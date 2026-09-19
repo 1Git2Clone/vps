@@ -236,3 +236,65 @@ but the swap.
 - Port serenity-bot properly (Rust + sqlx, needs a Nix build, `services.postgresql`
   with the dump restored, and its `.env` in sops)
 - From then on deploys are `deploy .#vps` — auto-rollback on lockout
+
+## What changed in the port
+
+Not a 1:1 translation. The deliberate departures:
+
+- **Data lives in named docker volumes**, never a bind-mounted host directory.
+  `services.restic` backs up `/var/lib/docker/volumes` wholesale, so a service
+  added later is covered the moment it declares a volume. A backup that has to
+  be told about each new service is a backup that eventually stops covering one.
+  The Ansible roles' data guards (`assert` that `data/world` exists before
+  provisioning) have no equivalent and need none — there is no path to point at
+  the wrong place.
+
+- **Configuration comes from the Nix store**, read-only. Store files are 0444,
+  which is what the tempo (uid 10001) and grafana (uid 472) permission failures
+  in the Ansible setup were about; and a store path changes when its content
+  does, so systemd recreates the container on a config-only change. That is what
+  `recreate: always` was working around.
+
+- **Certificates are `security.acme`**, not a certbot container plus cron. The
+  certificate is _named_ `hu-tao.dev` with the subdomains as SANs, so reordering
+  the list cannot silently issue a second lineage the way certbot's
+  name-after-the-first-`-d` behaviour could. Note NixOS calls the key
+  `key.pem`, not certbot's `privkey.pem`, and DMS reads it with
+  `SSL_TYPE=manual` rather than guessing from `$SSL_DOMAIN`.
+
+- **Images pin a release tag and no digest.** The Ansible repo pinned
+  `tag@sha256:…`; the digests have since gone stale, and a release tag has been
+  the more stable of the two in practice. `:latest` is still never used — for
+  tempo it is a main-branch build that reports a version which was never
+  released.
+
+- **Real credentials everywhere.** Grafana's anonymous-Admin access is off and
+  the login comes from sops, as do dozzle's bcrypt hash and minecraft's RCON
+  password. **uptime-kuma is the exception, unavoidably**: it has no environment
+  variable or config file that seeds an admin account — the first visitor is
+  prompted to create one and the route then closes. Create it immediately after
+  the first deploy. **searxng is the other exception, for the opposite reason**:
+  it has no concept of a user at all, so there is nothing to seed — caddy's
+  `basic_auth` is the entire access control and the hash lives in sops. Because
+  `basic_auth` runs a cost-14 bcrypt on every request, caddy's `rate_limit`
+  (a compiled-in module) sits in front of it and returns 429 before the hash
+  runs, so a password flood cannot become CPU exhaustion. It is in-process on
+  purpose — see the fail2ban row in [Failure modes](../operations/recovery.md#the-fail2ban-blast-radius)
+  for the forward-chain ban whose blast radius it avoids.
+
+  Generate that hash with `mkpasswd`, which is already on the host:
+
+  ```sh
+  mkpasswd -m bcrypt -R 14
+  ```
+
+  **`-R 14` is not optional.** mkpasswd defaults to cost 05 and caddy's own
+  `hash-password` uses 14, so the default silently produces a hash 512x cheaper
+  to attack than the one caddy would have made. The `$2b$` prefix mkpasswd emits
+  is fine — caddy verifies through golang.org/x/crypto/bcrypt, which records the
+  minor version without validating it, so `$2a$`, `$2b$` and `$2y$` are
+  interchangeable.
+
+- **Not ported: `camofox` and `serenity-bot`.** They are host systemd units for
+  an npm project and a Rust binary checked out under `/home`, not container
+  services, and they depend on trees this image does not create.

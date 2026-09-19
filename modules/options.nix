@@ -68,6 +68,11 @@
       default = [
         "hutao/compress"
         "skavex/skavex"
+        # This repo's own handbook, built by .forgejo/workflows/pages.yml and
+        # served at pages.<domain>/hutao/vps/docs/. The artifact stages the
+        # book under `docs/`, so the trailing path segment comes from the
+        # artifact's layout rather than from anything here.
+        "hutao/vps"
       ];
       description = ''
         The repositories whose published pages are served at `pages.<domain>`,

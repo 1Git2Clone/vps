@@ -73,8 +73,8 @@ in
     #
     # 13.0.8 -> 13.2.2 crosses two minors and is taken for the CVEs fixed
     # across 13.1.5, 13.1.6, 13.2.1 and 13.2.2, not for anything new. This
-    # port is tailnet-only (ARCHITECTURE.md §3), so none of them was reachable
-    # from the internet — the bump is hygiene, not an incident.
+    # port is tailnet-only (docs/src/architecture/network.md), so none of
+    # them was from the internet — the bump is hygiene, not an incident.
     #
     # grafana.db migrates FORWARD on first start and grafana does not support
     # downgrading. Re-deploying the previous generation therefore runs the old

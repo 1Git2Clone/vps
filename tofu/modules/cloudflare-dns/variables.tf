@@ -41,7 +41,8 @@ variable "tailnet_ipv4" {
 
     A CGNAT address in public DNS looks alarming and is not: 100.64.0.0/10 is
     unroutable on the internet, so the record is a dead end for anyone off the
-    tailnet, and four further layers sit behind it (ARCHITECTURE.md §3).
+    tailnet, and four further layers sit behind it (see the handbook's
+    "Network and trust boundaries").
 
     A RECORDS RATHER THAN A CNAME to the node's MagicDNS name, which was the
     first design here. Tailscale does NOT publish <node>.<tailnet>.ts.net in

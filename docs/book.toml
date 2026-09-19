@@ -1,0 +1,61 @@
+# ==============================================================================
+# The handbook — mdBook configuration
+# ==============================================================================
+# `docs/src/` is the source, `docs/book/` is the render, and the render is
+# gitignored: it is a build artifact that the pages workflow produces and the
+# VPS pulls. See .forgejo/workflows/pages.yml and modules/pages-pull.nix.
+#
+#   nix develop -c mdbook serve docs --open     # live reload while writing
+#   nix develop -c mdbook build docs            # what CI does
+#   nix develop -c mdbook test docs             # no-op today; no rust samples
+#
+# WHY A BOOK AND NOT A FLAT FOLDER. Every page here used to be a section of one
+# 483-line ARCHITECTURE.md, and the thing that file could not do was let you
+# arrive at one answer. A search result pointed at a file, not a section; a link
+# from a module comment had to name an anchor that renumbered whenever a section
+# was inserted. The book gives every topic its own URL and its own place in a
+# sidebar, which is what makes the module comments able to point AT something.
+
+[book]
+title = "hu-tao.dev infrastructure"
+description = "How one NixOS box and its CI runner are put together, and why."
+authors = ["hutao"]
+language = "en"
+src = "src"
+
+[build]
+# A link to a page that does not exist is a broken link in the published site,
+# and the published site is the thing people actually read. Fail the build
+# instead — CI runs `mdbook build`, so this turns a dead cross-reference into a
+# red run rather than a 404 nobody reports.
+create-missing = false
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+# Rendered natively by Forgejo too. Every diagram in this book is a ```mermaid
+# fence, which means the SAME source renders in three places with no build
+# step: here, in the Forgejo web UI when you browse docs/src/, and in a pull
+# request that changes one. That is the entire reason the diagrams are not
+# SVGs, D2, or the ASCII art they replaced — a picture that only exists after a
+# build is a picture nobody sees while reviewing the change that invalidates
+# it. Forgejo bundles mermaid 11.16.1; the book carries its own copy so it also
+# works offline and off-instance.
+#
+# The two files named below are NOT in git. `mdbook-mermaid install docs`
+# writes them here, pinned by flake.lock, and `nix run .#docs` does that for
+# you. Without them this build fails outright with "failed to open
+# mermaid.min.js for hashing" — which is the intended behaviour, since the
+# alternative is silently publishing un-rendered code fences.
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+git-repository-url = "https://git.hu-tao.dev/hutao/vps"
+edit-url-template = "https://git.hu-tao.dev/hutao/vps/_edit/main/docs/{path}"
+# The published site lives under /hutao/vps/docs/ on pages.hu-tao.dev, never at
+# a domain root, so every asset reference has to be relative. mdBook does that
+# by default; this is here to state that the prefix is not configurable from
+# inside the book and must not be hard-coded into a link.
+site-url = "/hutao/vps/docs/"
+
+[output.html.search]
+enable = true

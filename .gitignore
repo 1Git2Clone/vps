@@ -11,3 +11,14 @@ tofu/.terraform.tfstate.lock.info
 # Plan files embed variable values — including tokens — in cleartext.
 tofu/*.tfplan
 tofu/*.tfplan.json
+
+# mdBook output. Built by .forgejo/workflows/pages.yml and published as an
+# artifact; never committed.
+docs/book/
+
+# Written verbatim by `mdbook-mermaid install docs`, which is a step in the
+# pages workflow and in `nix run .#docs`. 2.6 MB of vendored minified JS whose
+# version is already pinned by flake.lock — committing it would put the same
+# bytes in git history on every mdbook-mermaid bump.
+docs/mermaid.min.js
+docs/mermaid-init.js
