@@ -176,7 +176,9 @@ last."**
 
   The first probe failed. Without the gate, that is the runner exiting 1.
 
-- `ARCHITECTURE.md` §12 gains a row for the deploy-rs abort behaviour.
+- The handbook's [Failure modes](../../operations/recovery.md#the-abort-that-was-worse-than-the-failure)
+  gains a row for the deploy-rs abort behaviour. _(Done; it was
+  `ARCHITECTURE.md` §12 when this was written.)_
 
 ## 9. Action items
 

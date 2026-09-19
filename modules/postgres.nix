@@ -23,7 +23,7 @@ let
   # emits `ALTER TABLE ... OWNER TO <role>`, which hard-fails under
   # ON_ERROR_STOP if the role is absent — so the dump decides this name, and
   # renaming it means rewriting the dump. See "Restoring a postgres dump into a
-  # new service" in docs/deploying.md.
+  # new service" in docs/src/operations/provisioning.md.
   role = "serenity";
 
   passwordFile = config.sops.secrets.serenity_db_password.path;

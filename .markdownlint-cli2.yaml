@@ -32,6 +32,9 @@ ignores:
   # would tax every future plan for no reader's benefit. They are still
   # prettier-formatted, because that is what an editor does on save.
   - "docs/superpowers/**"
+  # mdBook's render, not its source. docs/src/** IS linted — that is the point
+  # of having a book — but docs/book/** is generated output and gitignored.
+  - "docs/book/**"
   # Untracked scratch. Never reaches pre-commit, but `markdownlint-cli2` run
   # by hand globs the working tree and would find them.
   - ".remember/**"
@@ -63,6 +66,11 @@ config:
     tables: false
     code_blocks: false
 
+  # MD025 (single-h1) is NOT listed here. mdBook's SUMMARY.md uses a
+  # top-level heading as a PART divider, so a three-part book has three of
+  # them by design — but that is one file, and the rule is right everywhere
+  # else. It is disabled inline in SUMMARY.md itself rather than globally.
+  #
   # Fenced, always. Without this the rule infers the style from whichever kind
   # of block appears FIRST in a file, so one indented block at the top makes
   # every fence below it an error.
