@@ -89,30 +89,52 @@ Three of them also answer by name — `dozzle.`, `grafana.` and `syncthing.` —
 and that is the same mechanism wearing a hat. Caddy runs a **second listener**
 on `infra.tailnetHttpsPort` (8443) carrying those three vhosts and nothing
 else; like every other private port it is published on `0.0.0.0` and kept
-private by being in neither allow-list. What makes the URL portless is a `nat`
-chain at priority **-110**, ten ahead of docker's `dstnat`, rewriting port 443
-arriving on `tailscale0` onto it.
+private by being in neither allow-list.
 
-```mermaid
-sequenceDiagram
-    participant C as client
-    participant N as nat -110
-    participant D as dstnat
-    participant P as caddy
+What makes the URL portless is two lines in a `nat` prerouting chain:
 
-    Note over N: ours
-    Note over D: docker's
-    C->>N: :443 on tailscale0
-    N->>P: rewrite 443 → 8443
-    P-->>C: 200 from the :8443 vhost
-    Note over N,D: wrong priority → docker first
-    C->>D: :443 on tailscale0
-    D->>P: DNAT to the :443 listener
-    P-->>C: 404, no site for this name
+```text
+type nat hook prerouting priority -110; policy accept;
+iifname tailscale0 tcp dport 443 redirect to :8443
+iifname tailscale0 tcp dport 80  redirect to :8880
 ```
 
-Getting that priority wrong is silent: docker DNATs the packet to caddy's
-_public_ listener first and the name 404s.
+Two details in those lines do all the work, and they are independent:
+
+- **`iifname tailscale0`** is what keeps this off public traffic. A request
+  arriving on the public interface never matches, so it falls through to
+  docker's own prerouting and reaches caddy's ordinary `:443` listener exactly
+  as it always did. This chain cannot affect a public vhost.
+- **priority `-110`** is ten ahead of docker's `dstnat` at `-100`, and that
+  ordering is the entire control. Both chains run on the same hook; the lower
+  number runs first.
+
+```mermaid
+flowchart TB
+    pkt["tcp dport 443"] --> iif{"which interface?"}
+
+    iif -- "public" --> dn["docker dstnat -100<br/>ours never matched"]
+    dn --> pub443["caddy :443<br/>public vhosts"] --> ok1(["200"])
+
+    iif -- "tailscale0" --> prio{"our chain's<br/>priority?"}
+
+    prio -- "-110, ahead ✓" --> rw["redirect 443 → 8443"]
+    rw --> priv["caddy :8443<br/>tailnet vhosts"] --> ok2(["200"])
+
+    prio -- "after -100 ✗" --> dn2["docker dstnat first"]
+    dn2 --> pub443b["caddy :443<br/>public vhosts"] --> nf(["404<br/>no such site"])
+
+    classDef bad fill:#8c2f2f,stroke:#4d1a1a,color:#fff
+    classDef good fill:#1f6f43,stroke:#0d3a23,color:#fff
+    class nf,dn2,pub443b bad
+    class ok1,ok2,rw good
+```
+
+The right-hand branch is the **misconfiguration, not a second real path** —
+there is no case in which a tailnet request legitimately lands on the public
+listener. It is drawn because getting the priority wrong fails silently: the
+packet is still delivered, caddy still answers, and the only symptom is a 404
+on a name that resolves, from a box that is up, over a link that works.
 
 The names are plain A records to the box's `100.x` address
 (`tofu/modules/cloudflare-dns`). A CNAME to the node's MagicDNS name would
