@@ -196,6 +196,19 @@
 
           # 443 also carries lego's ACME calls and the tailscale DERP fallback.
           tcp dport { 25, 53, 80, 443, 7844 } ct state new accept
+
+          # THE CI RUNNER'S ADMIN PATH, and the only reason this box originates
+          # ssh at all. `ssh -J vps root@<runner>` makes the VPS open a
+          # host-originated connection on 22, which this policy-drop chain
+          # would otherwise swallow — the matching cloud rule in
+          # tofu/modules/hetzner-firewall is necessary and NOT sufficient.
+          #
+          # Scoped to the one address. The runner is not on the tailnet (see
+          # docs/superpowers/specs/2026-09-18-ci-runner-host-design.md — the
+          # input chain below accepts iifname tailscale0 unconditionally, so a
+          # runner there would reach every port on this box), which makes this
+          # jump the permanent admin path rather than install scaffolding.
+          ip daddr 46.225.61.172 tcp dport 22 ct state new accept
           # 67 is the DHCP client renewing its lease.
           udp dport { 53, 67, 123, 443, 3478, 7844, 41641 } ct state new accept
 
