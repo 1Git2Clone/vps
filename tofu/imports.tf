@@ -100,6 +100,16 @@ import {
   id       = "${var.cloudflare_zone_id}/${each.value}"
 }
 
+# DNSSEC was switched on in the dashboard before tofu knew about it, so this is
+# an adoption rather than a creation — without it the first plan proposes
+# CREATING a zone setting that already exists. The id is the bare zone id: a
+# zone has exactly one DNSSEC configuration, so there is no second component to
+# address, unlike the DNS records below which are `<zone>/<record>`.
+import {
+  to = cloudflare_zone_dnssec.main
+  id = var.cloudflare_zone_id
+}
+
 import {
   to = module.dns.cloudflare_dns_record.mx
   id = "${var.cloudflare_zone_id}/b48a6f27879595810a33aa4008ae2911"
