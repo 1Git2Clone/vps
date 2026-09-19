@@ -20,26 +20,32 @@ runner reaching into the VPS, which is the one thing the split forbids.
 So the job uploads an artifact and the VPS fetches it.
 
 ```mermaid
-sequenceDiagram
-    participant J as job
-    participant F as Forgejo
-    participant P as pages-pull
-    participant V as volume
-
-    Note over J: on the runner box
-    J->>F: upload artifact "pages"
-    Note over F,V: the rest is on the VPS
-    loop every 5 min
-        P->>F: list artifacts
-        alt newer than on disk
-            P->>F: download zip
-            P->>V: unpack into owner/repo
-        else same artifact
-            Note over P: "already at artifact N"
-        end
+flowchart TB
+    subgraph R["runner box"]
+        job["workflow job"]
     end
-    Note over V: caddy reads it, read-only
+
+    job -- "upload artifact<br/>named <b>pages</b>" --> fj
+
+    subgraph V["hu-tao"]
+        direction TB
+        fj["Forgejo"]
+        fj -- "POST action_run_success<br/>over the docker bridge" --> hook["pages-hook<br/>verify HMAC, touch a file"]
+        hook -- "systemd .path" --> pull["pages-pull"]
+        clock(["hourly timer<br/>safety net"]) --> pull
+        pull -- "discover repos,<br/>fetch what changed" --> fj
+        pull --> vol[("pages_data")]
+        vol -- read-only --> caddy["caddy"]
+    end
+
+    caddy --> url(["pages.hu-tao.dev/&lt;owner&gt;/&lt;repo&gt;/"])
+
+    classDef net fill:#2d4a7c,stroke:#16233c,color:#fff
+    class hook net
 ```
+
+An hourly timer starts `pages-pull` as well, and that is a safety net rather
+than the mechanism — see [When it runs](#when-it-runs).
 
 **Every connection is initiated on the VPS**, and in fact never leaves the host
 — the artifact is in Forgejo's own storage, in a container on the same box.
@@ -97,6 +103,55 @@ An **empty discovery is treated as an error**, not as "no repos publish". This
 instance always has repos, so zero means the search endpoint moved or started
 refusing us — and the damage would be every published site silently freezing at
 its current content while the unit kept exiting 0.
+
+## When it runs
+
+A **Forgejo system webhook** on `action_run_success`, so publishing is an event
+rather than a poll. The whole path is:
+
+|          |                                                                                           |
+| -------- | ----------------------------------------------------------------------------------------- |
+| trigger  | one system hook in Site Administration, firing for every repo on the instance             |
+| target   | `http://<dockerBridgeGateway>:<pagesHookPort>/hooks/pages-pull`                           |
+| auth     | HMAC-SHA256 over the body, read from `X-Hub-Signature-256`                                |
+| receiver | `modules/pages-hook.nix` — `webhook(1)`, `DynamicUser`, bound to the bridge address alone |
+| effect   | touches one file; a systemd `.path` unit starts `pages-pull` as root                      |
+
+**It never leaves the box.** Forgejo is a container on this host, so the
+delivery goes container → docker bridge → receiver. There is no caddy site, no
+published port, no DNS name and no public listener — the network cost is one
+input rule of the same shape the Discord bot and caddy already have.
+
+That is also the correction to an earlier claim here: this used to say a
+webhook cost "an HTTP receiver on the mail server, which is not a trade worth
+making". It assumed the receiver had to be public.
+
+**A system hook, not a per-repo hook.** Per-repo would reintroduce exactly the
+per-repo setup step that discovery removed. One hook covers everything,
+including repos that do not exist yet.
+
+**The receiver parses nothing.** Any successful Action Run pokes `pages-pull`,
+which is idempotent and cheap. Reading the payload would trade a slightly
+smaller number of no-op runs for a coupling to Forgejo's `ActionPayload`
+schema.
+
+**The listener holds no privilege.** It runs as a `DynamicUser` whose entire
+capability is touching one file in its own `RuntimeDirectory`; the `.path` unit
+does the privileged half. A network-facing process that can run
+`systemctl start` is a network-facing process that is root-adjacent.
+
+**The hourly timer stays**, and is now a safety net rather than the mechanism.
+A webhook is a delivery and deliveries are lost — the receiver can be down
+mid-deploy, Forgejo's retries can run out, the hook can be switched off in a
+web form nothing here can see. Each of those leaves a site frozen with no error
+anywhere. The sweep makes the worst case "stale for up to an hour".
+
+### The one hand-kept value
+
+The hook's Target URL and secret live in a web form, so nothing in this repo
+can verify they match `infra.pagesHookPort` and `pages/hook_secret`. A mismatch
+is at least loud in two places: a 403 in `journalctl -u pages-hook`, and a
+failed delivery in the hook's own history in Site Administration.
 
 ## Failure isolation
 

@@ -17,6 +17,7 @@
     ./modules/vuln-scan.nix
     ./modules/renovate.nix
     ./modules/pages-pull.nix
+    ./modules/pages-hook.nix
     ./modules/syncthing.nix
     ./modules/containers
   ];
