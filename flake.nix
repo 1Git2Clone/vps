@@ -124,76 +124,124 @@
       # The last one is deliberate. deploy-rs confirms reachability, not service
       # health, and a container crashlooping is both visible and recoverable —
       # rolling the whole system back for it would be the wrong reflex.
-      deploy.nodes.vps = {
-        # The MagicDNS name, not an IP: it survived the primary-IP swap during
-        # the migration, so the same command works before and after a cutover.
-        #
-        # This is the tailnet node name, which is NOT the same thing as
-        # networking.hostName — renaming the machine in the tailscale admin
-        # console changes it and silently breaks deploys with
-        # "Host key verification failed" or a DNS failure. Check with
-        # `tailscale status` if a deploy suddenly cannot reach the box.
-        hostname = "vps";
+      # ONE attrset rather than `deploy.nodes.vps` plus a generated sibling:
+      # Nix cannot merge an assignment to `deploy.nodes` with an assignment to
+      # `deploy.nodes.vps` in the same set, and the runners have to be generated
+      # rather than written out.
+      deploy.nodes = {
+        vps = {
+          # The MagicDNS name, not an IP: it survived the primary-IP swap during
+          # the migration, so the same command works before and after a cutover.
+          #
+          # This is the tailnet node name, which is NOT the same thing as
+          # networking.hostName — renaming the machine in the tailscale admin
+          # console changes it and silently breaks deploys with
+          # "Host key verification failed" or a DNS failure. Check with
+          # `tailscale status` if a deploy suddenly cannot reach the box.
+          hostname = "vps";
 
-        profiles.system = {
-          sshUser = "hutao";
-          user = "root";
-          path = deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.vps-hetzner;
+          profiles.system = {
+            sshUser = "hutao";
+            user = "root";
+            path = deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.vps-hetzner;
 
-          # Port 2222 reaches the host's own sshd. Going through the default
-          # port would hit forgejo, and going through Tailscale SSH would hit
-          # its interactive re-auth check — neither of which can be scripted.
-          sshOpts = [
-            "-p"
-            "2222"
-          ];
+            # Port 2222 reaches the host's own sshd. Going through the default
+            # port would hit forgejo, and going through Tailscale SSH would hit
+            # its interactive re-auth check — neither of which can be scripted.
+            sshOpts = [
+              "-p"
+              "2222"
+            ];
 
-          magicRollback = true;
-          autoRollback = true;
+            magicRollback = true;
+            autoRollback = true;
 
-          # Long enough for every container to be recreated on a config change,
-          # short enough that a hung activation is not an outage.
-          confirmTimeout = 120;
+            # Long enough for every container to be recreated on a config change,
+            # short enough that a hung activation is not an outage.
+            confirmTimeout = 120;
 
-          # 15 minutes, raised from 300s for the serenity-bot image build.
-          #
-          # That build runs INSIDE activation: serenity-bot-image.service is a
-          # Type=oneshot wanted by multi-user.target, so switch-to-configuration
-          # starts it and blocks on a Rust release build. Upstream's Dockerfile
-          # has no cargo-chef layer — `COPY . .` then `cargo build` — so EVERY
-          # rev bump invalidates the whole build, not just the first one.
-          #
-          # MEASURED on this host, 2026-09-04, cold cache including the
-          # rust:1.94-bullseye and debian:bullseye-slim pulls: 3m28s
-          # (cargo itself 3m03s). 900s is ~4x that.
-          #
-          # An earlier version of this comment guessed "tens of minutes" and set
-          # 2100s. That was wrong by an order of magnitude, and the guess is why
-          # the number is now written down with a date next to it: 300s would
-          # have very nearly worked, at about 17% headroom, which is too thin
-          # for a slower network or a loaded box but nowhere near needing 35
-          # minutes. Re-measure rather than re-guess if the build grows.
-          #
-          # Deliberately LONGER than the build unit's own TimeoutStartSec
-          # (10min, in modules/containers/serenity-bot.nix). That unit only
-          # covers the boot path now, but an overrun there should still read as
-          # "serenity-bot-image.service: Start operation timed out" rather than
-          # an unexplained rollback. Keep the ordering if either number moves.
-          #
-          # This timeout is what bounds the build on a DEPLOY, because the build
-          # happens in the activation script itself — deliberately, since that
-          # is the one phase of a switch where the old container is still
-          # serving (see the phase list in modules/containers/serenity-bot.nix).
-          # Activation therefore still WAITS for the compile, which is why this
-          # number stays where it is; the bot just does not go down for it.
-          #
-          # The cost is still borne by every deploy, so the durable fix stands:
-          # build the image off-box — same architecture, so a native build here
-          # and a pushed closure there, not a cross-compile — and ship it as an
-          # imageFile so activation only does `docker load`.
-          activationTimeout = 900;
+            # 15 minutes, raised from 300s for the serenity-bot image build.
+            #
+            # That build runs INSIDE activation: serenity-bot-image.service is a
+            # Type=oneshot wanted by multi-user.target, so switch-to-configuration
+            # starts it and blocks on a Rust release build. Upstream's Dockerfile
+            # has no cargo-chef layer — `COPY . .` then `cargo build` — so EVERY
+            # rev bump invalidates the whole build, not just the first one.
+            #
+            # MEASURED on this host, 2026-09-04, cold cache including the
+            # rust:1.94-bullseye and debian:bullseye-slim pulls: 3m28s
+            # (cargo itself 3m03s). 900s is ~4x that.
+            #
+            # An earlier version of this comment guessed "tens of minutes" and set
+            # 2100s. That was wrong by an order of magnitude, and the guess is why
+            # the number is now written down with a date next to it: 300s would
+            # have very nearly worked, at about 17% headroom, which is too thin
+            # for a slower network or a loaded box but nowhere near needing 35
+            # minutes. Re-measure rather than re-guess if the build grows.
+            #
+            # Deliberately LONGER than the build unit's own TimeoutStartSec
+            # (10min, in modules/containers/serenity-bot.nix). That unit only
+            # covers the boot path now, but an overrun there should still read as
+            # "serenity-bot-image.service: Start operation timed out" rather than
+            # an unexplained rollback. Keep the ordering if either number moves.
+            #
+            # This timeout is what bounds the build on a DEPLOY, because the build
+            # happens in the activation script itself — deliberately, since that
+            # is the one phase of a switch where the old container is still
+            # serving (see the phase list in modules/containers/serenity-bot.nix).
+            # Activation therefore still WAITS for the compile, which is why this
+            # number stays where it is; the bot just does not go down for it.
+            #
+            # The cost is still borne by every deploy, so the durable fix stands:
+            # build the image off-box — same architecture, so a native build here
+            # and a pushed closure there, not a cross-compile — and ship it as an
+            # imageFile so activation only does `docker load`.
+            activationTimeout = 900;
+          };
         };
-      };
+      }
+      # The runners, one node each, generated from the same infra.runnerIPv4s
+      # the VPS firewall is built from — so a runner that exists is a runner you
+      # can deploy to, with no second list to keep in step. They are
+      # interchangeable machines running the identical closure; only the address
+      # differs.
+      #
+      # MAGIC ROLLBACK MATTERS MORE HERE THAN ON THE VPS. A runner is reachable
+      # only by `ssh -J vps`, across two firewalls and the jump host's own
+      # policy-drop output chain — there is no tailnet fallback and no second
+      # route in. A bad rule in modules/runner/firewall.nix locks the box out
+      # for good, and recovery is the Hetzner web console. This is the control
+      # that makes editing that file a normal thing to do rather than a gamble.
+      // nixpkgs.lib.mapAttrs' (
+        name: addr:
+        nixpkgs.lib.nameValuePair "runner-${name}" {
+          hostname = addr;
+
+          profiles.system = {
+            sshUser = "root";
+            user = "root";
+            path = deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.runner-hetzner;
+
+            # Through the VPS: the runner's single ingress rule is tcp/22 from
+            # 167.233.24.58/32 and nothing else. The jump host's output chain
+            # has to permit it too — that is what infra.runnerIPv4s feeds.
+            sshOpts = [
+              "-o"
+              "ProxyJump=vps"
+            ];
+
+            magicRollback = true;
+            autoRollback = true;
+
+            # No containers to recreate and no image build during activation,
+            # unlike the VPS: this box's activation is a systemd reload and a
+            # ruleset swap. The defaults would do; these are headroom for a slow
+            # link through the jump.
+            confirmTimeout = 120;
+            activationTimeout = 240;
+          };
+        }
+      ) self.nixosConfigurations.runner-hetzner.config.infra.runnerIPv4s;
 
       # deployChecks gives two checks, and only one of them was ever meant to be
       # built here. `deploy-activate` references the whole system closure by
