@@ -132,6 +132,17 @@ let
   runnerApiPaths = [
     "/api/actions/*"
     "/api/actions_pipeline/*"
+    # v4 ARTIFACT UPLOAD, and it does NOT live under /api/. actions/upload-artifact
+    # v4 posts to ACTIONS_RESULTS_URL + this twirp service, and Forgejo sets that
+    # variable to the instance ROOT — so the path is top-level and none of the
+    # entries above cover it. Probed against the live instance: POST returns 401
+    # (route exists, wants the job token) rather than 404, on all of
+    # /api/actions_pipeline/_apis/..., this path, and the same path nested under
+    # /api/actions_pipeline. Left out, this allowlist would 403 every artifact
+    # upload the moment the publishing workflows start working — a self-inflicted
+    # break that measurement could not have caught, because no upload has yet
+    # got far enough to issue a request.
+    "/twirp/github.actions.results.api.v1.ArtifactService/*"
     "/*/*/info/refs"
     "/*/*/git-upload-pack"
   ];
