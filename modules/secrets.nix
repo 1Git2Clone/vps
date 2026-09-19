@@ -96,6 +96,17 @@
         key = "grafana/admin_password";
       };
 
+      # === Pages ===
+      # HMAC secret for the Forgejo SYSTEM webhook that pokes pages-pull, set
+      # by hand in Site Administration → Integrations → Webhooks. The same
+      # string has to be in both places; nothing can check that for you, and a
+      # mismatch shows up as a 403 in `journalctl -u pages-hook` and as a failed
+      # delivery in the hook's own history — loud in two places, which is the
+      # best available given one of them is a web form.
+      pages_hook_secret = {
+        key = "pages/hook_secret";
+      };
+
       # === Vuln Scan ===
       vuln_scan_discord_webhook_url = {
         key = "vuln_scan/discord_webhook_url";

@@ -257,11 +257,24 @@ in
   systemd.timers.pages-pull = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      # Five minutes. It was instant when the job wrote the volume directly, and
-      # this is the cost of reversing the direction. A Forgejo webhook would make
-      # it instant again at the price of an HTTP receiver on the mail server,
-      # which is not a trade worth making for a static site.
-      OnCalendar = "*:0/5";
+      # HOURLY, AND NO LONGER THE PRIMARY TRIGGER. modules/pages-hook.nix
+      # receives Forgejo's action-run webhook and starts this unit within
+      # seconds of a workflow succeeding, so the common path does not wait on
+      # a clock at all.
+      #
+      # The timer stays because a webhook is a delivery, and deliveries are
+      # lost: the receiver can be down mid-deploy, Forgejo's retries can run
+      # out, the hook can be disabled by accident in a web form nothing here
+      # can see. Every one of those leaves a site frozen at its last content
+      # with no error anywhere — the failure shape half this repo's modules
+      # carry comments about. An hourly sweep makes the worst case "stale for
+      # up to an hour" instead of "stale forever".
+      #
+      # An earlier version of this comment said a webhook cost "an HTTP
+      # receiver on the mail server, which is not a trade worth making". That
+      # assumed a PUBLIC receiver. Forgejo is a container on this host and the
+      # delivery never leaves the box.
+      OnCalendar = "hourly";
       Persistent = true;
     };
   };
