@@ -17,7 +17,27 @@
 # The consequence to keep in mind when adding a service: a published port needs
 # to be in the forward allow-list below, not the input one. Getting that backwards
 # gives you a container the internet can reach but the firewall never authorised.
-{ config, ... }:
+{ config, lib, ... }:
+let
+  # One accept per runner, each carrying its own indentation: a multi-line Nix
+  # interpolation only indents its FIRST line, and this lands inside a chain
+  # body. Same technique as the label list in modules/runner/identity.nix.
+  #
+  # Generated rather than hand-written so adding a runner is one entry in
+  # infra.runnerIPv4s and one in tofu's var.runner_ipv4s. An empty list emits
+  # NOTHING, which is the safe direction in a policy-drop chain — the failure
+  # mode of a hand-maintained `ip daddr { ... }` set is an empty set, and nft
+  # rejects that outright rather than at review time.
+  # The separator carries the indentation, and the FIRST line's comes from the
+  # placeholder's own position in the ruleset below. Nix strips the common
+  # leading whitespace of an indented string, so a placeholder written at column
+  # 0 would reset that strip for the entire ruleset — it does not just misplace
+  # this one rule, it re-indents all 226 lines. Verified by diffing the rendered
+  # ruleset against the previous revision: byte-identical for one runner.
+  runnerSshRules = lib.concatMapStringsSep "\n    " (
+    addr: "ip daddr ${addr} tcp dport 22 ct state new accept"
+  ) (lib.attrValues config.infra.runnerIPv4s);
+in
 
 {
   networking.nftables = {
@@ -196,6 +216,20 @@
 
           # 443 also carries lego's ACME calls and the tailscale DERP fallback.
           tcp dport { 25, 53, 80, 443, 7844 } ct state new accept
+
+          # THE CI RUNNERS' ADMIN PATH, and the only reason this box originates
+          # ssh at all. `ssh -J vps root@<runner>` makes the VPS open a
+          # host-originated connection on 22, which this policy-drop chain
+          # would otherwise swallow — the matching cloud rule in
+          # tofu/modules/hetzner-firewall is necessary and NOT sufficient.
+          #
+          # Scoped to those addresses, one rule each, from infra.runnerIPv4s.
+          # The runners are not on the tailnet (see
+          # docs/superpowers/specs/2026-09-18-ci-runner-host-design.md — the
+          # input chain below accepts iifname tailscale0 unconditionally, so a
+          # runner there would reach every port on this box), which makes this
+          # jump the permanent admin path rather than install scaffolding.
+          ${runnerSshRules}
           # 67 is the DHCP client renewing its lease.
           udp dport { 53, 67, 123, 443, 3478, 7844, 41641 } ct state new accept
 

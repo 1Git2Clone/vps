@@ -134,3 +134,27 @@ import {
   to = module.dns.cloudflare_dns_record.bsky
   id = "${var.cloudflare_zone_id}/49002efb9babb52cd5dc5a207fb42cd0"
 }
+
+# The CI runner, created in the console on 2026-09-18 and adopted here. Its
+# primary IPs are deliberately NOT imported: server.tf declares no public_net
+# block for this box, so there is nothing for them to be imported into. They
+# stay Hetzner-managed and auto-delete with the server, which is the right
+# lifecycle for an address that carries neither DNS nor a PTR.
+import {
+  to = hcloud_server.runner["forgejo-runner"]
+  id = "166488672"
+}
+
+# THE RUNNER BECAME A for_each. Its state address changed from
+# hcloud_server.runner to hcloud_server.runner["forgejo-runner"], and without
+# this block tofu reads that as "destroy one server, create another" — which on
+# a delete-protected box fails the apply outright, and on an unprotected one
+# would have destroyed a limited-availability CX server to rename a state key.
+#
+# A `moved` block rather than a hand-run `tofu state mv`: the migration lives in
+# the repo, applies itself on the next plan, and is still correct for anyone
+# planning from a state that has already moved (it becomes a no-op).
+moved {
+  from = hcloud_server.runner
+  to   = hcloud_server.runner["forgejo-runner"]
+}

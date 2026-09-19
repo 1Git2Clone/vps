@@ -119,3 +119,32 @@ jobs:
           nix build --print-build-logs \
             .#checks.x86_64-linux.deploy-schema \
             .#checks.x86_64-linux.deploy-schema-rejects-bad-input
+
+      # NOT runner-firewall — that one is a two-node NixOS VM test and needs
+      # /dev/kvm, which a GitHub-hosted runner does not have (no nested
+      # virtualisation; a VM test here would fall back to qemu's TCG software
+      # emulation, measured at ~5x slower just to boot two minimal nodes).
+      # runner-firewall stays hand-run: `nix build
+      # .#checks.x86_64-linux.runner-firewall -L` on a machine with KVM.
+      #
+      # This is the automated stand-in: it greps the EVALUATED nftables
+      # ruleset for line order rather than booting anything, so it needs no
+      # KVM and costs seconds. It catches the exact regression runner-firewall
+      # exists for — the VPS rules sinking below a broad `podman*` accept —
+      # just not with a real packet, which is why the VM test still exists for
+      # a human to run before trusting a change to firewall.nix.
+      - name: Validate the runner firewall rule order
+        run: |
+          nix build --print-build-logs \
+            .#checks.x86_64-linux.runner-firewall-ordering
+
+      # Same gap class as the ordering check above, and worth naming: a check
+      # that is only EVALUATED never runs its builder, so its failure branch is
+      # inert. `nix flake check --no-build` would not notice the runner growing
+      # a sops-install-secrets unit — that host holds no age key, so a
+      # copy-pasted module import bringing secrets management onto it is a real
+      # regression this only catches when something actually builds it.
+      - name: Check the runner host holds no secrets
+        run: |
+          nix build --print-build-logs \
+            .#checks.x86_64-linux.runner-has-no-secrets

@@ -126,3 +126,106 @@ resource "hcloud_server" "vps" {
 #
 # Both commands are in docs/deploying.md. Neither can be triggered by an
 # `apply`, which is the point.
+
+# ==============================================================================
+# The CI runner
+# ==============================================================================
+# A second, deliberately disposable box. It exists because forgejo-runner was
+# sharing 15 GB with two JVMs that commit their heaps up front, and on
+# 2026-09-18 a 732 MB `nix eval` was enough to push the box over and make the
+# kernel shoot minecraft's java — the OOM killer scores by resident size, so the
+# biggest idle process loses regardless of who caused the spike.
+#
+# Created in the console, ADOPTED here: see the import block in imports.tf. As
+# with the VPS, do not apply against an unimported server — tofu would build a
+# second one.
+#
+# Everything about it is imported-shaped rather than created-shaped:
+#
+#   * no public_net block. The provider's importer leaves public_net out of
+#     state, so declaring it makes every post-import plan propose an ADDITION
+#     that detaches and reattaches the live primary IPs — the exact accident
+#     that cost 167.233.24.58 on 2026-09-05. This box's addresses
+#     (46.225.61.172 / 2a01:4f8:1c19:cb62::/64) carry no reputation and no PTR,
+#     but churn on a live attachment is still churn.
+#   * protections are ON. An earlier revision of this comment argued they should
+#     stay off because the box holds only caches -- true of the DISK and false
+#     of the box: CX server types are limited-availability, so a destroyed
+#     runner may simply not be re-creatable when it is wanted back. The operator
+#     enabled protection live on 2026-09-19 for exactly that reason, and it is
+#     declared here so a plan never proposes removing it.
+#
+#     THE CONSEQUENCE IS user_data. hcloud treats it as replace-forces-new, and
+#     a protected server cannot be replaced -- so it is in ignore_changes below,
+#     and an already-created box can never be given or handed a new identity
+#     through it. That is what the staged-file channel in
+#     modules/runner/identity.nix exists for. New boxes still get user_data at
+#     CREATE time, where ignore_changes does not apply, so they stay
+#     self-configuring.
+resource "hcloud_server" "runner" {
+  # One box per entry in var.runner_names. Every runner is the same closure with
+  # the same settings; the only thing that differs between them is the identity
+  # in user_data below, which each box reads back from its own metadata service.
+  for_each = toset(var.runner_names)
+
+  name        = each.key
+  server_type = var.runner_server_type
+
+  # nbg1, NOT var.location. The VPS is pinned to fsn1 because its primary IP is
+  # location-bound and carries the mail reputation; this box has no such tie. The
+  # two being in different cities costs nothing because they only ever speak over
+  # the public internet: HTTPS to git.<domain> one way, ssh the other. There is
+  # no private link to keep them in a zone for.
+  location = "nbg1"
+
+  # What the console booted it with. Ignored below, like the VPS's: nixos-anywhere
+  # kexecs over it and nothing from this image survives the install.
+  image = "ubuntu-26.04"
+
+  ssh_keys = [hcloud_ssh_key.main.name]
+
+  # Set live by the console at creation, so it is declared here. An attribute
+  # that exists on the server but not in the config is not "unmanaged" — it is a
+  # silent proposed removal on the next plan.
+  labels = {
+    runner = ""
+  }
+
+  # Delete and rebuild protection. See the header: CX types are
+  # limited-availability, so "it only holds caches" is an argument about the
+  # disk, not about whether the box can be got back.
+  #
+  # rebuild_protection blocks the hcloud rebuild-from-image action only.
+  # nixos-anywhere is unaffected — it kexecs from inside the running system and
+  # never calls that API.
+  delete_protection  = true
+  rebuild_protection = true
+
+  # The Forgejo uuid+secret. Applied at CREATE time only: see ignore_changes.
+  # modules/runner/identity.nix reads it back at every boot from
+  # http://169.254.169.254/hetzner/v1/userdata — note that path, not the
+  # plausible-looking /hetzner/v1/metadata/userdata, which 404s.
+  user_data = var.runner_identities[each.key]
+
+  # Same reason as the VPS: the firewall is attached by
+  # hcloud_firewall_attachment, so a rule change never reads as a server change.
+  ignore_remote_firewall_ids = true
+
+  lifecycle {
+    # user_data is here because it is replace-forces-new and these boxes are
+    # protected: without it, editing an identity produces a plan that wants to
+    # destroy a protected server, which fails the apply outright rather than
+    # doing anything useful.
+    #
+    # ignore_changes suppresses diffs against PRIOR STATE, and a create has
+    # none — so a NEW runner still receives its user_data and comes up
+    # self-configuring. Only already-created boxes are frozen, and those take
+    # their identity from the staged file instead.
+    ignore_changes = [
+      ssh_keys,
+      image,
+      public_net,
+      user_data,
+    ]
+  }
+}

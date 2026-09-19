@@ -58,19 +58,34 @@
       };
 
       # === Forgejo ===
-      # The Actions runner's own secret, from Site Administration -> Actions ->
-      # Runners -> Create new runner, which creates the runner record and shows
-      # its uuid and secret. The uuid is not secret and is in
-      # modules/containers/forgejo-runner.nix; this is the half that is.
+      # NOTHING HERE. The runner secret used to live at forgejo/runners, read
+      # by the in-container runner on this box. That runner is gone and the key
+      # has no reader left, so the declaration is removed rather than kept
+      # "just in case": a declared sops secret is decrypted onto this machine
+      # at activation, and a credential nothing consumes is pure exposure.
       #
-      # NOT a registration token: `forgejo-runner register` and the .runner file
-      # it writes are the legacy path, and a declared server.connections entry
-      # and a .runner file cannot coexist.
+      # The key may stay in secrets.yaml as operator inventory — sops-nix only
+      # looks up what is declared here, so an extra key costs nothing. The CI
+      # runners on their own boxes cannot read this file at all: they hold no
+      # age key and decrypt nothing, asserted by checks.runner-has-no-secrets.
+      # Each one gets its uuid+secret from its own Hetzner user_data, or from a
+      # file staged at install for a box that predates that mechanism. See
+      # modules/runner/identity.nix.
+
+      # === Renovate ===
+      # Both were Forgejo Actions secrets until the CI runner moved onto its own
+      # untrusted box. A runner this repo explicitly does not trust does not get
+      # a bot token with write on repository and issue across hutao/* and
+      # skavex/* handed to it once a day — so the job became modules/renovate.nix,
+      # a timer on this host, and the credentials became ordinary sops secrets.
       #
-      # A missing key here fails sops-install-secrets, which fails the BUILD —
-      # so add the value before the deploy that first imports this module.
-      forgejo_runner_token = {
-        key = "forgejo/runner_token";
+      # They could not be migrated by copying: a Forgejo Actions secret is
+      # write-only once set, so both were reissued.
+      renovate_token = {
+        key = "renovate/token";
+      };
+      renovate_github_com_token = {
+        key = "renovate/github_com_token";
       };
 
       # === Grafana ===
