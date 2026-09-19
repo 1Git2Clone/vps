@@ -1,0 +1,154 @@
+// =============================================================================
+// Tailnet policy file
+// =============================================================================
+// Rendered by tofu/tailscale.tf. ${vps_ipv4} comes from var.tailnet_ipv4, the
+// same value the dozzle/grafana/syncthing A records use, so there is one
+// address here and not a second copy to drift.
+//
+// HuJSON: comments survive the apply and show up in the admin console, so this
+// file IS the documentation the next person reads there.
+//
+// WHY THIS EXISTS. modules/firewall.nix accepts `iifname tailscale0` wholesale
+// — that is how every tailnet-only service is kept private, by the ABSENCE of
+// an internet rule rather than by a bind address. The consequence is that the
+// tailnet is one flat trust zone: anything on it reaches sshd on 2222,
+// pgbouncer on 6432, tempo's OTLP receivers, grafana, dozzle and syncthing's
+// GUI. One compromised phone is the whole estate. nftables cannot tell tailnet
+// peers apart; this file is the only layer that can.
+{
+	// The VPS by address rather than by tag, so the rules below are readable
+	// and so nothing here depends on MagicDNS resolving at policy-evaluation
+	// time (it does not — the policy file takes IPs, tags and hosts).
+	"hosts": {
+		"vps": "${vps_ipv4}",
+	},
+
+	// tag:vps is what makes the narrowing possible AT ALL, and the reason is
+	// subtle enough to write down: Tailscale has no deny rules. Rules are
+	// purely additive, so you cannot narrow a destination by adding a rule —
+	// you can only stop a wider rule from covering it.
+	//
+	// "autogroup:self only applies to user-owned devices. It does not apply to
+	// tagged devices." (kb/1337). So the moment the VPS carries a tag it drops
+	// out of `autogroup:self` and the broad device-to-device rule below stops
+	// reaching it, leaving only the port list further down.
+	//
+	// THIS IS WHY THE ROLLOUT HAS NO OUTAGE WINDOW. Apply this file while the
+	// VPS is still untagged and nothing changes: it is still a self-owned
+	// device, still covered by the broad rule. Then tag it in the admin console
+	// (Machines -> hu-tao -> Edit ACL tags -> tag:vps) and the narrowing turns
+	// on, with the ssh rule below already in place to catch it. Untag to revert.
+	"tagOwners": {
+		"tag:vps": ["autogroup:owner"],
+	},
+
+	"acls": [
+		// Your own devices, to each other, unchanged. Laptops, desktop, phone —
+		// syncthing pairs over this, and there is nothing to gain by taking a
+		// scalpel to a set of machines that are all equally yours.
+		//
+		// Once tag:vps is applied this NO LONGER INCLUDES THE VPS. That is the
+		// whole mechanism; see tagOwners above.
+		{
+			"action": "accept",
+			"src": ["autogroup:member"],
+			"dst": ["autogroup:self:*"],
+		},
+
+		// THE VPS, BY PORT. Everything a tailnet client legitimately reaches on
+		// that box, and nothing else — so a compromised peer cannot sweep it.
+		//
+		//   2222  the host's own sshd. DEPLOY-CRITICAL: `deploy .#vps` connects
+		//         here (flake.nix pins -p 2222 precisely because 22 is forgejo
+		//         and Tailscale SSH cannot be scripted past its re-auth check).
+		//         Drop this port and deploys stop working.
+		//   22    forgejo's ssh, for git over the tailnet
+		//   80    redirected to tailnetHttpPort by the firewall's prerouting
+		//   443   redirected to tailnetHttpsPort the same way — this is what
+		//         makes https://dozzle.<domain> work with no port in the URL.
+		//         The ACL sees the port the CLIENT sent, before the rewrite, so
+		//         443 is the one that has to be listed and 8443 is a courtesy.
+		//   3000  grafana, host networking
+		//   8080  dozzle direct, the path that still works when caddy is the
+		//         broken part
+		//   8384  syncthing's GUI
+		//   8443  caddy's tailnet listener, reachable directly as well as via
+		//   8880  the redirect above
+		//
+		// DELIBERATELY ABSENT: 6432 (pgbouncer) and 4317/4318 (tempo's OTLP
+		// receivers). Both bind 0.0.0.0 and are reached by the discord bot over
+		// the docker bridge, not from the tailnet — the input chain has a
+		// separate rule for that, scoped to botSubnet. Nothing on the tailnet
+		// has ever needed them; if a debugging session does, add them here
+		// rather than reaching for `tailscale up --shields-up` on a laptop.
+		{
+			"action": "accept",
+			"src": ["autogroup:member"],
+			"dst": ["tag:vps:22,80,443,2222,3000,8080,8384,8443,8880"],
+		},
+	],
+
+	"ssh": [
+		// Your own devices. This is the stock rule and is left alone.
+		{
+			"action": "check",
+			"src": ["autogroup:member"],
+			"dst": ["autogroup:self"],
+			"users": ["autogroup:nonroot"],
+		},
+
+		// The VPS, once tagged — WITHOUT THIS, TAGGING IT BREAKS TAILSCALE SSH,
+		// because the rule above stops matching a device that is no longer
+		// "self". modules/services.nix calls Tailscale SSH the normal
+		// administrative path, so that would be a bad surprise for a one-click
+		// console action.
+		//
+		// `check`, not `accept`: it forces a browser re-auth (12h by default)
+		// rather than letting any device holding a tailnet key open a shell.
+		// This is already how the tailnet behaves — flake.nix's deploy node
+		// notes Tailscale SSH "would hit its interactive re-auth check", which
+		// is why deploys go to 2222 instead — so keeping `check` preserves both
+		// behaviours rather than changing either.
+		//
+		// nonroot only, matching sshd's own PermitRootLogin = "no". hutao has
+		// passwordless sudo via wheel, so this costs nothing and stops the two
+		// doors into the box from disagreeing about whether root may log in.
+		{
+			"action": "check",
+			"src": ["autogroup:member"],
+			"dst": ["tag:vps"],
+			"users": ["autogroup:nonroot"],
+		},
+	],
+
+	// Run by the PROVIDER AT PLAN TIME against the real API, so a rule that
+	// stops being true fails `tofu plan` rather than being discovered later.
+	// That is the part of this worth having: the policy above is a claim, and
+	// these are the claim being checked.
+	//
+	// THE `deny` ENTRIES ONLY HOLD ONCE tag:vps IS APPLIED — until then the
+	// broad device-to-device rule still covers the VPS and a plan will fail
+	// here saying so. That failure is not a bug to work around, it is this file
+	// telling you the narrowing is not live yet. See the rollout order in
+	// tailscale.tf.
+	"tests": [
+		{
+			"src": "autogroup:member",
+			"accept": [
+				// Deploys. The single most load-bearing line in the file.
+				"vps:2222",
+				// The tailnet vhosts, at the port the browser actually sends.
+				"vps:443",
+				// dozzle direct, for when caddy is what broke.
+				"vps:8080",
+			],
+			"deny": [
+				// pgbouncer and tempo are for the bot over the docker bridge.
+				// A tailnet peer reaching postgres is the shape of the incident
+				// this file exists to make impossible.
+				"vps:6432",
+				"vps:4317",
+			],
+		},
+	],
+}
