@@ -1,0 +1,114 @@
+# ==============================================================================
+# Pages — build the handbook and hand it to the VPS
+# ==============================================================================
+# This job does NOT publish anything. It uploads an artifact named `pages`, and
+# modules/pages-pull.nix on the VPS fetches it every five minutes and unpacks
+# it into the pages volume. The direction is deliberate: a runner on its own
+# box must never reach into the VPS, which is the entire premise of the split.
+# See docs/src/operations/pages.md.
+#
+# The published URL is https://pages.hu-tao.dev/hutao/vps/docs/ — the layout of
+# the artifact IS the URL below `<owner>/<repo>/`, with no rewriting anywhere,
+# which is why the book is staged under `_site/docs/` rather than at the root.
+#
+# NOT on `main` only. The book builds on every pull request too, because
+# `create-missing = false` in docs/book.toml turns a dead cross-reference into
+# a build failure — and a build failure is worth catching in review rather than
+# after it is serving a 404. Only a push to main uploads.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/book.toml"
+      - "docs/src/**"
+      - "flake.nix"
+      - "flake.lock"
+      - ".forgejo/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "docs/book.toml"
+      - "docs/src/**"
+      - "flake.nix"
+      - "flake.lock"
+      - ".forgejo/workflows/pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Build the handbook
+    # `nix`, not `ubuntu-latest`, for the same reason ci.yml uses it: that
+    # label is node:22-bookworm, and mdbook would then be a download per run
+    # instead of a devShell the binary cache already has. See ci.yml's own
+    # note for the full reasoning.
+    runs-on: nix
+
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
+
+    steps:
+      # Byte-for-byte the checkout ci.yml uses, and for the same reason: the
+      # nixos/nix image carries no node, so actions/checkout cannot run here.
+      #
+      # Deliberately NOT `--depth 1 origin $GITHUB_SHA`, which would be the
+      # obvious saving — fetching a bare SHA needs the server to allow
+      # want-sha (uploadpack.allowAnySHA1InWant), which is not something this
+      # workflow should depend on. refs/pull/* is fetched alongside the
+      # branches so one command serves all three triggers: on a pull_request
+      # $GITHUB_SHA is the merge commit, which no branch reaches.
+      - name: Checkout
+        run: |
+          git init -q -b main .
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git fetch -q --prune origin \
+            "+refs/heads/*:refs/remotes/origin/*" \
+            "+refs/pull/*:refs/pull/*"
+          git checkout -q --detach "$GITHUB_SHA"
+
+      # `mdbook-mermaid install` writes mermaid.min.js and mermaid-init.js
+      # next to book.toml, which docs/book.toml's `additional-js` then
+      # references. They are gitignored: 2.6 MB of vendored minified JS whose
+      # version is already pinned by flake.lock, so committing it would put
+      # the same bytes in history again on every bump. The consequence is that
+      # this step is NOT optional — without it `mdbook build` fails on the
+      # missing files rather than quietly shipping un-rendered fences.
+      - name: Build
+        run: |
+          nix develop .#ci -c mdbook-mermaid install docs
+          nix develop .#ci -c mdbook build docs
+
+      # The staging path is the contract with modules/pages-pull.nix: whatever
+      # is in the artifact is unpacked verbatim under <owner>/<repo>, so this
+      # directory name is the `/docs/` in the published URL. Changing it
+      # changes the URL and nothing warns you.
+      - name: Stage
+        run: |
+          mkdir -p _site/docs
+          cp -r docs/book/. _site/docs/
+
+      # forgejo/upload-artifact, NOT actions/upload-artifact. GitHub's v4
+      # bundles @actions/artifact v2, which tests GITHUB_SERVER_URL's hostname,
+      # decides a Forgejo instance is GitHub Enterprise Server, and THROWS
+      # before opening a socket — so it fails with zero HTTP requests, which is
+      # invisible in the server's access log and unfixable at any layer below
+      # the action. The Forgejo fork's single patch is to make that check
+      # return false.
+      #
+      # Bare `forgejo/upload-artifact@v5` is correct: DEFAULT_ACTIONS_URL is
+      # unset on this instance, so Forgejo's default of https://code.forgejo.org
+      # applies, and that is where the fork lives.
+      #
+      # The name `pages` is not cosmetic either — pages-pull.nix looks for an
+      # artifact with exactly this name and ignores every other one.
+      - name: Upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: forgejo/upload-artifact@v5
+        with:
+          name: pages
+          path: _site
+          retention-days: 7
