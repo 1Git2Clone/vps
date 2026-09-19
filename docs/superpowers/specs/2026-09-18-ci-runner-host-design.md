@@ -272,10 +272,14 @@ jump works again:
 `tofu/runner-firewall.tf` does NOT need touching: it filters the runner's own
 public NIC and pins the VPS's address as the source, which does not change.
 
-Each declared record still has to be created in Forgejo by hand. Destroying a
-clone does not delete it; stale records accumulate in Site Administration →
-Actions → Runners and must be pruned by hand, or by the orchestrator if the
-ephemeral follow-up is ever built.
+Each declared record still has to be created in Forgejo by hand, once per
+runner — not once per box. A record is server-side state with no tie to any
+machine, and the pair is not a registration token: not one-shot, and it does not
+expire from non-use, so replacing or reinstalling a box reuses the same pair.
+Only deleting the record invalidates it, and that invalidates both halves at
+once. Destroying a clone does not delete it; stale records accumulate in Site
+Administration → Actions → Runners and must be pruned by hand, or by the
+orchestrator if the ephemeral follow-up is ever built.
 
 ## The runner host — `modules/runner/`
 
