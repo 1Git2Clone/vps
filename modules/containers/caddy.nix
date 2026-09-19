@@ -119,9 +119,14 @@ let
       host = "pages.${domain}";
 
       # A document root rather than an upstream: the only site here caddy
-      # serves itself. Everything under it is written by an Actions workflow
-      # (see modules/containers/forgejo-runner.nix) into the ONE volume a
-      # workflow is allowed to mount, and caddy reads it read-only.
+      # serves itself. Everything under it is fetched by modules/pages-pull.nix
+      # — a timer on this host that pulls each repo's published `pages`
+      # artifact out of Forgejo and unpacks it — and caddy reads it read-only.
+      #
+      # It used to be WRITTEN by the Actions job itself, into the one volume the
+      # in-container runner allowed a workflow to mount. A runner on its own box
+      # cannot reach this volume and must not, so the direction reversed: the
+      # job uploads, this host fetches.
       #
       # The layout IS the URL: /srv/pages/<owner>/<repo>/index.html answers
       # pages.<domain>/<owner>/<repo>/. Nothing maps or rewrites, so a page
