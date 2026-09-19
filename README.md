@@ -66,7 +66,7 @@ nix develop -c mdbook serve docs --open
 | Chapter                                                          | For                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
 | [Network and trust boundaries](docs/src/architecture/network.md) | the three doors, input vs forward, why there is no private network |
-| [CI runner isolation](docs/src/architecture/runner.md)           | the six layers, the one-way rule, the four-path allow-list         |
+| [CI runner isolation](docs/src/architecture/runner.md)           | the seven layers, the one-way rule, the four-path allow-list       |
 | [The service stack](docs/src/architecture/services.md)           | what runs, and how each thing is reached                           |
 | [Deploying](docs/src/operations/deploying.md)                    | the everyday path, and the circuit breaker behind it               |
 | [Failure modes and recovery](docs/src/operations/recovery.md)    | what rolls back on its own and what does not                       |

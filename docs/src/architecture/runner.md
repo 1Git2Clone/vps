@@ -15,7 +15,7 @@ estate.
 The isolation boundary did not get stronger. **It moved** — from a container to
 a VM — and what sits inside it got much smaller.
 
-## Six layers
+## Seven layers
 
 ```mermaid
 flowchart TB
@@ -50,11 +50,20 @@ flowchart TB
 | 4   | Runner nftables: output policy-drop; the VPS reachable on 443 and nothing else         | `modules/runner/firewall.nix`   |
 | 5   | Caddy: runner addresses restricted to four Actions paths, everything else 403          | `modules/containers/caddy.nix`  |
 | 6   | Job: no engine socket by default; its container is created per job and destroyed after | `modules/runner/default.nix`    |
+| 7   | `pages-pull`: every symlink deleted out of a fetched artifact before caddy serves it   | `modules/pages-pull.nix`        |
 
 Every connection between the two hosts is either initiated **by the VPS**, or
 is HTTPS from the runner to `git.hu-tao.dev` like any other client on the
 internet. There is no private link, deliberately —
 [see why](network.md#why-there-is-no-private-network).
+
+Layer 7 is a different kind of control from the six above it, which is why it
+was missing for a while. Every one of those reads an **address, a port or a
+path**; none of them can read what is _inside_ a request that the allow-list
+legitimately permits. The published artifact is exactly that — content the
+runner authors, travelling through a route layer 5 has to admit, landing in a
+tree caddy serves. [What it strips, and
+why](../operations/pages.md#the-artifact-is-untrusted-content).
 
 ## The one-way rule, and how it is enforced
 
