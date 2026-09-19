@@ -75,6 +75,33 @@
       '';
     };
 
+    runnerIPv4s = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "46.225.61.172" ];
+      description = ''
+        The CI runners' public IPv4s. Consumed by modules/firewall.nix, which
+        emits one `ip daddr <addr> tcp dport 22 ct state new accept` per entry
+        into the OUTPUT chain: that chain is policy-drop, so `ssh -J vps
+        root@<runner>` -- the runners' only admin path, since they are
+        deliberately off the tailnet -- does not leave this box without it.
+
+        A LIST because the runners are interchangeable and meant to multiply.
+        Adding one is an entry here plus an entry in tofu's var.runner_ipv4s,
+        and BOTH are required: the cloud firewall and this ruleset are each
+        what survives a misconfiguration of the other, so a rule in one alone
+        is not sufficient.
+
+        Bare addresses, not CIDRs. nftables `ip daddr` takes either, and
+        keeping the two spellings distinct makes it obvious at a glance which
+        list a value was copied from.
+
+        Owned by tofu and copied here, same as publicIPv4: if an address
+        changes, tofu changes first and this follows. A runner's address
+        changes whenever its box is replaced, which `user_data` being
+        replace-forces-new means happens on every identity rotation.
+      '';
+    };
+
     acmeEmail = lib.mkOption {
       type = lib.types.str;
       default = "ivan@hu-tao.org";
