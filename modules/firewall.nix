@@ -36,7 +36,7 @@ let
   # ruleset against the previous revision: byte-identical for one runner.
   runnerSshRules = lib.concatMapStringsSep "\n    " (
     addr: "ip daddr ${addr} tcp dport 22 ct state new accept"
-  ) config.infra.runnerIPv4s;
+  ) (lib.attrValues config.infra.runnerIPv4s);
 in
 
 {

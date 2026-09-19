@@ -172,6 +172,11 @@ variable "runner_names" {
     condition     = length(var.runner_names) == length(toset(var.runner_names))
     error_message = "runner_names must be unique: each entry is one hcloud server."
   }
+
+  validation {
+    condition     = toset(var.runner_names) == toset(keys(var.runner_ipv4s))
+    error_message = "runner_names and runner_ipv4s must cover exactly the same server names -- a runner with no address is unreachable over the jump, and an address with no runner is a stale hole in the VPS egress allow-list."
+  }
 }
 
 variable "runner_identities" {
@@ -205,6 +210,11 @@ variable "runner_identities" {
   validation {
     condition     = alltrue([for v in values(var.runner_identities) : can(regex("^forgejo-runner: [0-9a-fA-F-]{36} [A-Za-z0-9]{32,}$", v))])
     error_message = "Each identity must be exactly 'forgejo-runner: <uuid> <secret>' -- a 36-char uuid then 32+ alphanumerics. modules/runner/identity.nix refuses anything else at boot, which is a much slower way to find a typo."
+  }
+
+  validation {
+    condition     = length(setsubtract(toset(var.runner_names), toset(keys(var.runner_identities)))) == 0
+    error_message = "Every name in runner_names needs an entry in runner_identities."
   }
 }
 
@@ -264,6 +274,12 @@ variable "runner_ipv4s" {
     allow-list: `ssh -J vps root@<runner>` is the permanent admin path, and the
     runners are deliberately not on the tailnet.
 
+    KEYED BY SERVER NAME, like runner_identities, not a positional list. Three
+    parallel lists correlated by index is a data structure that silently
+    survives being wrong: delete the middle entry of one and every later runner
+    is pointed at its neighbour's address, with nothing to notice it. The map
+    key is checked against runner_names below.
+
     NOT derived from hcloud_server.runner[*].ipv4_address, though it could be.
     That would make every firewall rule depend on the servers, so a plan that
     replaces a box also rewrites the firewall in the same apply -- and the VPS's
@@ -276,6 +292,6 @@ variable "runner_ipv4s" {
     without the matching nftables line is not sufficient: the VPS output chain
     is policy-drop and swallows the connection before it leaves the box.
   EOT
-  type        = list(string)
-  default     = ["46.225.61.172/32"]
+  type        = map(string)
+  default     = { "forgejo-runner" = "46.225.61.172/32" }
 }

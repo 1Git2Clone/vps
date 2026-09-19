@@ -18,5 +18,5 @@ module "hetzner-firewall" {
 
   # The jump-host egress rule. See var.runner_ipv4s for why this is an explicit
   # list rather than hcloud_server.runner[*].ipv4_address.
-  runner_ips = var.runner_ipv4s
+  runner_ips = values(var.runner_ipv4s)
 }

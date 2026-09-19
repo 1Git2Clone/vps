@@ -76,8 +76,10 @@
     };
 
     runnerIPv4s = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [ "46.225.61.172" ];
+      type = lib.types.attrsOf lib.types.str;
+      default = {
+        forgejo-runner = "46.225.61.172";
+      };
       description = ''
         The CI runners' public IPv4s. Consumed by modules/firewall.nix, which
         emits one `ip daddr <addr> tcp dport 22 ct state new accept` per entry
@@ -85,11 +87,17 @@
         root@<runner>` -- the runners' only admin path, since they are
         deliberately off the tailnet -- does not leave this box without it.
 
-        A LIST because the runners are interchangeable and meant to multiply.
-        Adding one is an entry here plus an entry in tofu's var.runner_ipv4s,
-        and BOTH are required: the cloud firewall and this ruleset are each
-        what survives a misconfiguration of the other, so a rule in one alone
-        is not sufficient.
+        KEYED BY HETZNER SERVER NAME, matching tofu's var.runner_ipv4s. An
+        attrset rather than a list because an address on its own says nothing
+        about which box it belongs to, and a bare list invites being correlated
+        by index with some other list — which stays silently wrong when an
+        entry is removed from the middle. Rules are emitted in key order, so
+        the rendered ruleset does not churn when an entry is added.
+
+        Adding a runner means an entry here AND one in tofu's
+        var.runner_ipv4s: the cloud firewall and this ruleset are each what
+        survives a misconfiguration of the other, so a rule in one alone is not
+        sufficient.
 
         Bare addresses, not CIDRs. nftables `ip daddr` takes either, and
         keeping the two spellings distinct makes it obvious at a glance which

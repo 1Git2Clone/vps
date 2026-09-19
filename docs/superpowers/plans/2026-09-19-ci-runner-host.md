@@ -2129,13 +2129,12 @@ care.
 - [ ] **Step 1: Put the EXISTING pair in tfvars**
 
 The runner record for this box already exists —
-`187cde37-2e9b-4601-b431-b437e7f83bc4`. It does not need recreating, and
-replacing the Hetzner box does not invalidate it: a declared uuid+secret is
-server-side state in Forgejo, unrelated to any machine. It is NOT a
-registration token — not one-shot, and it does not expire from non-use — so a
-pair that was staged but never consumed is still live. Only deleting the record
-in Site Administration → Actions → Runners invalidates it, and that invalidates
-both halves at once.
+`187cde37-2e9b-4601-b431-b437e7f83bc4`. It does not need recreating: a declared
+uuid+secret is server-side state in Forgejo, unrelated to any machine, and it is
+NOT a registration token — not one-shot, and it does not expire from non-use —
+so a pair that was staged but never consumed is still live. Only deleting the
+record in Site Administration → Actions → Runners invalidates it, and that
+invalidates both halves at once.
 
 Create a NEW record only when adding another runner, or when deliberately
 rotating this one's secret.
@@ -2148,107 +2147,132 @@ runner_names = ["forgejo-runner"]
 runner_identities = {
   "forgejo-runner" = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 <secret>"
 }
-runner_ipv4s = ["46.225.61.172/32"]
+runner_ipv4s = {
+  "forgejo-runner" = "46.225.61.172/32"
+}
 ```
 
-Three lists rather than one variable because the runners are meant to multiply:
-adding a second box is an entry in each and an apply. `runner_identities` is
-separate from `runner_names` because OpenTofu will not `for_each` over a
-sensitive value, and it carries a `validation` block that rejects a malformed
-pair at plan time instead of at boot.
+Three variables rather than one because the runners are meant to multiply:
+adding a second box is an entry in each plus an apply. `runner_identities` is
+separate because OpenTofu will not `for_each` over a sensitive value, and it
+carries a `validation` block that rejects a malformed pair at plan time instead
+of at boot. Both maps are keyed by server name, not correlated by index.
 
-- [ ] **Step 2: Plan, and read what it proposes**
+**This value does not reach THIS box.** `user_data` is replace-forces-new and
+the box is delete-protected, so tofu holds it in `ignore_changes`: it applies to
+runners tofu *creates*, and the existing one takes its identity from the file
+staged in Step 3. The entry still belongs here — it is what a from-scratch
+rebuild would use, and `runner_names` needs a matching key.
+
+- [ ] **Step 2: Plan and apply the state move**
 
 ```bash
 cd tofu && tofu plan -out=runner.tfplan
 ```
 
-Expected: `hcloud_server.runner` **must be replaced**, and nothing else changes.
-A plan that touches `hcloud_server.main`, any DNS record, or any firewall is
-wrong — stop and read it rather than applying.
+Expected: **`0 to add, 0 to change, 0 to destroy`**, with one line reading
+`hcloud_server.runner has moved to hcloud_server.runner["forgejo-runner"]`.
+That is the `moved` block in `imports.tf` doing a state rename with no
+infrastructure change.
 
-- [ ] **Step 3: Apply, and capture the new address**
+**Any plan that proposes destroying or replacing `hcloud_server.runner` is
+wrong — stop.** CX types are limited-availability; a destroyed runner may not be
+re-creatable when it is wanted back. Delete protection should make such an apply
+fail rather than succeed, but that is a backstop, not the control.
 
-```bash
-cd tofu && tofu apply runner.tfplan && tofu output
-```
-
-- [ ] **Step 4: Repoint the two places that pin the runner IPv4**
-
-Both are on the VPS side, and until both are updated and the VPS is deployed the
-jump in Step 7 cannot connect:
-
-- `infra.runnerIPv4s` in `modules/options.nix` — `modules/firewall.nix` expands
-  it into one accept per entry. The chain is policy-drop, so a stale address
-  here silently blackholes the jump.
-- `runner_ipv4s` in `tofu/terraform.tfvars` — `destination_ips` on the VPS's
-  `tcp/22` egress rule.
-
-`tofu/runner-firewall.tf` needs nothing: it filters the RUNNER's public NIC and
-pins the VPS's address as the source, which has not changed.
-
-`tofu output runner_ipv4s` prints the new address. Commit the Nix change,
-`tofu apply` the firewall change, then deploy the VPS:
+The runner's IPv4 does not change, so nothing needs repointing:
+`infra.runnerIPv4s` and `var.runner_ipv4s` both stay at `46.225.61.172`.
 
 ```bash
-deploy .#vps-hetzner
+cd tofu && tofu apply runner.tfplan
 ```
 
-- [ ] **Step 5: Confirm the target is the fresh bootstrap image**
+*(A full plan currently also reports `401 Unauthorized` from the Cloudflare
+provider on every DNS resource. Unrelated credential problem, but it blocks an
+untargeted apply — resolve it, or target the runner resources, first.)*
+
+- [ ] **Step 3: Stage the identity for the install**
+
+The box cannot be given user-data, so this file is its permanent source. It
+needs BOTH lines, `instance-id` first: `identity.nix` checks that line against
+the live metadata value before reading the pair, which is what makes a snapshot
+of this disk inert on any other machine.
 
 ```bash
-timeout 20 ssh -o BatchMode=yes -J vps root@<new ip> \
-  'head -2 /etc/os-release; lsblk -dn -o NAME,SIZE; \
-   curl -s -o /dev/null -w "userdata HTTP %{http_code}\n" \
-     http://169.254.169.254/hetzner/v1/userdata'
+stage=$(mktemp -d)
+install -d -m 0700 "$stage/var/lib/forgejo-runner-identity"
+umask 077
+read -rs -p "runner secret: " SEC && echo
+{
+  echo "instance-id: 166488672"
+  echo "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 $SEC"
+} > "$stage/var/lib/forgejo-runner-identity/userdata"
+chmod 0400 "$stage/var/lib/forgejo-runner-identity/userdata"
+unset SEC
 ```
 
-Expected: `ubuntu`, a single ~80G `sda`, and **`userdata HTTP 200`** — the last
-one is the whole point of this task and is worth seeing before the install, not
-after. A 204 means `user_data` did not reach the server and the install will
-come up with no identity.
+`read -rs` so the secret never reaches the terminal or the shell history.
 
-- [ ] **Step 6: Dry-run the install**
+- [ ] **Step 4: Confirm the target is still the bootstrap image**
+
+```bash
+timeout 20 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
+  'head -2 /etc/os-release; lsblk -dn -o NAME,SIZE; echo; \
+   curl -s --max-time 5 http://169.254.169.254/hetzner/v1/metadata/instance-id'
+```
+
+Expected: `ubuntu`, a single ~80G `sda`, and `166488672`. **The instance-id must
+match the line staged in Step 3** or the runner refuses to start — that check is
+the whole point of the line. If it already says NixOS, this task has been run
+before: stop and check, because a reinstall repartitions the disk.
+
+- [ ] **Step 5: Dry-run the install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
   --flake .#runner-hetzner \
   --ssh-option ProxyJump=vps \
+  --extra-files "$stage" \
   --vm-test
 ```
 
-Expected: a VM boots the closure and exits 0. No `--extra-files`: this host
-holds no age key and stages no identity. Note what this does **not** catch —
+Expected: a VM boots the closure and exits 0. The `--extra-files` tree carries
+the identity and nothing else: this host holds no age key and decrypts nothing,
+which `checks.runner-has-no-secrets` asserts. Note what this does **not** catch —
 `modules/hardware.nix` explains that the harness injects its own virtio modules,
 so a missing driver passes here and fails on the real machine. The module list
 is shared with the VPS, which boots, so the risk is low.
 
-- [ ] **Step 7: Install**
+- [ ] **Step 6: Install**
 
 ```bash
 nix run nixpkgs#nixos-anywhere -- \
   --flake .#runner-hetzner \
   --ssh-option ProxyJump=vps \
-  root@<new ip>
+  --extra-files "$stage" \
+  root@46.225.61.172
 ```
 
 Expected: kexec, disko partitions `/dev/sda`, the closure copies, the machine
-reboots. Several minutes. **Irreversible** — it repartitions the disk.
+reboots. Several minutes. **Irreversible** — it repartitions the disk. The
+server itself is untouched: same id, same address, nothing destroyed.
 
-- [ ] **Step 8: Verify the box came up as NixOS**
+Then `rm -rf "$stage"`.
+
+- [ ] **Step 7: Verify the box came up as NixOS**
 
 ```bash
-timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> \
+timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 \
   'hostnamectl; systemctl is-system-running || true'
 ```
 
 Expected: `Operating System: NixOS 26.05`, hostname `forgejo-runner`. A
 `degraded` state is not automatically a failure — check which unit next.
 
-- [ ] **Step 9: Verify the identity unit and the daemon**
+- [ ] **Step 8: Verify the identity unit and the daemon**
 
 ```bash
-timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> '
+timeout 30 ssh -o BatchMode=yes -J vps root@46.225.61.172 '
   systemctl status forgejo-runner-identity.service --no-pager -l | head -20
   echo "=== daemon ==="
   systemctl status forgejo-runner.service --no-pager -l | head -30
@@ -2260,7 +2284,9 @@ timeout 30 ssh -o BatchMode=yes -J vps root@<new ip> '
 ```
 
 Expected: `forgejo-runner-identity.service` succeeded with
-`forgejo runner identity composed from user-data`; `forgejo-runner.service`
+`forgejo runner identity composed from staged file (...)` — this box has no
+user-data and never will, so the staged file is the expected source, and it is
+deliberately NOT deleted after use; `forgejo-runner.service`
 **active (running)**; `/var/lib/forgejo-runner/` holding `config.yaml` (0440)
 and `token` (0400) and **no `.runner`**; and the grep returning `1`.
 
@@ -2270,7 +2296,7 @@ uuid and secret shapes before the daemon sees them, so a malformed pair fails
 loudly in the identity unit instead — a loop here means Forgejo rejected a
 well-formed credential, i.e. the record was deleted or the secret is stale.
 
-- [ ] **Step 10: Confirm it appears in Forgejo**
+- [ ] **Step 9: Confirm it appears in Forgejo**
 
 Site Administration → Actions → Runners. Expected: a runner named
 `forgejo-runner`, status **Idle**, carrying the four labels.
@@ -2722,7 +2748,7 @@ which is what keeps a fresh clone from paying a cold build.
 
 Two things the clone does NOT get, by design: a private NIC (there is none to
 attach) and a tailscale identity (it runs no tailscale). Its admin path is
-`ssh -J vps root@<new ip>`, which needs the new address added to
+`ssh -J vps root@46.225.61.172`, which needs the new address added to
 `tofu/modules/hetzner-firewall`'s scoped egress rule and to the VPS's own
 output chain in `modules/firewall.nix` — two edits per clone, deliberately, so
 a new box cannot be reached from the VPS until someone says so.

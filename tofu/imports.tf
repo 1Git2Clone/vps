@@ -144,3 +144,17 @@ import {
   to = hcloud_server.runner["forgejo-runner"]
   id = "166488672"
 }
+
+# THE RUNNER BECAME A for_each. Its state address changed from
+# hcloud_server.runner to hcloud_server.runner["forgejo-runner"], and without
+# this block tofu reads that as "destroy one server, create another" — which on
+# a delete-protected box fails the apply outright, and on an unprotected one
+# would have destroyed a limited-availability CX server to rename a state key.
+#
+# A `moved` block rather than a hand-run `tofu state mv`: the migration lives in
+# the repo, applies itself on the next plan, and is still correct for anyone
+# planning from a state that has already moved (it becomes a no-op).
+moved {
+  from = hcloud_server.runner
+  to   = hcloud_server.runner["forgejo-runner"]
+}
