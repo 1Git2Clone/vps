@@ -177,14 +177,43 @@ in
           # bridge with caddy — so they arrive here as plain input instead, and
           # a monitor pointed at the name simply times out.
           #
-          # NOT narrowed to a source subnet, unlike that rule. The proxy network
-          # is left on docker's address pool (see modules/containers/default.nix)
-          # and pinning a subnet onto a network that already exists means
-          # deleting it by hand, which detaches every container on it. The cost
-          # of the wider match is small: both ports already answer the whole
-          # tailnet, so the containers on the other bridges gain nothing they
-          # could not already reach.
-          iifname "br-*" tcp dport {
+          # NOT narrowed to a POSITIVE source subnet, unlike that rule. The
+          # proxy network is left on docker's address pool (see
+          # modules/containers/default.nix) and pinning a subnet onto a network
+          # that already exists means deleting it by hand, which detaches every
+          # container on it. So `br-*` stays, and the one subnet this repo DOES
+          # pin is subtracted instead.
+          #
+          # THE EXCLUSION IS WHY THE RULE ABOVE IS WORTH WRITING. That rule
+          # grants the bot exactly two ports, 4317 and 6432, from exactly
+          # botSubnet. Without the `!=` here, this rule immediately handed the
+          # same bridge three more — the bot and its redis could reach grafana,
+          # syncthing's GUI and caddy's tailnet listener, none of which they
+          # have any business talking to. A narrow grant followed by a broad one
+          # is just the broad one.
+          #
+          # The bot is the right container to subtract first: it is the only one
+          # here whose input is arbitrary text from strangers and which ships
+          # that text to a third-party model, so it is where an RCE would land.
+          # Both services it loses are credential-protected (grafana has a real
+          # admin login with sign-up off; syncthing's GUI has a password), so
+          # this is defence in depth rather than a hole being closed — it just
+          # means a bot compromise has to also be a credential compromise.
+          #
+          # `ip saddr` makes this rule IPv4-ONLY, where the bare version matched
+          # both families. That is not a regression today — docker's bridges
+          # here carry no IPv6 (the daemon's ipv6 support is off, so a container
+          # has no v6 address to source from) — but it is the thing to remember
+          # if that ever changes: turning on docker IPv6 would need an `ip6
+          # saddr != <v6 botSubnet>` sibling, or these three ports go dark over
+          # v6 with every other check passing.
+          #
+          # The residual is deliberate and worth naming: searxng, kuma, forgejo,
+          # navidrome and the two minecraft servers share the proxy bridge with
+          # caddy and are still matched. Subtracting them needs a pinned subnet
+          # and therefore a network recreation, which is a maintenance window,
+          # not an edit.
+          iifname "br-*" ip saddr != ${config.infra.botSubnet} tcp dport {
             3000,
             8384,
             ${toString config.infra.tailnetHttpsPort}

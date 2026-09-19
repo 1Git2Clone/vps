@@ -77,6 +77,30 @@ which stops every container. A wrong value here costs one failed container
 start and a rollback; pinning it costs a full container restart on every deploy
 that touches the line.
 
+The input rule that makes that route work is
+`iifname "br-*" ip saddr != 172.30.0.0/24 tcp dport { 3000, 8384, 8443 }`, and
+the exclusion is the point. The rule above it grants the bot exactly two ports
+(4317, 6432) from exactly `botSubnet`; without the `!=`, this one immediately
+handed the same bridge three more, so a narrow grant was followed by a broad one
+and only the broad one meant anything. The bot is the right container to
+subtract first — it is the only one here whose input is arbitrary text from
+strangers that it then ships to a third-party model.
+
+What remains matched is **deliberate and worth knowing**: searxng, kuma,
+forgejo, navidrome and the two minecraft servers share the proxy bridge with
+caddy, so they are still admitted to those three ports. Both services behind
+them are credential-protected (grafana has a real admin login with sign-up off;
+syncthing's GUI has a password), so this is defence in depth, not a hole being
+closed. Subtracting the rest needs a **positive** source match, which needs a
+pinned subnet on `proxy`, which means deleting a network that already exists and
+detaching every container on it — a maintenance window, not an edit.
+
+One silent consequence of adding `ip saddr`: the rule is now **IPv4-only**,
+where the bare version matched both families. That is free today because
+docker's bridges here carry no IPv6, but turning on docker IPv6 would need an
+`ip6 saddr !=` sibling or those three ports go dark over v6 with every other
+check still passing.
+
 ## Tailscale
 
 `--ssh` is on, so administrative access is Tailscale SSH. The tailnet interface
