@@ -100,6 +100,21 @@ import {
   id       = "${var.cloudflare_zone_id}/${each.value}"
 }
 
+# The tailnet policy file, adopted rather than written over. `tailscale_acl`
+# leaves `overwrite_existing_content` at false precisely so this import is
+# mandatory: without it the provider refuses to touch a policy tofu has never
+# read. The id is ignored by the provider ("ID doesn't matter" in its own import
+# docs) because a tailnet has exactly one policy file; `acl` is the spelling its
+# documentation uses.
+#
+# An import puts the CURRENT policy in state, which is what makes the first plan
+# a readable diff instead of a blind replacement. It does not stop the apply
+# from replacing it -- read that diff. See tofu/tailscale.tf.
+import {
+  to = tailscale_acl.main
+  id = "acl"
+}
+
 # DNSSEC was switched on in the dashboard before tofu knew about it, so this is
 # an adoption rather than a creation — without it the first plan proposes
 # CREATING a zone setting that already exists. The id is the bare zone id: a
