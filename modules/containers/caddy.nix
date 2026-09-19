@@ -27,6 +27,7 @@ let
     domain
     dockerBridgeGateway
     pagesVolume
+    runnerIPv4s
     proxyNetwork
     tailnetHttpPort
     tailnetHttpsPort
@@ -98,6 +99,43 @@ let
   # Where the pages volume is mounted inside this container.
   pagesRoot = "/srv/pages";
 
+  # WHAT A CI RUNNER IS ALLOWED TO ASK git.<domain> FOR. Everything else from a
+  # runner address gets a 403.
+  #
+  # MEASURED, NOT GUESSED. Access logging was turned on for this vhost and a
+  # real workflow (hutao/compress Pages, run #7) was driven through it on the
+  # new runner. Filtered to the runner's address, the complete set was:
+  #
+  #    36  POST 200  /api/actions/runner.v1.RunnerService/FetchTask
+  #    88  POST 200  /api/actions/runner.v1.RunnerService/UpdateLog
+  #    80  POST 200  /api/actions/runner.v1.RunnerService/UpdateTask
+  #     1  GET  200  /hutao/compress/info/refs
+  #     1  POST 200  /hutao/compress/git-upload-pack
+  #
+  # Nothing else. In particular no /api/v1 and no web UI, which is what makes
+  # this worth doing: the runner's real surface is tiny next to what an
+  # address-only control has to leave open.
+  #
+  # /api/actions_pipeline/* IS THE ONE ENTRY NOT IN THAT LIST, and it is here on
+  # purpose. It carries artifact upload, which is how pages publishes now that
+  # the job can no longer write the volume (modules/pages-pull.nix). It did not
+  # appear in the capture because the upload step failed BEFORE issuing a
+  # request — zero requests to that prefix, which is itself how we know the
+  # failure was client-side rather than anything at this layer. Leaving it out
+  # would guarantee a 403 the moment uploads start working, and the whole point
+  # of measuring was to avoid breaking CI in ways that read as a Forgejo fault.
+  #
+  # The two git paths are wildcarded by owner and repo rather than pinned to the
+  # repos that publish today: `actions/checkout` runs in every workflow on every
+  # repo this runner serves, and pinning them would turn "someone added a repo"
+  # into a checkout failure.
+  runnerApiPaths = [
+    "/api/actions/*"
+    "/api/actions_pipeline/*"
+    "/*/*/info/refs"
+    "/*/*/git-upload-pack"
+  ];
+
   sites = [
     {
       host = "music.${domain}";
@@ -110,6 +148,29 @@ let
     {
       host = "git.${domain}";
       upstream = "forgejo:4242";
+
+      # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
+      # address-and-port control: the cloud firewall, the runner's own nftables,
+      # and this host's output chain can all say "that box may reach tcp/443
+      # here" and nothing finer. But the runner MUST reach 443 on this host —
+      # that is how it fetches jobs — so without something reading the request,
+      # a rooted CI job gets the entire Forgejo surface: every repo it can see,
+      # the whole web UI, the full /api/v1 with whatever its session carries.
+      #
+      # remote_ip is the TCP peer and never a header. Caddy consults
+      # X-Forwarded-For only when `trusted_proxies` is set, which it is not
+      # anywhere in this file, and every record in tofu/modules/cloudflare-dns
+      # is `proxied = false`, so nothing sits in front of caddy to launder an
+      # address. A root-compromised runner can forge any credential it holds; it
+      # cannot forge its source address, because Hetzner assigns it and filters
+      # spoofed egress upstream. That is why this is keyed on address rather
+      # than on a token.
+      #
+      # This GRANTS NOTHING. It is a pure restriction applied to a set of
+      # addresses, so the worst a mistake here can do is break CI — loudly, in a
+      # way a workflow run reports — rather than open something up.
+      restrictRunners = true;
+
     }
     {
       host = "status.${domain}";
@@ -320,6 +381,24 @@ let
             [
               "\treverse_proxy ${site.upstream} {"
               "\t\theader_up Host {upstream_hostport}"
+              "\t}"
+            ]
+          else if site.restrictRunners or false then
+            # `handle` blocks are mutually exclusive and evaluated in order, so
+            # the trailing bare `handle` is what every non-runner client falls
+            # through to. A plain `reverse_proxy` outside a handle would run for
+            # runner requests too and defeat the whole thing.
+            [
+              "\t@runner remote_ip ${lib.concatStringsSep " " (lib.attrValues runnerIPv4s)}"
+              "\thandle @runner {"
+              "\t\t@runner_api path ${lib.concatStringsSep " " runnerApiPaths}"
+              "\t\thandle @runner_api {"
+              "\t\t\treverse_proxy ${site.upstream}"
+              "\t\t}"
+              "\t\trespond \"not permitted from a CI runner\" 403"
+              "\t}"
+              "\thandle {"
+              "\t\treverse_proxy ${site.upstream}"
               "\t}"
             ]
           else
