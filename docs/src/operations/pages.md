@@ -44,6 +44,17 @@ sequenceDiagram
 **Every connection is initiated on the VPS**, and in fact never leaves the host
 — the artifact is in Forgejo's own storage, in a container on the same box.
 
+**Pull requests upload too, under a different name.** `pages-pull` looks for an
+artifact called exactly `pages` and ignores every other one, so a PR uploading
+`pages-preview` exercises the whole path — node, the action, the twirp service,
+caddy's allow-list — and publishes nothing.
+
+That is not symmetry for its own sake. The upload step was originally gated
+`if: push && main`, which meant it was skipped on every pull request: the
+branch that introduced this workflow went green having never once run the step,
+and the missing-node failure landed on `main` at merge. A gate that turns the
+risky step off for every rehearsal is not a gate.
+
 **No credential.** The publishing repos are public and Forgejo serves
 `/api/v1/repos/<owner>/<repo>/actions/artifacts` anonymously (verified
 2026-09-19 against the live instance: 200 with a bare JSON array body). The day

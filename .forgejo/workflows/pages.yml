@@ -82,10 +82,6 @@ jobs:
           nix develop .#ci -c mdbook-mermaid install docs
           nix develop .#ci -c mdbook build docs
 
-      # The staging path is the contract with modules/pages-pull.nix: whatever
-      # is in the artifact is unpacked verbatim under <owner>/<repo>, so this
-      # directory name is the `/docs/` in the published URL. Changing it
-      # changes the URL and nothing warns you.
       - name: Stage
         run: |
           mkdir -p _site/docs
@@ -105,10 +101,69 @@ jobs:
       #
       # The name `pages` is not cosmetic either — pages-pull.nix looks for an
       # artifact with exactly this name and ignores every other one.
+      # THE UPLOAD STEP IS A JAVASCRIPT ACTION AND THIS IMAGE HAS NO NODE.
+      # `nix` is nixos/nix, which ships nix, bash, gitMinimal, curl and
+      # coreutils and nothing else — modules/runner/identity.nix says so in as
+      # many words. The runner executes a JS action by invoking `node` inside
+      # the job container, so without this the step dies before it runs:
+      #
+      #   crun: executable file `node` not found in $PATH
+      #   [runner]: exitcode '127': command not found
+      #
+      # Installing into /root/.nix-profile rather than relying on $GITHUB_PATH,
+      # because that directory is the FIRST entry of the image's own PATH
+      # (verified against the registry's image config for nixos/nix:2.35.2), so
+      # the binary is found by the container itself and not by anything the
+      # runner has to agree to carry forward. The $GITHUB_PATH line is a second
+      # belt for the case where the runner rebuilds PATH from scratch.
+      #
+      # `--inputs-from .` is what keeps this pinned: a bare `nixpkgs#nodejs_22`
+      # resolves through the global registry to whatever channel the image
+      # happens to have, which is a second, unlocked nixpkgs. This one comes
+      # from our flake.lock like everything else.
+      #
+      # The action declares `using: node20`; node 22 runs it, and 22 is what
+      # the runner's own `node-22` label means on this instance.
+      - name: Provide node for the upload action
+        run: |
+          nix profile install --profile /root/.nix-profile \
+            --inputs-from . nixpkgs#nodejs_22
+          echo "/root/.nix-profile/bin" >> "$GITHUB_PATH"
+          node --version
+
+      # The staging path is the contract with modules/pages-pull.nix: whatever
+      # is in the artifact is unpacked verbatim under <owner>/<repo>, so this
+      # directory name is the `/docs/` in the published URL. Changing it
+      # changes the URL and nothing warns you.
+      # The artifact NAME is the publish switch, not an `if:` on the step.
+      #
+      # It used to be `if: push && main`, and that is exactly how the missing
+      # node above reached main unnoticed: the step was SKIPPED on the pull
+      # request, so the branch went green having never once executed the thing
+      # that was broken. A gate that turns the risky step off for every rehearsal
+      # is not a gate, it is a blindfold.
+      #
+      # Now the upload always runs and the name decides what happens to it.
+      # modules/pages-pull.nix looks for an artifact called exactly `pages` and
+      # ignores every other one, so a pull request uploading `pages-preview`
+      # exercises the whole path — node, the action, the twirp service, caddy's
+      # allow-list — and publishes nothing.
+      #
+      # Computed into $GITHUB_ENV by a plain shell `if` rather than with an
+      # inline `${{ a && b || c }}` ternary: this file's job is to be obvious,
+      # and the ternary's operand-returning semantics are a GitHub-ism worth not
+      # betting a silent publish on.
+      - name: Decide the artifact name
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then
+            echo "ARTIFACT_NAME=pages" >> "$GITHUB_ENV"
+          else
+            echo "ARTIFACT_NAME=pages-preview" >> "$GITHUB_ENV"
+          fi
+
       - name: Upload
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: forgejo/upload-artifact@v5
         with:
-          name: pages
+          name: ${{ env.ARTIFACT_NAME }}
           path: _site
           retention-days: 7
