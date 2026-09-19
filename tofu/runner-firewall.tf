@@ -28,28 +28,37 @@ resource "hcloud_firewall" "runner" {
   name = "runner-firewall"
 
   # ---- inbound -------------------------------------------------------------
-  # One rule, and it is scaffolding.
+  # One rule, and it is PERMANENT — not the scaffolding an earlier version of
+  # this file called it.
   #
-  # nixos-anywhere has to reach a shell on this box before NixOS exists on it,
-  # and the bootstrap Ubuntu's sshd is on 22. Rather than opening 22 to the
-  # internet, it is opened only to the VPS, so the install runs as
+  # The original plan was: open 22 to the VPS for nixos-anywhere, then delete
+  # the rule once the runner joined the tailnet and administration moved there.
+  # The runner does not join the tailnet. modules/firewall.nix on the VPS
+  # accepts `iifname tailscale0` with no source qualification, so a runner on
+  # the tailnet reaches every port on that box — sshd on 2222, pgbouncer,
+  # tempo's OTLP receiver, the mail ports — and the whole one-way design
+  # evaporates. See the design doc's "Why the runner is not on the tailnet
+  # either".
   #
-  #     nixos-anywhere --ssh-option ProxyJump=vps root@10.0.1.3
+  # So this is the admin path, for good:
   #
-  # i.e. jumped through a box that is already reachable over tailscale. Note
-  # this needs tcp/22 OUTBOUND on main-firewall, which the VPS does not
-  # currently have — see the note in hetzner-firewall.tf.
+  #     ssh -J vps root@46.225.61.172
+  #     nixos-anywhere --flake .#runner-hetzner \
+  #       --ssh-option ProxyJump=vps root@46.225.61.172
   #
-  # DELETE THIS RULE once NixOS is installed and tailscale is up there. At that
-  # point the correct inbound set is empty: administration goes over the tailnet,
-  # and the tailnet does not need an inbound rule to work (it NAT-traverses, and
-  # falls back to DERP over outbound 443).
+  # The public address, NOT the 10.0.1.3 an earlier revision named here — the
+  # private NIC was removed in 5d0ae14 and that address does not exist.
+  #
+  # It needs tcp/22 outbound on main-firewall, which tofu/modules/
+  # hetzner-firewall grants to this /32 — AND a matching rule in the VPS's own
+  # nftables output chain, which is policy-drop and did not have one. The cloud
+  # rule alone is necessary and not sufficient.
   rule {
     direction   = "in"
     protocol    = "tcp"
     port        = "22"
     source_ips  = ["167.233.24.58/32"]
-    description = "Bootstrap sshd, from the VPS only — remove after nixos-anywhere"
+    description = "Admin ssh, from the VPS only (ssh -J vps)"
   }
 
   # ---- outbound ------------------------------------------------------------
@@ -102,32 +111,12 @@ resource "hcloud_firewall" "runner" {
     description     = "NTP"
   }
 
-  # Tailscale, for when this box joins the tailnet and the inbound rule above
-  # can be deleted. 443/udp is the DERP fallback that makes it work even when
-  # direct fails; 3478 and 41641 are what let it avoid the relay.
-  rule {
-    direction       = "out"
-    protocol        = "udp"
-    port            = "443"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-    description     = "QUIC / Tailscale DERP"
-  }
-
-  rule {
-    direction       = "out"
-    protocol        = "udp"
-    port            = "3478"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-    description     = "STUN (Tailscale)"
-  }
-
-  rule {
-    direction       = "out"
-    protocol        = "udp"
-    port            = "41641"
-    destination_ips = ["0.0.0.0/0", "::/0"]
-    description     = "Tailscale direct (avoids DERP relay)"
-  }
+  # NO TAILSCALE RULES. An earlier revision carried udp/443, udp/3478 and
+  # udp/41641 so this box could join the tailnet once installed. It must not:
+  # the VPS accepts `iifname tailscale0` unconditionally, so a tailnet runner
+  # bypasses every one-way control this split exists to create. The absence is
+  # the control — modules/runner/firewall.nix carries an assertion for the
+  # host-side half.
 }
 
 # Attachment as its own resource, matching modules/hetzner-firewall: a rule
