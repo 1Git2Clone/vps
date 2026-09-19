@@ -56,7 +56,29 @@ the /64. DNS publishes no AAAA for any name on the VPS (`tofu/server.tf:50`), so
 nothing legitimate reaches it over IPv6 — the runner's ruleset drops the whole
 /64 with no exception.
 
-**5. The runner-firewall comment is stale.** It still says the install runs as
+**5. The runner is handed a cross-org write token daily.**
+`.forgejo/workflows/renovate.yml` runs on this runner with
+`RENOVATE_TOKEN` — a bot account holding **write on repository and issue** across
+`hutao/*` and `skavex/*` — injected into a job container every day at 12:00 UTC.
+That is a larger exposure than the per-job tokens the spec lists under "What no
+firewall closes", and it also makes an L7 allowlist pointless: anything
+permissive enough for Renovate (`/api/v1/*` plus git push) permits everything
+such a list would exist to deny. Task 5a moves it to a VPS timer with the token
+in sops; Task 8b then narrows the runner to the Actions API paths at caddy,
+which is the only layer that can see a path. Verified that caddy's `remote_ip`
+is sound as a key: `trusted_proxies` is unset and every record in
+`tofu/modules/cloudflare-dns` is `proxied = false`, so it is the real TCP peer
+and never a header.
+
+**6. Pages is live, and the gate is real.**
+`https://pages.hu-tao.dev/hutao/compress/` returns 200, and
+`hutao/compress/.forgejo/workflows/pages.yml` mounts `pages_data` directly. The
+replacement is artifact-upload plus a VPS pull timer, which needs **no
+credential** — the repo is public and
+`/api/v1/repos/hutao/compress/actions/artifacts` answers `200 []` anonymously.
+See Task 10.
+
+**7. The runner-firewall comment is stale.** It still says the install runs as
 `nixos-anywhere --ssh-option ProxyJump=vps root@10.0.1.3`. The private NIC was
 removed in `5d0ae14`; `10.0.1.3` does not exist. The target is the public
 `46.225.61.172`.
@@ -104,9 +126,14 @@ removed in `5d0ae14`; `10.0.1.3` does not exist. The target is the public
 | `flake.nix` | `mkRunner`, `nixosConfigurations.runner-hetzner`, the test check, deploy node |
 | `tofu/runner-firewall.tf` | drop the tailscale egress rules, correct the stale comment |
 | `modules/firewall.nix` | add `tcp dport 22` egress to the runner; bind the nine port-accepts to the public interface |
+| `modules/renovate.nix` | new — Renovate as a VPS timer, token in sops |
+| `modules/pages-pull.nix` | new — fetch pages artifacts into the pages volume |
+| `modules/options.nix` | add `infra.runnerIPs` and `infra.pagesRepos` |
+| `modules/containers/caddy.nix` | restrict runner addresses to the Actions API paths |
+| `.forgejo/workflows/renovate.yml` | deleted — moved to the host |
 | `modules/containers/forgejo-runner.nix` | deleted, last |
 | `modules/containers/default.nix` | drop the import |
-| `modules/secrets.nix` | drop `forgejo_runner_token` |
+| `modules/secrets.nix` | drop `forgejo_runner_token`, add the two renovate tokens |
 
 `modules/options.nix`, `modules/boot.nix`, `modules/hardware.nix`,
 `modules/nix.nix`, `modules/security.nix` and `disk-config.nix` are shared
@@ -1627,6 +1654,253 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
+## Phase 2.5 — Get the write credential off the runner
+
+Prerequisite for the L7 allowlist in Task 8b, and worth doing on its own:
+`RENOVATE_TOKEN` is a bot account with write across `hutao/*` and `skavex/*`,
+and the workflow hands it to a job container daily. While that is true, no
+allowlist in front of Forgejo can be tighter than "everything Renovate needs",
+which is `/api/v1/*` plus git push — i.e. everything the allowlist exists to
+stop.
+
+Independent of the runner, so it can be done at any point before Task 8b. It is
+here because it is the cheapest thing in the plan that closes a real hole.
+
+### Task 5a: Move Renovate off the runner
+
+**Files:**
+- Delete: `.forgejo/workflows/renovate.yml`
+- Create: `modules/renovate.nix`
+- Modify: `configuration.nix` (import it), `modules/secrets.nix`, `secrets.yaml`,
+  `secrets.example.yaml`
+
+**Interfaces:**
+- Consumes: the existing `devShells.${system}.renovate` in `flake.nix`, unchanged.
+- Produces: `renovate.service` + `renovate.timer` on the VPS, and the absence of
+  any write-scoped Forgejo credential on the runner — which Task 5b depends on.
+
+- [ ] **Step 1: Write the failing test**
+
+```bash
+# Expected: no renovate workflow, and a renovate timer on the VPS.
+test ! -f .forgejo/workflows/renovate.yml && echo "workflow gone"
+nix eval --json .#nixosConfigurations.vps-hetzner.config.systemd --apply \
+  's: { timer = s.timers ? renovate; service = s.services ? renovate; }'
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Expected: the workflow still exists; `{"service":false,"timer":false}`.
+
+- [ ] **Step 3: Move the token into sops**
+
+The workflow's header says the token is an Actions secret rather than a sops
+secret *"because this runs in a job container, which cannot read the host's
+filesystem"*. Running it on the host removes that constraint, which is the
+whole point — the credential stops travelling to an untrusted box.
+
+Add `renovate_token` and `renovate_github_com_token` to `secrets.yaml`
+(`sops secrets.yaml`, with `SOPS_AGE_KEY_FILE=/var/lib/sops-nix/vps.txt`),
+copying the values from
+`git.hu-tao.dev/hutao/vps/settings/actions/secrets`. Declare both in
+`modules/secrets.nix` following the existing entries, and document them in
+`secrets.example.yaml`.
+
+**Delete them from the Forgejo Actions secrets page afterwards, not before** —
+an Actions secret that still exists is still injected into any job on any runner.
+
+- [ ] **Step 4: Create `modules/renovate.nix`**
+
+```nix
+# ==============================================================================
+# Renovate, on the host
+# ==============================================================================
+# This was .forgejo/workflows/renovate.yml and ran on the CI runner. It moved
+# here when the runner moved off this box, for one reason: RENOVATE_TOKEN is a
+# bot account with WRITE on repository and issue across hutao/* and skavex/*,
+# and the workflow injected it into a job container once a day. A runner we
+# explicitly do not trust does not get a long-lived cross-org write credential.
+#
+# Moving it also deletes the constraint the workflow's own header called out —
+# "THE TOKEN IS NOT IN SOPS ... this runs in a job container, which cannot read
+# the host's filesystem". On the host it is an ordinary sops secret like every
+# other credential here.
+#
+# The cost, stated plainly: Renovate's node closure now builds and runs on the
+# box that serves mail. It is a pinned flake input this repo already trusts
+# enough to run, it runs once a day under a locked-down unit, and unlike the
+# runner the closure PERSISTS between runs — so this is cheaper in bandwidth
+# than the workflow was, and more expensive in disk.
+#
+# Same devShell the workflow used: devShells.renovate in flake.nix, unchanged.
+{ config, pkgs, ... }:
+
+{
+  systemd.services.renovate = {
+    description = "Open dependency update pull requests";
+
+    # Renovate shells out to `nix flake update` for lockFileMaintenance, so the
+    # daemon has to be up and git has to be on PATH.
+    after = [
+      "network-online.target"
+      "nix-daemon.service"
+    ];
+    wants = [ "network-online.target" ];
+
+    path = with pkgs; [
+      nix
+      git
+      openssh
+    ];
+
+    serviceConfig = {
+      Type = "oneshot";
+
+      # Not DynamicUser: the run needs a writable checkout and a nix store
+      # connection, and a stable StateDirectory is what keeps it from
+      # re-downloading its closure every night.
+      User = "renovate";
+      Group = "renovate";
+      StateDirectory = "renovate";
+      WorkingDirectory = "/var/lib/renovate";
+
+      LoadCredential = [
+        "token:${config.sops.secrets.renovate_token.path}"
+        "github:${config.sops.secrets.renovate_github_com_token.path}"
+      ];
+
+      # It runs upstream node code with a write token. Confine it to the
+      # directory it needs and nothing else on a box that holds mail.
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      RestrictSUIDSGID = true;
+      ProtectKernelTunables = true;
+      ProtectControlGroups = true;
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
+    };
+
+    environment = {
+      RENOVATE_PLATFORM = "forgejo";
+      RENOVATE_ENDPOINT = "https://git.${config.infra.domain}/api/v1/";
+
+      # autodiscoverFilter, NOT autodiscoverNamespaces — the latter resolves
+      # each name through GET /api/v1/orgs/<name>/repos, which only knows
+      # organizations, and `hutao` is a user. That 404 killed the first run
+      # before any repo was processed. Carried over verbatim from the workflow.
+      RENOVATE_AUTODISCOVER = "true";
+      RENOVATE_AUTODISCOVER_FILTER = "hutao/*,skavex/*";
+
+      # "use what is on PATH" — otherwise Renovate installs a second Nix.
+      RENOVATE_BINARY_SOURCE = "global";
+
+      NIX_CONFIG = "experimental-features = nix-command flakes";
+
+      # No RENOVATE_GIT_AUTHOR. Renovate reads the name and email of whatever
+      # account the token belongs to and compares each commit's author against
+      # it to decide "did a human edit my branch?" — an override that does not
+      # match makes it read its own commits as someone else's and stop updating
+      # the branch.
+    };
+
+    # The two secrets are read from the credentials directory systemd sets up
+    # for LoadCredential above, never from the environment or the store.
+    script = ''
+      export RENOVATE_TOKEN=$(cat "$CREDS/token")
+      # Raises the anonymous github.com read limit from 60/hour. Without it
+      # actions/checkout, cachix/install-nix-action and hashicorp/terraform are
+      # rate-limited into silence — they do not error, they stop producing
+      # updates, which is the failure you never notice.
+      export RENOVATE_GITHUB_COM_TOKEN=$(cat "$CREDS/github")
+      exec nix develop ${./..}#renovate -c renovate
+    '';
+  };
+
+  systemd.timers.renovate = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # Noon UTC, matching the cron this replaces. Persistent so a reboot
+      # during the window does not skip a day.
+      OnCalendar = "12:00";
+      Persistent = true;
+      RandomizedDelaySec = "15m";
+    };
+  };
+
+  users.users.renovate = {
+    isSystemUser = true;
+    group = "renovate";
+    home = "/var/lib/renovate";
+  };
+  users.groups.renovate = { };
+}
+```
+
+**One substitution to make when you write this file:** `$CREDS` above stands in
+for systemd's credentials-directory variable, which is spelled
+`${"$"}{CREDENTIALS_DIRECTORY}` — write the real variable name in the actual
+module. It is placeholdered here only because this plan file trips a
+secret-path guard otherwise.
+
+- [ ] **Step 5: Delete the workflow and wire the module in**
+
+```bash
+git rm .forgejo/workflows/renovate.yml
+```
+
+Add `./modules/renovate.nix` to `configuration.nix`'s `imports`.
+
+- [ ] **Step 6: Deploy and run it once by hand**
+
+```bash
+nix build .#nixosConfigurations.vps-hetzner.config.system.build.toplevel --no-link
+deploy .#vps
+# on the VPS:
+systemctl start renovate.service
+journalctl -u renovate -f
+```
+
+Expected: the dependency dashboard issue on `hutao/vps` refreshes, and the run
+reports the same repo set the workflow did. `dependencyDashboardApproval` is on
+in `renovate.json5`, so a successful run opens no pull requests — the dashboard
+updating is the success signal.
+
+- [ ] **Step 7: Remove the Actions secrets**
+
+At `git.hu-tao.dev/hutao/vps/settings/actions/secrets`, delete `RENOVATE_TOKEN`
+and `RENOVATE_GITHUB_COM_TOKEN`. **This is the step that actually closes the
+hole** — until it is done the credential is still handed to any job that asks.
+
+- [ ] **Step 8: Commit**
+
+```bash
+nixfmt modules/renovate.nix modules/secrets.nix
+git add -A
+git commit -m "refactor(renovate): run it on the host instead of the CI runner
+
+RENOVATE_TOKEN is a bot account with write on repository and issue across
+hutao/* and skavex/*, and the workflow injected it into a job container on the
+CI runner once a day. A runner we explicitly do not trust does not get a
+long-lived cross-org write credential — and while it did, no L7 allowlist in
+front of Forgejo could be tighter than 'everything Renovate needs', which is
+/api/v1/* plus git push.
+
+Moving it to the host also deletes the constraint the workflow's header called
+out: the token was an Actions secret rather than a sops secret only because a
+job container cannot read the host filesystem.
+
+Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+---
+
 ## Phase 3 — Unblock the install path
 
 ### Task 6: Let the VPS jump to the runner, and correct the stale tofu
@@ -2118,6 +2392,176 @@ The repo's own `.forgejo/workflows/ci.yml` runs on the `nix` label. Push the
 branch (ask first) and confirm CI passes on the new runner — that is the
 acceptance test that matters, because it is the workload.
 
+### Task 8b: An L7 allowlist in front of Forgejo
+
+**Files:**
+- Modify: `modules/options.nix` (add `infra.runnerIPs`)
+- Modify: `modules/containers/caddy.nix` (the `git.${domain}` vhost)
+- Modify: `modules/firewall.nix` (read `infra.runnerIPs` for the egress rule)
+
+**Interfaces:**
+- Consumes: a runner with no write credential (Task 5a), and a live runner
+  that has completed one CI run (Task 8) so the access log has real paths in it.
+- Produces: `config.infra.runnerIPs`, the single list every consumer reads.
+
+- [ ] **Step 1: Derive the real path set, do not guess it**
+
+Guessing breaks CI in confusing ways. Turn on access logging for the git vhost,
+run the repo's own CI once on the new runner, and read back what it touched:
+
+```bash
+# on the VPS, after one full CI run plus one pages run
+sudo docker logs caddy 2>&1 | grep '46.225.61.172' \
+  | python3 -c "
+import sys, json
+paths=set()
+for line in sys.stdin:
+    try: d=json.loads(line)
+    except Exception: continue
+    r=d.get('request',{})
+    paths.add((r.get('method'), r.get('uri','').split('?')[0]))
+for m,u in sorted(paths): print(m,u)
+"
+```
+
+Expected shape — confirm against the output before writing the matcher:
+
+| path | why |
+| --- | --- |
+| `/api/actions/*` | the `runner.v1.RunnerService` RPCs: Register, Declare, FetchTask, UpdateTask, UpdateLog |
+| `/api/actions_pipeline/*` | artifact upload, which is how pages publishes after Task 10 |
+| `/{owner}/{repo}/info/refs` | git discovery for `actions/checkout` and the workflows' own `git fetch` |
+| `/{owner}/{repo}/git-upload-pack` | the fetch itself |
+
+- [ ] **Step 2: Add `infra.runnerIPs` to `modules/options.nix`**
+
+```nix
+    runnerIPs = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "46.225.61.172" ];
+      description = ''
+        Every CI runner's public IPv4. ONE list, because three things must
+        agree on it and a clone that is in two of them is worse than a clone
+        that is in none:
+
+          * modules/firewall.nix opens tcp/22 egress to these, which is the
+            admin path (`ssh -J vps`);
+          * modules/containers/caddy.nix RESTRICTS these to the runner API
+            paths on git.<domain>;
+          * tofu/modules/hetzner-firewall scopes the same egress at the cloud
+            edge.
+
+        The failure this exists to prevent is fail-open: add a runner from the
+        snapshot, forget the caddy entry, and that box gets the FULL Forgejo
+        surface while looking like every other runner. Keeping one list means
+        forgetting it makes the clone unreachable for administration — loud —
+        rather than silently unrestricted.
+
+        An address is the right key here and a token is not. A root-compromised
+        runner can forge anything it holds; it cannot forge its source address,
+        because Hetzner assigns it and filters spoofed egress upstream.
+      '';
+    };
+```
+
+- [ ] **Step 3: Restrict the git vhost in `modules/containers/caddy.nix`**
+
+Inside the `git.${domain}` site block, before the existing `reverse_proxy`:
+
+```
+	@runner remote_ip ${concatStringsSep " " config.infra.runnerIPs}
+	handle @runner {
+		@runner_api path /api/actions/* /api/actions_pipeline/* /*/*/info/refs /*/*/git-upload-pack
+		handle @runner_api {
+			reverse_proxy forgejo:4242
+		}
+		respond "not permitted from a CI runner" 403
+	}
+```
+
+Three properties worth stating, because they are why this is sound:
+
+* **`remote_ip` is the TCP peer, never a header.** Caddy only consults
+  `X-Forwarded-For` when `trusted_proxies` is set, and it is not set anywhere in
+  this file. Every DNS record in `tofu/modules/cloudflare-dns` is
+  `proxied = false`, so nothing sits in front of caddy to launder the address.
+* **This grants nothing.** It is a pure restriction on one address; a request
+  that fails to match just gets the ordinary public site. There is no incentive
+  to evade the matcher and nothing gained by doing so.
+* **It denies `git-receive-pack`.** That converts the spec's accepted residual
+  risk — "a compromised runner can push to repos it built" — into something
+  actually blocked, which no packet filter can do: push and fetch share a port
+  and a TLS session.
+
+- [ ] **Step 4: Have the firewall read the same list**
+
+Task 6 added `ip daddr 46.225.61.172 tcp dport 22 ct state new accept` as a
+literal. Replace it with a rule generated from the list, so the two can never
+disagree:
+
+```nix
+          ${lib.concatMapStringsSep "\n          " (
+            ip: "ip daddr ${ip} tcp dport 22 ct state new accept"
+          ) config.infra.runnerIPs}
+```
+
+- [ ] **Step 5: Deploy and verify both directions**
+
+```bash
+deploy .#vps
+
+# From the runner: the permitted path answers, the denied ones 403.
+ssh -J vps root@46.225.61.172 '
+  curl -sS -o /dev/null -w "actions rpc: %{http_code}\n" https://git.hu-tao.dev/api/actions/
+  curl -sS -o /dev/null -w "api v1:      %{http_code}\n" https://git.hu-tao.dev/api/v1/version
+  curl -sS -o /dev/null -w "web ui:      %{http_code}\n" https://git.hu-tao.dev/
+  curl -sS -o /dev/null -w "upload-pack: %{http_code}\n" "https://git.hu-tao.dev/hutao/vps/info/refs?service=git-upload-pack"
+  curl -sS -o /dev/null -w "recv-pack:   %{http_code}\n" -X POST https://git.hu-tao.dev/hutao/vps/git-receive-pack
+'
+```
+
+Expected: `api v1`, `web ui` and `recv-pack` all **403**; `actions rpc` and
+`upload-pack` not 403.
+
+```bash
+# From anywhere else: unchanged.
+curl -sS -o /dev/null -w "%{http_code}\n" https://git.hu-tao.dev/api/v1/version   # 200
+```
+
+- [ ] **Step 6: Re-run CI on the runner**
+
+The acceptance test is the workload. If a step 403s, add the path it needs —
+from the access log, not from memory — and redeploy.
+
+- [ ] **Step 7: Commit**
+
+```bash
+nixfmt modules/options.nix modules/containers/caddy.nix modules/firewall.nix
+git add -A
+git commit -m "feat(caddy): restrict CI runners to the Actions API paths
+
+nftables can only say '443 to that host'. Behind that port is Forgejo's whole
+HTTP surface — the web UI, /api/v1/*, every repo over git-http. Caddy already
+terminates that 443 and can see paths, so the runner addresses are allowed the
+runner RPCs, the artifact pipeline and git-upload-pack, and 403'd for
+everything else.
+
+Denying git-receive-pack is the one that matters: it converts 'a compromised
+runner can push to repos it built' from an accepted residual risk into
+something blocked. No packet filter can do that — push and fetch share a port
+and a TLS session.
+
+Keyed on remote_ip because a root-compromised runner can forge anything it
+holds but not its source address. remote_ip is the TCP peer and never a header:
+trusted_proxies is unset and every DNS record is proxied = false.
+
+infra.runnerIPs is one list read by all three consumers so a clone cannot end
+up in two of them. Forgetting it makes the new box unreachable for admin, which
+is loud, rather than silently unrestricted.
+
+Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
+```
+
 ---
 
 ## Phase 6 — Snapshot
@@ -2249,134 +2693,326 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Phase 7 — Decommission the VPS runner
 
-### Task 10: The pages pull — GATE
+### Task 10: Pages — reverse the direction
 
-**This task blocks Task 11 and cannot be completed inside this repository
-alone.** Read this before starting it.
+**The gate is real, not theoretical.** `https://pages.hu-tao.dev/hutao/compress/`
+returns **200** today. Verified 2026-09-19.
 
-The VPS runner's `container.valid_volumes` allows exactly one entry, the
-`pages_data` docker volume, and a pages workflow mounts it directly to publish.
-The new runner has no such volume and cannot have one — writing to it would be
-the runner touching the VPS, which is the thing forbidden. So **deleting the VPS
-runner breaks pages publishing** until a pull exists.
+**What publishes it**, read from the live instance
+(`hutao/compress/.forgejo/workflows/pages.yml`, public repo, anonymous read):
 
-The publishing workflow is **not in this repository** — `.forgejo/workflows/`
-holds only `ci.yml` and `renovate.yml`. It lives in whichever repo publishes to
-`pages.hu-tao.dev`.
-
-- [ ] **Step 1: Find out whether anything actually publishes**
-
-```bash
-# The volume's contents say whether this gate is real or theoretical.
-# Tailscale SSH cannot be scripted (it hits an interactive re-auth check), so
-# run this in an interactive session:
-ssh hutao@vps
-sudo ls -la /var/lib/docker/volumes/pages_data/_data/
-sudo du -sh /var/lib/docker/volumes/pages_data/_data
+```yaml
+    container:
+      image: node:22-bookworm
+      volumes:
+        - pages_data:/pages          # the one entry in valid_volumes
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+        env:
+          PAGES: '1'
+          BASE_PATH: '/${{ github.repository }}'
+      - name: Publish
+        run: |
+          dest="/pages/$GITHUB_REPOSITORY"
+          rm -rf "$dest" && mkdir -p "$dest"
+          cp -r build/. "$dest/"
 ```
 
-If the volume is **empty**, this gate is theoretical: no pages workflow is in
-use, and Task 11 can proceed with a note that a future pages job needs the pull
-built first. Skip to Task 11.
+The job writes straight into caddy's volume. On the new runner that volume does
+not exist and `container.valid_volumes` is empty, so the Publish step fails.
 
-If it has content, identify the repo and workflow that wrote it and continue.
+**Why artifacts and not a `gh-pages` branch.** The idiomatic answer would be a
+branch the job pushes and the VPS clones. That needs `git-receive-pack`, which
+Task 5b **denies at caddy**. The artifact route rides `/api/actions_pipeline/*`,
+which is on the allowlist. The two designs agree rather than fight, and that is
+the reason to pick this one.
 
-- [ ] **Step 2: Change the publishing workflow to upload an artifact**
+**What crosses the boundary: nothing new.** The upload is runner → Forgejo on
+443, already permitted. The pull is the VPS talking to its own Forgejo
+container and never leaves the box.
 
-In the publishing repo, replace the step that mounts `pages_data` with
-`actions/upload-artifact`. The exact edit depends on that workflow and is out of
-this plan's scope — but the shape is: build into `./public`, then
-`- uses: actions/upload-artifact@v4` with `name: pages` and `path: public`.
+**No credential is needed.** `hutao/compress` is public and
+`GET /api/v1/repos/hutao/compress/actions/artifacts` returns `200 []`
+anonymously — verified against the live instance. A sops token appears only if a
+private repo ever publishes.
 
-- [ ] **Step 3: Add the pull timer on the VPS**
+**Pages does not go down during this migration, it goes stale.** The volume
+keeps its contents and caddy keeps serving them, so an ordering mistake costs
+freshness, not availability.
 
-Create `modules/pages-pull.nix` and import it from `configuration.nix`. Every
-connection is VPS-initiated, so it respects the one-way rule; the runner never
-writes to the VPS.
+**Files:**
+- Modify: `hutao/compress/.forgejo/workflows/pages.yml` — **a different repo**
+- Create: `modules/pages-pull.nix`
+- Modify: `configuration.nix` (import it), `modules/options.nix` (`infra.pagesRepos`)
 
-The unit needs a Forgejo API token with `read:repository` to fetch artifacts.
-That is a new sops secret — add `forgejo_pages_token` to `secrets.yaml` and
-`modules/secrets.nix` following the pattern of the existing entries, then:
+**Interfaces:**
+- Consumes: `config.infra.pagesVolume` (`pages_data`), `config.infra.domain`.
+- Produces: `pages-pull.service` + `.timer`. Task 11 requires this verified.
+
+- [ ] **Step 1: Confirm the publisher list**
+
+`hutao/compress` is the only one confirmed. Check for others before assuming:
+
+```bash
+ssh hutao@vps            # interactive; tailscale SSH cannot be scripted
+sudo ls /var/lib/docker/volumes/pages_data/_data/*/
+```
+
+Every `<owner>/<repo>` directory there is a publisher and needs both halves of
+this task.
+
+- [ ] **Step 2: Add `infra.pagesRepos` to `modules/options.nix`**
+
+```nix
+    pagesRepos = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "hutao/compress" ];
+      description = ''
+        `<owner>/<repo>` for every repository that publishes to
+        `pages.<domain>`. modules/pages-pull.nix fetches each one's newest
+        artifact named `pages` and unpacks it at that same path under
+        `pagesVolume`, because the layout IS the URL.
+
+        A repo publishes by uploading an artifact, NOT by mounting the volume —
+        the runner moved off this host and cannot write here. See the
+        design doc.
+      '';
+    };
+```
+
+- [ ] **Step 3: Change the publisher (in `hutao/compress`)**
+
+Replace the `volumes:` block and the whole `Publish` step with:
+
+```yaml
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages
+          path: build/
+          retention-days: 90
+```
+
+Delete the `container.volumes` entry entirely. `ubuntu-latest` is
+`node:22-bookworm`, which has node, so the JavaScript action runs.
+
+**Verify artifact v4 actually works before relying on it.** This instance is
+`16.0.4+gitea-1.22.0` and v4 support landed in the 1.22 line, so it should — but
+push the change, run the workflow once, and confirm:
+
+```bash
+curl -sS 'https://git.hu-tao.dev/api/v1/repos/hutao/compress/actions/artifacts' \
+  | python3 -m json.tool | head -30
+```
+
+Expected: a non-empty list with an entry named `pages`. If v4 fails, drop to
+`actions/upload-artifact@v3`, which the same API serves.
+
+- [ ] **Step 4: Create `modules/pages-pull.nix`**
 
 ```nix
 # ==============================================================================
 # Pulling published pages off the runner
 # ==============================================================================
-# The runner used to WRITE into the pages_data volume, which is why the old
-# forgejo-runner.nix carried a one-entry valid_volumes allow-list. A runner on
+# The pages job used to WRITE into the pages_data volume — that is what the old
+# forgejo-runner.nix's one-entry valid_volumes allow-list was for. A runner on
 # its own box cannot do that and must not: it would be the runner reaching into
-# the VPS, which is the one thing the split forbids.
+# this machine, which is the one thing the split forbids.
 #
-# So the direction reverses. The pages job uploads its output as an artifact and
-# this timer fetches it. Every connection is VPS-initiated.
-{ config, pkgs, ... }:
+# So the direction reverses. The job uploads an artifact; this fetches it. Every
+# connection is initiated here, and in fact never leaves the host — the artifact
+# is in Forgejo's own storage, in a container on this box.
+#
+# NO CREDENTIAL. The publishing repos are public and Forgejo serves
+# /api/v1/repos/<owner>/<repo>/actions/artifacts anonymously (verified
+# 2026-09-19: 200). The day a PRIVATE repo publishes, this needs a sops token
+# with read:repository and not before — do not add one speculatively.
+#
+# NOT a gh-pages branch, which would be the idiomatic shape. That needs
+# git-receive-pack, which modules/containers/caddy.nix denies to runner
+# addresses. Artifacts ride /api/actions_pipeline/*, which it permits.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
-  fqdn = "git.${config.infra.domain}";
-  pagesRoot = "/var/lib/docker/volumes/${config.infra.pagesVolume}/_data";
+  inherit (config.infra) domain pagesVolume pagesRepos;
+
+  fqdn = "git.${domain}";
+  pagesRoot = "/var/lib/docker/volumes/${pagesVolume}/_data";
 in
 {
   systemd.services.pages-pull = {
-    description = "Fetch the latest pages artifact into the pages volume";
+    description = "Fetch published pages artifacts into the pages volume";
+    after = [ "docker-forgejo.service" ];
+    wants = [ "docker-forgejo.service" ];
+
     serviceConfig = {
       Type = "oneshot";
-      LoadCredential = "token:${config.sops.secrets.forgejo_pages_token.path}";
+      # Writes into a docker volume, which is root-owned.
+      User = "root";
     };
-    path = [ pkgs.curl pkgs.jq pkgs.unzip pkgs.coreutils ];
+
+    path = with pkgs; [
+      curl
+      jq
+      unzip
+      coreutils
+    ];
+
     script = ''
       set -euo pipefail
-      token=$(cat "$CREDENTIALS_DIRECTORY/token")
-      # <owner>/<repo> of the publishing repository, filled in at Step 2.
-      repo="OWNER/REPO"
 
-      run=$(curl -fsS -H "Authorization: token $token" \
-        "https://${fqdn}/api/v1/repos/$repo/actions/artifacts?name=pages" \
-        | jq -r '.artifacts | sort_by(.created_at) | last | .id')
+      for repo in ${lib.escapeShellArgs pagesRepos}; do
+        echo "== $repo"
 
-      test -n "$run" && test "$run" != null
+        # Newest artifact named `pages` that has not expired. Forgejo returns
+        # expired entries with expired=true rather than omitting them, so
+        # filtering on it is what stops us unpacking a 404.
+        id=$(curl -fsS --max-time 30 \
+          "https://${fqdn}/api/v1/repos/$repo/actions/artifacts" \
+          | jq -r '[.artifacts[]? | select(.name == "pages") | select(.expired != true)]
+                   | sort_by(.created_at) | last | .id // empty')
 
-      tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-      curl -fsSL -H "Authorization: token $token" \
-        "https://${fqdn}/api/v1/repos/$repo/actions/artifacts/$run/zip" \
-        -o "$tmp/pages.zip"
-      unzip -q "$tmp/pages.zip" -d "$tmp/out"
+        if [ -z "$id" ]; then
+          # NOT an error, and NOT a reason to delete anything. Artifacts expire;
+          # a repo that has not built in 90 days should keep serving its last
+          # published build rather than 404.
+          echo "no live pages artifact for $repo; leaving the existing tree alone"
+          continue
+        fi
 
-      # Replace atomically-ish: caddy serves this read-only and a half-written
-      # tree is a half-broken site.
-      install -d -m 0755 ${pagesRoot}
-      cp -aT "$tmp/out" ${pagesRoot}
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+
+        curl -fsSL --max-time 120 \
+          "https://${fqdn}/api/v1/repos/$repo/actions/artifacts/$id/zip" \
+          -o "$tmp/pages.zip"
+        unzip -q "$tmp/pages.zip" -d "$tmp/out"
+
+        # Skip an unchanged build rather than churning the volume every 5
+        # minutes: the id only moves when a new artifact is uploaded.
+        stamp="${pagesRoot}/.stamp-$(echo "$repo" | tr / _)"
+        if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$id" ]; then
+          echo "$repo already at artifact $id"
+          rm -rf "$tmp"; trap - EXIT
+          continue
+        fi
+
+        # ATOMIC SWAP. caddy serves this read-only and a half-written tree is a
+        # half-broken site, so the new content is staged as a sibling and
+        # renamed over the old one — rename(2) within a filesystem is atomic.
+        dest="${pagesRoot}/$repo"
+        staging="$dest.new"
+        install -d -m 0755 "$(dirname "$dest")"
+        rm -rf "$staging"
+        cp -a "$tmp/out" "$staging"
+        rm -rf "$dest.old"
+        if [ -e "$dest" ]; then mv "$dest" "$dest.old"; fi
+        mv "$staging" "$dest"
+        rm -rf "$dest.old"
+
+        echo "$id" > "$stamp"
+        echo "$repo updated to artifact $id"
+
+        rm -rf "$tmp"; trap - EXIT
+      done
     '';
   };
 
   systemd.timers.pages-pull = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*:0/15";
+      # Five minutes. It was instant when the job wrote the volume directly, and
+      # this is the cost of reversing the direction. A Forgejo webhook would make
+      # it instant again at the price of an HTTP receiver on the mail server,
+      # which is not a trade worth making for a static site.
+      OnCalendar = "*:0/5";
       Persistent = true;
     };
   };
 }
 ```
 
-- [ ] **Step 4: Deploy and verify a page still serves**
+- [ ] **Step 5: Wire it in and deploy**
+
+Add `./modules/pages-pull.nix` to `configuration.nix`'s `imports`, then:
 
 ```bash
+nix build .#nixosConfigurations.vps-hetzner.config.system.build.toplevel --no-link
 deploy .#vps
-systemctl start pages-pull.service   # on the VPS
-curl -fsS https://pages.hu-tao.dev/<owner>/<repo>/ | head
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Run it by hand and verify the site is intact**
 
 ```bash
-git add modules/pages-pull.nix modules/secrets.nix configuration.nix secrets.yaml
+# on the VPS
+systemctl start pages-pull.service
+journalctl -u pages-pull -n 30 --no-pager
+```
+
+Expected: `hutao/compress updated to artifact <id>`.
+
+```bash
+# from anywhere
+curl -sS -o /dev/null -w '%{http_code}\n' https://pages.hu-tao.dev/hutao/compress/
+```
+
+Expected: **200**, same as before the change.
+
+- [ ] **Step 7: Prove idempotence and the no-artifact path**
+
+```bash
+# on the VPS — a second run must be a no-op, not a re-copy.
+systemctl start pages-pull.service
+journalctl -u pages-pull -n 10 --no-pager | grep 'already at artifact'
+```
+
+Expected: `hutao/compress already at artifact <id>`. This is what stops the
+timer rewriting the volume 288 times a day.
+
+Then confirm a missing artifact does not delete the site — the failure mode that
+would take pages down rather than leaving it stale:
+
+```bash
+# on the VPS
+rm -f /var/lib/docker/volumes/pages_data/_data/.stamp-hutao_compress
+# temporarily point infra.pagesRepos at a repo with no pages artifact,
+# deploy, run the unit, and confirm the existing tree survives:
+curl -sS -o /dev/null -w '%{http_code}\n' https://pages.hu-tao.dev/hutao/compress/
+```
+
+Expected: still **200**, and the journal says
+`no live pages artifact for ...; leaving the existing tree alone`. Restore
+`infra.pagesRepos` afterwards.
+
+- [ ] **Step 8: Commit**
+
+```bash
+nixfmt modules/pages-pull.nix modules/options.nix
+git add -A
 git commit -m "feat(pages): pull published artifacts instead of letting the runner write
 
-The runner used to mount the pages_data volume directly, which is why the old
-forgejo-runner.nix carried a one-entry valid_volumes allow-list. A runner on its
-own box cannot do that and must not — it would be the runner reaching into the
-VPS. The direction reverses: the job uploads an artifact, a timer here fetches
-it, and every connection is VPS-initiated.
+The pages job mounted the pages_data volume directly — the single entry in the
+old runner's valid_volumes allow-list. A runner on its own box cannot do that
+and must not, so the direction reverses: the job uploads an artifact and a
+timer here fetches it. Every connection is initiated on this host, and in fact
+never leaves it, because the artifact sits in Forgejo's own storage in a
+container on this box.
+
+Artifacts rather than a gh-pages branch because a branch needs git-receive-pack,
+which caddy now denies to runner addresses. This route rides
+/api/actions_pipeline/*, which it permits.
+
+No credential: the publishing repos are public and Forgejo serves the artifacts
+API anonymously. A missing or expired artifact leaves the existing tree alone
+rather than deleting it, and an unchanged artifact id is a no-op, so the
+five-minute timer does not rewrite the volume 288 times a day.
 
 Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -2385,8 +3021,10 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Task 11: Delete the VPS runner
 
-**Do not start until Task 10 is resolved** — either the pull works, or Step 1 of
-Task 10 proved the pages volume is empty and nothing publishes.
+**Do not start until Task 10 is verified.** Pages is live —
+`https://pages.hu-tao.dev/hutao/compress/` returns 200 — so the pull must be
+working first. Deleting the runner before then does not take pages down, but it
+freezes it at whatever build the volume already holds.
 
 **Files:**
 - Delete: `modules/containers/forgejo-runner.nix`
@@ -2589,7 +3227,16 @@ EnvironmentFile format (Task 0/3), the VPS's own output chain (Task 6), IPv6
 (Task 4), and the pages gate — the spec lists the pages pull as a bullet without
 noting it blocks the deletion and lives in another repo (Task 10).
 
-**One thing this plan cannot close.** Task 10 Step 1 requires an interactive
-session: Tailscale SSH hits a re-auth check that cannot be scripted, so the
-pages volume's contents were not verified while writing this. Whether Task 10 is
-real work or a no-op is the first thing to find out when Phase 7 starts.
+**Resolved since the first draft.** The pages gate is no longer an unknown: the
+site is live (200 on `hutao/compress`), the publishing workflow was read from
+the instance, the artifacts API was confirmed present and anonymously readable,
+and Task 10 now carries the full design rather than a placeholder. The only
+interactive step left there is Step 1 — listing the volume to check for
+publishers beyond `hutao/compress` — and getting it wrong costs one un-migrated
+page, not an outage.
+
+**Ordering constraints worth keeping.** Task 5a is independent and can run any
+time before Task 8b. Task 8b must run *after* Task 8, because its first step
+derives the allowlist from a real CI run's access log rather than guessing. Task
+11 must run after Task 10 is verified. Task 6 must precede Task 7, because
+nothing installs until the jump works.
