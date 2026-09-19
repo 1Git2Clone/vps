@@ -41,6 +41,24 @@ locals {
     # migration so the old box could rsync directly to the new one.
     { protocol = "tcp", port = "2222", description = "Host sshd, server-to-server" },
   ]
+
+  # Egress ssh to the CI runners, one rule covering all of them. This is the
+  # PERMANENT admin path, not install scaffolding: the runners are deliberately
+  # off the tailnet, so `ssh -J vps root@<runner>` is the only way in and it
+  # needs the VPS to originate a connection on 22.
+  #
+  # Built as a list to concatenate rather than written inline so an empty
+  # var.runner_ips produces NO RULE, instead of one with an empty destination
+  # list -- which hcloud reads as "anywhere", quietly turning a scoped rule into
+  # an open one at the exact moment the list is misconfigured.
+  runner_ssh = length(var.runner_ips) == 0 ? [] : [
+    {
+      protocol        = "tcp"
+      port            = "22"
+      description     = "ssh to the CI runners (jump host)"
+      destination_ips = var.runner_ips
+    },
+  ]
 }
 
 resource "hcloud_firewall" "main" {
@@ -58,12 +76,15 @@ resource "hcloud_firewall" "main" {
   }
 
   dynamic "rule" {
-    for_each = local.outbound
+    for_each = concat(local.outbound, local.runner_ssh)
     content {
-      direction       = "out"
-      protocol        = rule.value.protocol
-      port            = rule.value.port
-      destination_ips = local.anywhere
+      direction = "out"
+      protocol  = rule.value.protocol
+      port      = rule.value.port
+      # Defaults to anywhere; an entry may narrow it. try() rather than lookup()
+      # because these objects are a tuple of differing shapes, and only try()
+      # tolerates the attribute being absent on most of them.
+      destination_ips = try(rule.value.destination_ips, local.anywhere)
       description     = rule.value.description
     }
   }

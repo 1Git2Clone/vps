@@ -27,6 +27,7 @@ let
     domain
     dockerBridgeGateway
     pagesVolume
+    runnerIPv4s
     proxyNetwork
     tailnetHttpPort
     tailnetHttpsPort
@@ -98,6 +99,61 @@ let
   # Where the pages volume is mounted inside this container.
   pagesRoot = "/srv/pages";
 
+  # WHAT A CI RUNNER IS ALLOWED TO ASK git.<domain> FOR. Everything else from a
+  # runner address gets a 403.
+  #
+  # MEASURED, NOT GUESSED. Access logging was turned on for this vhost and a
+  # real workflow (hutao/compress Pages, run #7) was driven through it on the
+  # new runner. Filtered to the runner's address, the complete set was:
+  #
+  #    36  POST 200  /api/actions/runner.v1.RunnerService/FetchTask
+  #    88  POST 200  /api/actions/runner.v1.RunnerService/UpdateLog
+  #    80  POST 200  /api/actions/runner.v1.RunnerService/UpdateTask
+  #     1  GET  200  /hutao/compress/info/refs
+  #     1  POST 200  /hutao/compress/git-upload-pack
+  #
+  # Nothing else. In particular no /api/v1 and no web UI, which is what makes
+  # this worth doing: the runner's real surface is tiny next to what an
+  # address-only control has to leave open.
+  #
+  # ARTIFACT UPLOAD is the one thing that capture could not show, because at the
+  # time it was taken no upload had ever issued a request: actions/upload-artifact
+  # v4 bundles @actions/artifact v2, which tests GITHUB_SERVER_URL's hostname
+  # against GITHUB.COM and *.GHE.COM, decides a Forgejo instance is a self-hosted
+  # GitHub Enterprise Server, and throws before opening a socket. Zero requests
+  # from the runner is exactly what that looks like from here, and it is why no
+  # amount of work at this layer could have fixed it. The publishing workflows now
+  # use code.forgejo.org/forgejo/upload-artifact, whose one patch is to drop that
+  # check, and the upload route it actually uses is the twirp service below.
+  #
+  # The two git paths are wildcarded by owner and repo rather than pinned to the
+  # repos that publish today: `actions/checkout` runs in every workflow on every
+  # repo this runner serves, and pinning them would turn "someone added a repo"
+  # into a checkout failure.
+  runnerApiPaths = [
+    "/api/actions/*"
+    # ARTIFACT TRANSFER, AND IT DOES NOT LIVE UNDER /api/. upload-artifact posts to
+    # ACTIONS_RESULTS_URL + this twirp service, and Forgejo sets that variable to
+    # the instance ROOT, so the path is top-level and the entry above does not
+    # cover it. Added on the strength of a probe (POST returns 401 — route exists,
+    # wants the job token — rather than 404) and since CONFIRMED by real traffic:
+    # hutao/compress artifact 15 and skavex/skavex artifact 14 both uploaded
+    # through it, and modules/pages-pull.nix fetched and unpacked both.
+    #
+    # One wildcard covers download as well as upload — ListArtifacts and
+    # GetSignedArtifactURL are methods on the same service — which matters if a
+    # workflow ever consumes an artifact rather than only producing one.
+    #
+    # /api/actions_pipeline/* WAS HERE AND IS DELIBERATELY GONE. It is the v3
+    # artifact API, added defensively when the guess was that uploads rode it.
+    # They do not: a full run's capture never touched it, and the upload that now
+    # works goes to the twirp service instead. An allow-list entry nothing uses is
+    # surface, and this is the layer whose whole job is to have less of it.
+    "/twirp/github.actions.results.api.v1.ArtifactService/*"
+    "/*/*/info/refs"
+    "/*/*/git-upload-pack"
+  ];
+
   sites = [
     {
       host = "music.${domain}";
@@ -110,6 +166,29 @@ let
     {
       host = "git.${domain}";
       upstream = "forgejo:4242";
+
+      # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
+      # address-and-port control: the cloud firewall, the runner's own nftables,
+      # and this host's output chain can all say "that box may reach tcp/443
+      # here" and nothing finer. But the runner MUST reach 443 on this host —
+      # that is how it fetches jobs — so without something reading the request,
+      # a rooted CI job gets the entire Forgejo surface: every repo it can see,
+      # the whole web UI, the full /api/v1 with whatever its session carries.
+      #
+      # remote_ip is the TCP peer and never a header. Caddy consults
+      # X-Forwarded-For only when `trusted_proxies` is set, which it is not
+      # anywhere in this file, and every record in tofu/modules/cloudflare-dns
+      # is `proxied = false`, so nothing sits in front of caddy to launder an
+      # address. A root-compromised runner can forge any credential it holds; it
+      # cannot forge its source address, because Hetzner assigns it and filters
+      # spoofed egress upstream. That is why this is keyed on address rather
+      # than on a token.
+      #
+      # This GRANTS NOTHING. It is a pure restriction applied to a set of
+      # addresses, so the worst a mistake here can do is break CI — loudly, in a
+      # way a workflow run reports — rather than open something up.
+      restrictRunners = true;
+
     }
     {
       host = "status.${domain}";
@@ -119,9 +198,14 @@ let
       host = "pages.${domain}";
 
       # A document root rather than an upstream: the only site here caddy
-      # serves itself. Everything under it is written by an Actions workflow
-      # (see modules/containers/forgejo-runner.nix) into the ONE volume a
-      # workflow is allowed to mount, and caddy reads it read-only.
+      # serves itself. Everything under it is fetched by modules/pages-pull.nix
+      # — a timer on this host that pulls each repo's published `pages`
+      # artifact out of Forgejo and unpacks it — and caddy reads it read-only.
+      #
+      # It used to be WRITTEN by the Actions job itself, into the one volume the
+      # in-container runner allowed a workflow to mount. A runner on its own box
+      # cannot reach this volume and must not, so the direction reversed: the
+      # job uploads, this host fetches.
       #
       # The layout IS the URL: /srv/pages/<owner>/<repo>/index.html answers
       # pages.<domain>/<owner>/<repo>/. Nothing maps or rewrites, so a page
@@ -315,6 +399,24 @@ let
             [
               "\treverse_proxy ${site.upstream} {"
               "\t\theader_up Host {upstream_hostport}"
+              "\t}"
+            ]
+          else if site.restrictRunners or false then
+            # `handle` blocks are mutually exclusive and evaluated in order, so
+            # the trailing bare `handle` is what every non-runner client falls
+            # through to. A plain `reverse_proxy` outside a handle would run for
+            # runner requests too and defeat the whole thing.
+            [
+              "\t@runner remote_ip ${lib.concatStringsSep " " (lib.attrValues runnerIPv4s)}"
+              "\thandle @runner {"
+              "\t\t@runner_api path ${lib.concatStringsSep " " runnerApiPaths}"
+              "\t\thandle @runner_api {"
+              "\t\t\treverse_proxy ${site.upstream}"
+              "\t\t}"
+              "\t\trespond \"not permitted from a CI runner\" 403"
+              "\t}"
+              "\thandle {"
+              "\t\treverse_proxy ${site.upstream}"
               "\t}"
             ]
           else

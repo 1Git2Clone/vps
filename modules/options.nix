@@ -51,11 +51,53 @@
       default = "pages_data";
       description = ''
         Docker volume holding the static sites served at `pages.<domain>`.
-        Named here because three places must agree on it: caddy mounts it
-        read-only, the Actions runner allows it as the ONE volume a workflow
-        may mount, and a workflow names it in `jobs.<id>.container.volumes`.
+        Named here because two places must agree on it: caddy mounts it
+        read-only, and modules/pages-pull.nix unpacks fetched artifacts into it.
+
+        It was three places while the runner lived on this box — it allowed
+        this as the ONE volume a workflow could mount, and a workflow named it
+        in `jobs.<id>.container.volumes`. A runner on its own box cannot reach
+        it, which is the whole point of the split.
         Being a docker volume also means restic already backs it up, since
         `services.restic` takes /var/lib/docker/volumes wholesale.
+      '';
+    };
+
+    pagesRepos = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "hutao/compress"
+        "skavex/skavex"
+      ];
+      description = ''
+        The repositories whose published pages are served at `pages.<domain>`,
+        as `<owner>/<repo>`. Read by modules/pages-pull.nix, which fetches each
+        one's newest artifact named `pages` and unpacks it into
+        `<pagesVolume>/<owner>/<repo>` — the layout IS the URL, so this list is
+        also the list of paths that answer under pages.<domain>.
+
+        THE LIST EXISTS BECAUSE THE DIRECTION REVERSED. While the runner lived
+        on this box a publishing workflow mounted the pages volume and wrote
+        into it, so nothing here had to know which repos published; the set was
+        whatever had ever run the job. A runner on its own box cannot reach this
+        volume and must not, so the pull side has to be told what to look for.
+
+        Defaulted to what the volume already held on 2026-09-19 rather than left
+        empty: an empty list is a silently no-op timer, which is the failure
+        this repo keeps writing comments about.
+
+        `hutao/critical-forest` is deliberately NOT here even though the volume
+        holds a tree for it: the repo 404s under both `hutao` and `skavex`, so
+        it was renamed or deleted at some point and nothing can be pulled for
+        it. The served tree is left in place — caddy keeps answering that path
+        — but a name that cannot resolve would fail this unit every five
+        minutes forever. A repo that genuinely disappears belongs out of this
+        list, not permanently red in the journal.
+
+        A repo listed here that has never uploaded a `pages` artifact is not an
+        error — the unit logs "no live pages artifact" and leaves any existing
+        tree alone, which is also exactly what it does for a repo whose
+        artifacts have aged out.
       '';
     };
 
@@ -72,6 +114,41 @@
 
         Public by definition, so a plain string is right — the reasoning on
         `acmeEmail` applies here too.
+      '';
+    };
+
+    runnerIPv4s = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {
+        forgejo-runner = "46.225.61.172";
+      };
+      description = ''
+        The CI runners' public IPv4s. Consumed by modules/firewall.nix, which
+        emits one `ip daddr <addr> tcp dport 22 ct state new accept` per entry
+        into the OUTPUT chain: that chain is policy-drop, so `ssh -J vps
+        root@<runner>` -- the runners' only admin path, since they are
+        deliberately off the tailnet -- does not leave this box without it.
+
+        KEYED BY HETZNER SERVER NAME, matching tofu's var.runner_ipv4s. An
+        attrset rather than a list because an address on its own says nothing
+        about which box it belongs to, and a bare list invites being correlated
+        by index with some other list — which stays silently wrong when an
+        entry is removed from the middle. Rules are emitted in key order, so
+        the rendered ruleset does not churn when an entry is added.
+
+        Adding a runner means an entry here AND one in tofu's
+        var.runner_ipv4s: the cloud firewall and this ruleset are each what
+        survives a misconfiguration of the other, so a rule in one alone is not
+        sufficient.
+
+        Bare addresses, not CIDRs. nftables `ip daddr` takes either, and
+        keeping the two spellings distinct makes it obvious at a glance which
+        list a value was copied from.
+
+        Owned by tofu and copied here, same as publicIPv4: if an address
+        changes, tofu changes first and this follows. A runner's address
+        changes whenever its box is replaced, which `user_data` being
+        replace-forces-new means happens on every identity rotation.
       '';
     };
 
@@ -126,6 +203,24 @@
       '';
     };
 
+    cacheProxyPort = lib.mkOption {
+      type = lib.types.port;
+      default = 34567;
+      description = ''
+        The Actions cache proxy port, shared by the two things that must agree
+        on it and would otherwise only agree by comment: the runner's own
+        `cache.proxy_port` (modules/runner/default.nix — job containers reach
+        the cache here via ACTIONS_CACHE_URL), and the runner's firewall
+        (modules/runner/firewall.nix — an input rule has to admit exactly this
+        port from the podman bridges).
+
+        Fixed rather than left at the runner's default (random), because a
+        firewall rule cannot name a port the daemon chooses at startup. Same
+        number as the VPS runner's cache port, so it means the same thing on
+        both boxes.
+      '';
+    };
+
     botNetwork = lib.mkOption {
       type = lib.types.str;
       default = "botnet";
@@ -168,12 +263,12 @@
       description = ''
         The host's address on docker's DEFAULT bridge, and the one address a
         job container can reach the host at whichever per-job network it was
-        created on — `container.network` is "" (see
-        modules/containers/forgejo-runner.nix), so that network differs every
-        run and its own gateway cannot be named ahead of time. The Actions
-        cache proxy is published here.
+        created on, back when this box ran the Actions runner in a container:
+        `container.network` was "", so that network differed every run and its
+        own gateway could not be named ahead of time.
 
-        Caddy uses it too, for the two tailnet vhosts whose backends are in the
+        That runner is gone and so is the Actions cache proxy it published
+        here. What still needs this is CADDY, for the two tailnet vhosts whose backends are in the
         HOST's network namespace rather than on the proxy network: grafana:3000
         and syncthing's GUI:8384. A container on any bridge reaches a local
         address of the host by routing through its own gateway, so this works

@@ -35,6 +35,43 @@ tailnet_ipv4 = "100.101.102.103"
 # Get it from Settings -> Account on BlueSky.
 bsky_record = "did=did:plc:..."
 
+# === CI runners ===
+# One entry per box, in BOTH lists, keyed by the Hetzner server name. Adding a
+# runner is two lines here and an apply -- nothing in modules/runner/ is
+# per-box, so there is no flake change, no deploy and no commit.
+runner_names = ["forgejo-runner"]
+
+# Each runner's Forgejo identity: the uuid and secret shown together exactly
+# once at Site Administration -> Actions -> Runners -> Create new runner.
+# Delivered to the box as Hetzner user_data, which is per-SERVER -- that is what
+# lets N clones of one snapshot come up as N distinct runners with no state.
+#
+# `forgejo-runner:` is a KEY the boot-time parser searches for, not a name; the
+# blob may hold other lines in any order.
+#
+# Separate from runner_names because OpenTofu refuses to use a sensitive value
+# as a for_each argument.
+#
+# APPLIED AT CREATE TIME ONLY. user_data is replace-forces-new and these boxes
+# are delete-protected, so tofu holds it in ignore_changes: editing an entry
+# here changes nothing on a box that already exists. A new box gets its pair
+# from here; an existing one takes it from the file staged at
+# /var/lib/forgejo-runner-identity/userdata. See tofu/server.tf.
+runner_identities = {
+  "forgejo-runner" = "forgejo-runner: 187cde37-2e9b-4601-b431-b437e7f83bc4 CHANGEME32AlphanumericCharsOrMore"
+}
+
+# The same boxes' public IPv4s as /32, for the VPS's egress allow-list -- `ssh
+# -J vps root@<runner>` is the only admin path, since the runners are off the
+# tailnet. Keyed by server name like runner_identities, not a positional list:
+# three lists correlated by index go wrong silently when an entry is removed
+# from the middle. Keep equal to infra.runnerIPv4s in modules/options.nix -- the
+# cloud firewall and the VPS's nftables are each what survives a
+# misconfiguration of the other, so a rule in one alone is not sufficient.
+runner_ipv4s = {
+  "forgejo-runner" = "46.225.61.172/32"
+}
+
 # Optional overrides:
 # domain      = "hu-tao.dev"
 # server_name = "hu-tao"
