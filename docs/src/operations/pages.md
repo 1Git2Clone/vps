@@ -44,16 +44,11 @@ sequenceDiagram
 **Every connection is initiated on the VPS**, and in fact never leaves the host
 — the artifact is in Forgejo's own storage, in a container on the same box.
 
-**Pull requests upload too, under a different name.** `pages-pull` looks for an
-artifact called exactly `pages` and ignores every other one, so a PR uploading
-`pages-preview` exercises the whole path — node, the action, the twirp service,
-caddy's allow-list — and publishes nothing.
-
-That is not symmetry for its own sake. The upload step was originally gated
-`if: push && main`, which meant it was skipped on every pull request: the
-branch that introduced this workflow went green having never once run the step,
-and the missing-node failure landed on `main` at merge. A gate that turns the
-risky step off for every rehearsal is not a gate.
+**The workflow runs on `main` only.** An earlier version built on pull requests
+and gated the upload step with `if: push && main` instead, which meant the
+riskiest step was skipped in every rehearsal: the branch introducing the
+workflow went green having never once run it, and the failure landed on `main`
+at merge. Gate the workflow, not the step.
 
 **No credential.** The publishing repos are public and Forgejo serves
 `/api/v1/repos/<owner>/<repo>/actions/artifacts` anonymously (verified
@@ -70,23 +65,38 @@ instead, sidestepping the need entirely. See
 
 ## Adding a repo
 
-Two things, and both are required:
+**One thing:** give the repo a workflow that uploads an artifact named exactly
+`pages`. That is the whole of it. Nothing is added to this repo, and no deploy
+is run.
 
-1. Add `<owner>/<repo>` to `infra.pagesRepos` in `modules/options.nix`. The
-   pull side has to be told what to look for — while the runner wrote the
-   volume directly, the set was simply "whatever had ever run the job", and
-   nothing had to know.
-2. Give the repo a workflow that uploads an artifact named exactly `pages`.
+`pages-pull` enumerates every repo on the instance through
+`/api/v1/repos/search` and publishes any that holds a live artifact by that
+name. Uploading it is the opt-in, the same way enabling Pages is a repo-level
+act rather than something the hosting provider does for you.
 
-A repo listed there that has never uploaded a `pages` artifact is **not** an
-error: the unit logs `no live pages artifact` and leaves any existing tree
-alone, which is also what it does for a repo whose artifacts have aged out.
+It was not always so. There used to be an `infra.pagesRepos` list in
+`modules/options.nix`, so adding a page meant a commit here and a
+`deploy .#vps` — a rebuild of the machine that serves mail, in order to publish
+a static site. The list existed because of a misreading of the runner split:
+the note said the pull side "has to be told what to look for", when it only has
+to be told how to find out.
 
-A repo that genuinely disappears belongs **out** of the list. `hutao/critical-forest`
-is deliberately absent even though the volume still holds a tree for it: the
-repo 404s under both owners, so it was renamed or deleted, and a name that
-cannot resolve would fail the unit every five minutes forever. The served tree
-is left in place — caddy keeps answering that path.
+Two things fall out of the change:
+
+- **A repo that has never published is not a special case.** It has no `pages`
+  artifact, so it is not discovered, and nothing is logged. Under the list this
+  was a repo you had named in error and worth a line in the journal; now it is
+  simply most of the instance.
+- **A renamed or deleted repo stops being discovered.** The old list had to be
+  edited by hand when that happened, or the unit failed every five minutes
+  forever — `hutao/critical-forest` was carried as a comment explaining exactly
+  that. The served tree is still left in place, so caddy keeps answering that
+  path until someone removes it.
+
+An **empty discovery is treated as an error**, not as "no repos publish". This
+instance always has repos, so zero means the search endpoint moved or started
+refusing us — and the damage would be every published site silently freezing at
+its current content while the unit kept exiting 0.
 
 ## Failure isolation
 
