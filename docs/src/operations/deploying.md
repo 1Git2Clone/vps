@@ -73,7 +73,7 @@ wrong reflex — fix it forward.
 sequenceDiagram
     participant W as workstation
     participant H as host
-    W->>W: build the closure locally
+    Note over W: build the closure locally
     W->>H: push closure, activate
     W--xH: close the connection
     W->>H: reconnect, FRESH connection
