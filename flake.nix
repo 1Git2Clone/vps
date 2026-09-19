@@ -486,6 +486,115 @@
                   [ "$fail" -eq 0 ] || exit 1
                   touch $out
                 '';
+
+              # The pages artifact is the ONE thing that crosses from the
+              # hostile runner into this host carrying content rather than an
+              # address, and modules/pages-pull.nix strips symlinks out of it
+              # before caddy is ever pointed at the tree. Without that strip,
+              # one `ln -s /etc/caddy/certs/key.pem x` in a published artifact
+              # serves the apex certificate's private key at
+              # https://pages.<domain>/<owner>/<repo>/x — caddy's file_server
+              # follows a symlink out of its root, and modules/acme.nix
+              # group-owns the certificate directory BY caddy on purpose.
+              #
+              # Two halves, and the second is why this is not just another
+              # grep-the-text check:
+              #
+              #   * ORDER — the strip has to sit after the unzip and before the
+              #     `cp -a` that copies the tree out of $tmp, or it runs on the
+              #     wrong side of the thing it protects. Same shape as
+              #     runner-firewall-ordering above, and the same reason: review
+              #     cannot see order, and getting it wrong fails silently with
+              #     every site still publishing correctly.
+              #
+              #   * BEHAVIOUR — the exact line is lifted out of the evaluated
+              #     unit and EVAL'd against a tree unpacked from a hostile zip
+              #     built right here. A retyped copy of the line would prove
+              #     nothing about the one that ships; this way, weakening
+              #     production's `find` (dropping `-type l`, say, or pointing it
+              #     at the wrong directory) fails here.
+              #
+              # `script` is a plain Nix string — it interpolates only `fqdn` and
+              # `pagesRoot`, both ordinary strings — so writing it out drags in
+              # no closure, per the deploy-schema lesson above.
+              pages-pull-strips-symlinks =
+                let
+                  script = self.nixosConfigurations.vps-hetzner.config.systemd.services.pages-pull.script;
+                  scriptFile = pkgs.writeText "pages-pull-script.sh" script;
+                in
+                pkgs.runCommand "pages-pull-strips-symlinks"
+                  {
+                    nativeBuildInputs = [
+                      pkgs.zip
+                      pkgs.unzip
+                    ];
+                  }
+                  ''
+                    set -euo pipefail
+
+                    # Comments in that script quote the commands below, so blank
+                    # full-line comments before searching — the same
+                    # false-positive runner-firewall-ordering hit.
+                    clean=$(mktemp)
+                    sed -E 's/^([[:space:]]*)#.*/\1/' ${scriptFile} > "$clean"
+
+                    line() {
+                      local pattern=$1 matches count
+                      matches=$(grep -nF -- "$pattern" "$clean") || true
+                      count=$(printf '%s\n' "$matches" | grep -c . || true)
+                      if [ "$count" -ne 1 ]; then
+                        echo "pages-pull-strips-symlinks: expected exactly 1 match for: $pattern (got $count)" >&2
+                        exit 1
+                      fi
+                      printf '%s\n' "$matches" | cut -d: -f1
+                    }
+
+                    unzip_at=$(line 'unzip -q "$tmp/pages.zip" -d "$tmp/out"')
+                    strip_at=$(line 'find "$tmp/out" -type l -delete')
+                    copy_at=$(line 'cp -a "$tmp/out" "$staging"')
+
+                    if [ "$strip_at" -le "$unzip_at" ] || [ "$strip_at" -ge "$copy_at" ]; then
+                      echo "pages-pull-strips-symlinks: the strip (line $strip_at) must sit between the unzip (line $unzip_at) and the cp (line $copy_at)" >&2
+                      exit 1
+                    fi
+
+                    # A hostile artifact, the shape a rooted runner would
+                    # upload: an absolute symlink at the top level, one nested a
+                    # directory down, and a real file that must SURVIVE — a
+                    # "strip" that emptied the tree would otherwise pass.
+                    mkdir -p src/nested
+                    echo '<h1>a real page</h1>' > src/index.html
+                    ln -s /etc/caddy/certs/key.pem src/leak
+                    ln -s / src/nested/slash
+                    ( cd src && zip -qry ../pages.zip . )
+
+                    tmp=$PWD/work
+                    mkdir -p "$tmp"
+                    unzip -q "$tmp/../pages.zip" -d "$tmp/out"
+
+                    # unzip restores symlinks; that is the whole premise.
+                    # Assert it here so this check cannot quietly become
+                    # vacuous if a future unzip stops doing it — at that point
+                    # the strip may be unnecessary, but that is a decision to
+                    # take deliberately, not to discover by a green check.
+                    test -L "$tmp/out/leak"
+                    test -L "$tmp/out/nested/slash"
+
+                    # PRODUCTION'S OWN LINE, not a copy of it.
+                    eval "$(sed -n "''${strip_at}p" "$clean")"
+
+                    if find "$tmp/out" -type l | grep -q .; then
+                      echo "pages-pull-strips-symlinks: a symlink survived the strip:" >&2
+                      find "$tmp/out" -type l >&2
+                      exit 1
+                    fi
+                    if [ ! -f "$tmp/out/index.html" ]; then
+                      echo "pages-pull-strips-symlinks: the strip removed real content, not just symlinks" >&2
+                      exit 1
+                    fi
+
+                    touch $out
+                  '';
             };
           };
 

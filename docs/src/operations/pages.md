@@ -104,6 +104,42 @@ instance always has repos, so zero means the search endpoint moved or started
 refusing us — and the damage would be every published site silently freezing at
 its current content while the unit kept exiting 0.
 
+## The artifact is untrusted content
+
+It was built on the [CI runner](../architecture/runner.md), the machine this
+estate treats as hostile. Layers 1–5 over there are address-and-port-and-path
+controls; **an artifact is the one thing that crosses the boundary carrying
+content**, and the caddy allow-list has to admit the `ArtifactService` route or
+publishing does not work at all.
+
+So `pages-pull` deletes every symlink out of the unpacked tree before anything
+is pointed at it:
+
+```sh
+unzip -q "$tmp/pages.zip" -d "$tmp/out"
+find "$tmp/out" -type l -delete
+```
+
+Info-ZIP already refuses the two obvious escapes — it strips `../`, it warns
+`stripped absolute path spec from /x`, and it will not write _through_ a
+symlink. What it does do is **restore** one, target and all, and the `cp -a`
+that follows preserves it. That is enough on its own, because caddy's
+`file_server` follows a symlink out of its root, and `modules/acme.nix`
+group-owns the certificate directory _by caddy_ so that caddy can read
+`key.pem`. One `ln -s /etc/caddy/certs/key.pem x` in a published artifact would
+otherwise serve the apex certificate's private key — and every one of its
+eleven SANs — at `https://pages.<domain>/<owner>/<repo>/x`.
+
+A published site is files and directories; a symlink in one has no legitimate
+use here. They are **deleted rather than rejected** so that one malformed
+artifact cannot wedge a repo's publishing, and `-type l` matches the link
+itself and never its target, so this cannot follow a link out of `$tmp`.
+
+`checks.pages-pull-strips-symlinks` holds it: it asserts the strip sits between
+the unzip and the copy, and then `eval`s **that exact line** — lifted out of the
+evaluated unit, not retyped — against a tree unpacked from a hostile zip built
+in the check.
+
 ## When it runs
 
 A **Forgejo system webhook** on `action_run_success`, so publishing is an event
