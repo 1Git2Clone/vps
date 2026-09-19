@@ -56,11 +56,12 @@ requirement, so the rest of this document is written around it.
 
 ```
 hu-tao          163906050  cx43  fsn1  167.233.24.58   mail, git, everything
+                                       2a01:4f8:c015:b138::/64
 forgejo-runner  166488672  cx33  nbg1  46.225.61.172   CI only
 
-  runner ──HTTPS 443──▶ git.hu-tao.dev        the one permitted direction
-  runner ──╳── anything else on the VPS
-  VPS    ──SSH 22───▶ runner                  admin, and the pages pull
+  runner ──HTTPS 443──▶ 167.233.24.58        the one permitted direction
+  runner ──╳── anything else on the VPS, v4 or v6
+  VPS    ──SSH 22───▶ runner                 admin, permanently
 ```
 
 `hcloud_network.main` (12666492, `10.0.0.0/16`) and its `10.0.1.0/24` subnet
@@ -88,6 +89,23 @@ rule is worth doing regardless (see VPS-side changes), but "one edit away from
 silently reopening" is not the property to build a trust boundary on when
 "the NIC does not exist" is available for free.
 
+### Why the runner is not on the tailnet either
+
+The same argument, one layer up. `modules/firewall.nix`'s input chain accepts
+`iifname tailscale0` unconditionally, so a tailnet member reaches every port on
+the VPS — sshd on 2222, pgbouncer, tempo's OTLP receiver, the mail ports — and
+no rule keyed on `167.233.24.58` sees that traffic at all. A runner on the
+tailnet is a runner with full access to the box this document exists to protect.
+
+Narrowing that accept to exclude one node is host-side filtering of a trust
+boundary, which is the option rejected above, and tailscale ACLs are a third
+control plane to keep correct. So the runner does not run tailscale.
+
+The cost is that administration has no tailnet path, and the `tcp/22` ingress
+rule scoped to `167.233.24.58/32` is therefore **permanent** rather than
+bootstrap scaffolding. Admin is `ssh -J vps root@46.225.61.172`. That direction
+is VPS→runner, which the one-way rule permits by construction.
+
 ### What no firewall closes
 
 Two paths survive by construction and are accepted, not mitigated:
@@ -107,7 +125,12 @@ Two paths survive by construction and are accepted, not mitigated:
 ## Identity — `modules/runner/identity.nix`
 
 A oneshot unit, ordered before the runner, reads the Hetzner metadata service
-and writes the registration token to a file the runner consumes via `tokenFile`.
+and writes the registration token where the runner consumes it.
+
+`services.gitea-actions-runner.instances.<name>.tokenFile` is mapped straight
+onto systemd's `EnvironmentFile=`, and upstream's registration script reads
+`$TOKEN` — so the file must contain the line `TOKEN=<token>`, not the bare
+token. A bare token registers nothing and fails with an empty-token error.
 
 The metadata endpoint is reachable on link-local over the public NIC; the
 runner's egress allow-list already permits `tcp/80`, which is what it uses.
@@ -194,10 +217,13 @@ boot, not added after the first ENOSPC.
 
 ## Snapshot and replication
 
-1. Install with nixos-anywhere, jumped through the VPS
-   (`--ssh-option ProxyJump=vps`), which is why the runner's single ingress rule
-   is scoped to `167.233.24.58/32` and the VPS gained one scoped `tcp/22` egress
-   rule.
+1. Install with nixos-anywhere, jumped through the VPS:
+   `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps root@46.225.61.172`.
+   The private NIC was removed in 5d0ae14, so the target is the public address;
+   the jump is what makes the runner's single ingress rule — `tcp/22` from
+   `167.233.24.58/32` — sufficient. It needs `tcp/22` egress on main-firewall
+   AND in the VPS's own `modules/firewall.nix` output chain, which is
+   policy-drop and did not have it.
 2. Power off, snapshot.
 3. A new runner is a server created from that snapshot with a registration token
    in user-data. No deploy, no flake change, no commit.
