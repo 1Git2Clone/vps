@@ -66,6 +66,7 @@ nix develop -c mdbook serve docs --open
 | Chapter                                                          | For                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
 | [Network and trust boundaries](docs/src/architecture/network.md) | the three doors, input vs forward, why there is no private network |
+| [The tailnet policy](docs/src/architecture/tailnet.md)           | what a tailnet peer may reach, and why tags are the only lever     |
 | [CI runner isolation](docs/src/architecture/runner.md)           | the seven layers, the one-way rule, the four-path allow-list       |
 | [The service stack](docs/src/architecture/services.md)           | what runs, and how each thing is reached                           |
 | [Deploying](docs/src/operations/deploying.md)                    | the everyday path, and the circuit breaker behind it               |
@@ -80,7 +81,7 @@ included, since they are mermaid and Forgejo draws them natively.
 ```sh
 nix develop                       # the shell everything below assumes
 deploy .#vps                      # the VPS
-deploy .#forgejo-runner           # the CI runner, via ProxyJump through the VPS
+deploy .#runner-forgejo-runner    # the CI runner, via ProxyJump through the VPS
 
 QEMU_OPTS="-vnc :0" nix run .#default    # the whole system, locally
 nix develop -c pre-commit install        # once per clone

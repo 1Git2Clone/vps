@@ -54,6 +54,7 @@ between them, deliberately — there was one, it had a single member, and
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | understand how a packet reaches a service | [Network and trust boundaries](architecture/network.md)                                                  |
 | know what runs here and how it is reached | [The service stack](architecture/services.md)                                                            |
+| know what a tailnet peer may reach        | [The tailnet policy](architecture/tailnet.md)                                                            |
 | ship a change                             | [Deploying](operations/deploying.md)                                                                     |
 | fix something that is broken now          | [Failure modes and recovery](operations/recovery.md)                                                     |
 | install a machine from nothing            | [Provisioning a machine](operations/provisioning.md)                                                     |

@@ -32,6 +32,9 @@ fail2ban-client status forgejo-ssh
 nft list table inet f2b-table             # where the bans actually are
 nft list table inet nixos-fw
 
+tailscale status                          # peers, and this node's own address
+tailscale whois 100.109.115.12            # THIS node: `Tags: tag:vps` or the ACL does not apply
+
 systemctl status vuln-scan.timer          # Saturdays 06:00 UTC
 systemctl start vuln-scan                 # run one now — it posts to Discord
 journalctl -u vuln-scan -n 50
@@ -80,3 +83,11 @@ nft list table inet nixos-fw              # the one-way rules; counters included
 `nft list counters` is the quick check that the one-way rule is doing something:
 `vps_allowed_out` should climb while jobs run, and `vps_blocked_out` should stay
 where it was. See [CI runner isolation](../architecture/runner.md#the-one-way-rule-and-how-it-is-enforced).
+
+The ingress pair answers the other direction — `ssh_from_vps` climbs every time
+you open the jump above, and `ssh_blocked` is anyone else trying:
+
+```sh
+ssh -J vps root@46.225.61.172 nft list counter inet nixos-fw ssh_from_vps
+ssh -J vps root@46.225.61.172 nft list counter inet nixos-fw ssh_blocked
+```

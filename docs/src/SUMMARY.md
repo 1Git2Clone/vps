@@ -8,6 +8,7 @@
 
 - [Hosts and boot](architecture/hosts.md)
 - [Network and trust boundaries](architecture/network.md)
+- [The tailnet policy](architecture/tailnet.md)
 - [CI runner isolation](architecture/runner.md)
 - [TLS, DNS and mail](architecture/tls-dns-mail.md)
 - [The service stack](architecture/services.md)
