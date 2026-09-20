@@ -47,14 +47,26 @@
 	"tagOwners": {
 		"tag:vps": ["autogroup:owner"],
 
-		// PRE-EXISTING. Friends' machines carry this tag, and the tag exists
-		// for exactly one reason: so they can be SSHed INTO without the rest of
-		// the tailnet's members reaching them. Tagging them took them out of
-		// their owner's `autogroup:self`, which is the same lever tag:vps uses
-		// above — see there for why that is the only way to narrow anything.
+		// FRIENDS' MACHINES. The tag exists for exactly one reason: so a
+		// friend's device can be SSHed INTO from here without the rest of the
+		// tailnet's members reaching it. Tagging a device takes it out of its
+		// owner's `autogroup:self`, which is the same lever tag:vps uses above
+		// — see there for why that is the only way to narrow anything.
 		//
-		// Dropping this entry while a device still carries the tag orphans that
-		// device, so it stays as long as those machines are tagged.
+		// ONE TAG FOR THE CLASS, not one per machine. A second friend's laptop
+		// joins this tag rather than arriving with a tagOwner, three rules and
+		// two tests of its own that a reviewer would have to read in full to
+		// discover they grant exactly what this already grants.
+		//
+		// ASSIGNING IT IS A CONSOLE ACTION, and the order matters the same way
+		// it does for tag:vps above: a device cannot be given tag:friends-ssh
+		// until an applied policy defines it. So apply this file first, then
+		// Machines -> <device> -> Edit ACL tags -> tag:friends-ssh. A device
+		// whose tag no rule here names has no grant at all — it is not covered
+		// by `autogroup:self` either, because it is tagged.
+		//
+		// Dropping this entry while a device still carries the tag orphans
+		// that device, so it stays as long as any friend's machine is tagged.
 		"tag:friends-ssh": ["autogroup:admin"],
 	},
 
@@ -117,10 +129,11 @@
 			"dst": ["tag:vps:22,80,443,2222,3000,8080,8384,8443,8880"],
 		},
 
-		// tag:friends-ssh IS A DESTINATION ONLY. Those machines exist here to be SSHed
-		// into; nothing on them has any business opening a connection into this
-		// tailnet. Since Tailscale has no deny rules, "cannot initiate" is not a
-		// rule you write — it is what you get by never naming tag:friends-ssh as a src.
+		// tag:friends-ssh IS A DESTINATION ONLY. Those machines are here to be
+		// SSHed into; nothing on them has any business opening a connection
+		// into this tailnet. Since Tailscale has no deny rules, "cannot
+		// initiate" is not a rule you write — it is what you get by never
+		// naming the tag as a src.
 		// The stock policy named it implicitly, because `src: ["*"]` covers
 		// tagged devices; the absence of that wildcard is the whole fix.
 		//
@@ -185,11 +198,11 @@
 		// Friends' machines. This is the rule the tag was created for.
 		//
 		// NARROWED FROM THE LIVE POLICY, which read
-		// `dst: ["autogroup:tagged", "tag:friends-ssh"]`. `autogroup:tagged` starts
+		// `dst: ["autogroup:tagged", <this tag>]`. `autogroup:tagged` starts
 		// covering tag:vps the moment the VPS is tagged — handing the VPS
 		// accept-without-re-auth and quietly overriding the `check` rule directly
-		// above, which is the entire point of this file. Naming tag:friends-ssh means it
-		// keeps exactly what it had and the VPS does not inherit it.
+		// above, which is the entire point of this file. Naming the friends tag
+		// means it keeps exactly what it had and the VPS does not inherit it.
 		//
 		// `accept` rather than `check` is kept as found: these are not your
 		// machines and a re-auth prompt buys nothing on a box you are visiting.
@@ -256,7 +269,7 @@
 				"vps:443",
 				// dozzle direct, for when caddy is what broke.
 				"vps:8080",
-				// The acl grant the tag:friends-ssh ssh rule silently depends on. If
+				// The acl grant the friends ssh rule silently depends on. If
 				// someone "tidies up" that rule, ssh to those boxes stops working
 				// and the ssh section will look innocent; this catches it.
 				"tag:friends-ssh:22",
@@ -275,8 +288,8 @@
 				"vps:6432",
 				"vps:4317",
 %{~ endif}
-				// tag:friends-ssh is an ssh destination and nothing more. Holds either
-				// way: it depends on tag:friends-ssh, which is already applied.
+				// The friends tag is an ssh destination and nothing more. Holds
+				// either way: it does not depend on tag:vps being applied.
 				"tag:friends-ssh:80",
 			],
 		},
