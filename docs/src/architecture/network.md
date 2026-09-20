@@ -10,7 +10,8 @@ flowchart TB
 
     net --> edge["<b>Door 1</b> · Hetzner edge firewall<br/><code>tofu/modules/hetzner-firewall</code>"]
     edge --> nft["<b>Door 2</b> · host nftables<br/><code>modules/firewall.nix</code>"]
-    tailnet --> ts["<b>Door 3</b> · tailscale0<br/>accepted wholesale on input"]
+    tailnet --> pol["<b>Door 3</b> · tailnet policy file<br/><code>tofu/tailscale-policy.hujson</code>"]
+    pol --> ts["tailscale0<br/>accepted wholesale on input"]
 
     nft --> inp["input hook"]
     nft --> fwd["prerouting DNAT → forward"]
@@ -23,7 +24,7 @@ flowchart TB
     caddy --> priv["tailnet vhosts :8443"]
 
     classDef door fill:#2d4a7c,stroke:#16233c,color:#fff
-    class edge,nft,ts door
+    class edge,nft,pol door
 ```
 
 ## The two firewalls
@@ -103,17 +104,28 @@ check still passing.
 
 ## Tailscale
 
-`--ssh` is on, so administrative access is Tailscale SSH. The tailnet interface
-is accepted wholesale on the input hook, which is how the tailnet-only services
-(grafana, tempo, dozzle, pgbouncer, syncthing GUI) are kept private — by the
-_absence_ of an internet rule, not by their bind address. Several bind
-`0.0.0.0` and rely entirely on this.
+The tailnet interface is accepted **wholesale** on the input hook, which is how
+the tailnet-only services (grafana, tempo, dozzle, pgbouncer, syncthing GUI)
+are kept private — by the _absence_ of an internet rule, not by their bind
+address. Several bind `0.0.0.0` and rely entirely on this.
 
-Three of them also answer by name — `dozzle.`, `grafana.` and `syncthing.` —
-and that is the same mechanism wearing a hat. Caddy runs a **second listener**
-on `infra.tailnetHttpsPort` (8443) carrying those three vhosts and nothing
-else; like every other private port it is published on `0.0.0.0` and kept
-private by being in neither allow-list.
+That is also why door 3 is a policy file and not an nftables rule. **nftables
+cannot tell tailnet peers apart**: every packet off `tailscale0` looks the same
+to it, so "which peers may reach what" is a question this layer is structurally
+unable to answer. `tofu/tailscale-policy.hujson` is the layer that can, and it
+narrows the VPS to nine ports for the owner account — 6432 and 4317/4318 are
+no longer tailnet-reachable at all. See
+[The tailnet policy](tailnet.md).
+
+`--ssh` is on, so interactive administrative access is Tailscale SSH — with a
+`check` rule, so it wants a browser re-auth. Scripted access (`deploy .#vps`)
+goes to port 2222 with an ordinary key for exactly that reason.
+
+Three of those services also answer by name — `dozzle.`, `grafana.` and
+`syncthing.` — and that is the same mechanism wearing a hat. Caddy runs a
+**second listener** on `infra.tailnetHttpsPort` (8443) carrying those three
+vhosts and nothing else; like every other private port it is published on
+`0.0.0.0` and kept private by being in neither allow-list.
 
 What makes the URL portless is two lines in a `nat` prerouting chain:
 

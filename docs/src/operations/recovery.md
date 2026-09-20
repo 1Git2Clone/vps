@@ -3,16 +3,18 @@
 The design is shaped by which failures roll back automatically and which do
 not. This page is the table of both, and then the three that are recent scars.
 
-| Failure                                                                    | Caught by                                                                      | Recovery                                                                                          |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| firewall / sshd / networking change locks you out                          | **deploy-rs auto-rollback**                                                    | automatic                                                                                         |
-| unbootable kernel / initrd                                                 | GRUB generation menu (5 s at boot)                                             | pick the previous generation                                                                      |
-| a container fails to start                                                 | nothing — deploy confirms reachability, not health                             | `nixos-rebuild --rollback` or fix forward                                                         |
-| `nftables` reload wiped docker's chains                                    | nothing automatic; the symptom is the _next_ container start failing           | `systemctl restart docker`, and keep `flushRuleset = false`                                       |
-| a rotated sops secret didn't reach a container                             | nothing — the container holds a stale inode                                    | copy-to-stable-path or env-file, see [Secrets](../architecture/secrets.md#the-stale-symlink-trap) |
-| tofu plan shows an unexpected diff on unchanged infra                      | you, reading the plan                                                          | **the state is wrong, not the infra** — never `apply`; `refresh`/`import`, verify on the box      |
-| a fail2ban jail bans a docker/bridge address                               | nothing — a forward-chain `reject` on an internal IP downs **every** container | `systemctl stop fail2ban`; keep private ranges in `ignoreIP`                                      |
-| a deploy restarts every container at once and one racy unit exits non-zero | **deploy-rs aborts** — and its deactivation stops every container              | see [the abort that was worse than the failure](#the-abort-that-was-worse-than-the-failure)       |
+| Failure                                                                    | Caught by                                                                            | Recovery                                                                                                        |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| firewall / sshd / networking change locks you out                          | **deploy-rs auto-rollback**                                                          | automatic                                                                                                       |
+| unbootable kernel / initrd                                                 | GRUB generation menu (5 s at boot)                                                   | pick the previous generation                                                                                    |
+| a container fails to start                                                 | nothing — deploy confirms reachability, not health                                   | `nixos-rebuild --rollback` or fix forward                                                                       |
+| `nftables` reload wiped docker's chains                                    | nothing automatic; the symptom is the _next_ container start failing                 | `systemctl restart docker`, and keep `flushRuleset = false`                                                     |
+| a rotated sops secret didn't reach a container                             | nothing — the container holds a stale inode                                          | copy-to-stable-path or env-file, see [Secrets](../architecture/secrets.md#the-stale-symlink-trap)               |
+| tofu plan shows an unexpected diff on unchanged infra                      | you, reading the plan                                                                | **the state is wrong, not the infra** — never `apply`; `refresh`/`import`, verify on the box                    |
+| a fail2ban jail bans a docker/bridge address                               | nothing — a forward-chain `reject` on an internal IP downs **every** container       | `systemctl stop fail2ban`; keep private ranges in `ignoreIP`                                                    |
+| a deploy restarts every container at once and one racy unit exits non-zero | **deploy-rs aborts** — and its deactivation stops every container                    | see [the abort that was worse than the failure](#the-abort-that-was-worse-than-the-failure)                     |
+| `tofu apply` fails with `test(s) failed (400)` on the tailnet policy       | the policy's own `tests`, run by Tailscale at **apply** time                         | the narrowing is not live yet — see [the bootstrap deadlock](../architecture/tailnet.md#the-bootstrap-deadlock) |
+| the DNSSEC chain breaks                                                    | **nothing here** — `kuma-check` probes from the VPS, whose resolver may not validate | `dig +dnssec @1.1.1.1 hu-tao.dev SOA` from off-box; until then the domain is dark for validating resolvers      |
 
 ## The fail2ban blast radius
 
@@ -71,9 +73,25 @@ none, and `apply` from no state builds a **second** server and moves DNS to it.
 resource, inert while state tracks it, active when it does not. `tofu init &&
 tofu plan` then rebuilds state.
 
-A correct recovery plan reads **`20 to import, 0 to add, 1 to change, 0 to
+A correct recovery plan reads **`32 to import, 0 to add, 1 to change, 0 to
 destroy`** — the one change being three provider-side booleans on
 `hcloud_server.vps` that the importer never sets. **Anything else means stop.**
+
+Expect a _second_ change, `tailscale_acl.main`, until the policy in this repo
+has been applied at least once: the import reads whatever the tailnet is
+currently serving, and the diff against `tailscale-policy.hujson` is the point.
+Read it before applying — that resource replaces the whole document, so
+anything the live policy carries and the file does not is deleted with nothing
+in the plan naming it as a loss. See
+[The tailnet policy](../architecture/tailnet.md#one-document-no-partial-ownership).
+
+**Three resources are in state that nothing declares** — `hcloud_network`,
+`hcloud_network_subnet` and `hcloud_server_network.vps`, left over from the
+private network that was deleted. They cannot be given import blocks
+(`Configuration for import target does not exist`), and plans refresh them and
+then omit them from `resource_changes` entirely, which is recorded in
+`tofu/imports.tf` as _not understood_ rather than explained away. Clearing them
+means `tofu state rm`.
 
 > **The sharp edge (learned the hard way, 2026-09-05):** the hcloud provider
 > never reads `public_net` into state, so a post-import plan proposes _adding_
