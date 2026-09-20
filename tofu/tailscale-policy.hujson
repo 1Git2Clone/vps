@@ -40,6 +40,11 @@
 	// on, with the ssh rule below already in place to catch it. Untag to revert.
 	"tagOwners": {
 		"tag:vps": ["autogroup:owner"],
+
+		// PRE-EXISTING, carried over verbatim. Something in the tailnet holds
+		// this tag today. Dropping a tagOwner for a tag a device still carries
+		// orphans that device, so it stays until you decide otherwise.
+		"tag:friends-ssh": ["autogroup:admin"],
 	},
 
 	"acls": [
@@ -86,6 +91,21 @@
 			"src": ["autogroup:member"],
 			"dst": ["tag:vps:22,80,443,2222,3000,8080,8384,8443,8880"],
 		},
+
+		// PRE-EXISTING BEHAVIOUR, PRESERVED RATHER THAN GUESSED AT. The policy
+		// this file replaces was the stock `src: ["*"], dst: ["*:*"]`, and `*`
+		// as a source includes TAGGED devices — so whatever carries tag:friends-ssh can
+		// currently initiate anything. Narrowing it blind would be a silent
+		// outage for a machine neither this repo nor its author can identify.
+		//
+		// TODO: find out what tag:friends-ssh is (admin console -> Machines, filter by
+		// tag) and give it a port list like tag:vps has above. Until then this
+		// is exactly the access it already had, written down instead of implied.
+		{
+			"action": "accept",
+			"src": ["tag:friends-ssh"],
+			"dst": ["*:*"],
+		},
 	],
 
 	"ssh": [
@@ -94,7 +114,7 @@
 			"action": "check",
 			"src": ["autogroup:member"],
 			"dst": ["autogroup:self"],
-			"users": ["autogroup:nonroot"],
+			"users": ["autogroup:nonroot", "root"],
 		},
 
 		// The VPS, once tagged — WITHOUT THIS, TAGGING IT BREAKS TAILSCALE SSH,
@@ -119,18 +139,60 @@
 			"dst": ["tag:vps"],
 			"users": ["autogroup:nonroot"],
 		},
+
+		// PRE-EXISTING, WITH ONE DELIBERATE NARROWING. The live rule read
+		// `dst: ["autogroup:tagged", "tag:friends-ssh"]` with `action: accept`, and
+		// `autogroup:tagged` would start covering tag:vps the moment the VPS is
+		// tagged — handing it accept-without-re-auth and quietly overriding the
+		// `check` rule directly above, which is the entire point of this file.
+		//
+		// So tag:friends-ssh keeps exactly what it had; the wildcard that would have
+		// swallowed the VPS does not. If you want the VPS on accept too, say so
+		// here rather than by re-widening this.
+		{
+			"action": "accept",
+			"src": ["1git2clone@github"],
+			"dst": ["tag:friends-ssh"],
+			"users": ["autogroup:nonroot", "root"],
+		},
 	],
 
-	// Run by the PROVIDER AT PLAN TIME against the real API, so a rule that
+	// CARRIED OVER VERBATIM FROM THE POLICY THIS FILE REPLACES. None of it is
+	// an access rule, all of it is load-bearing, and the resource overwrites
+	// the whole document — so anything omitted here is deleted on apply.
+	//
+	//   funnel   the stock grant. Removing it disables Tailscale Funnel
+	//            tailnet-wide.
+	//   mullvad  THIS ATTRIBUTE IS THE MULLVAD EXIT-NODE GATE. These four
+	//            addresses are devices with the integration enabled; drop one
+	//            and that machine loses its Mullvad exit nodes, with nothing in
+	//            the apply output saying so. Targets are raw tailnet addresses
+	//            rather than names because that is how the console wrote them.
+	"nodeAttrs": [
+		{"target": ["autogroup:member"], "attr": ["funnel"]},
+		{"target": ["100.108.24.65"], "attr": ["mullvad"]},
+		{"target": ["100.111.243.14"], "attr": ["mullvad"]},
+		{"target": ["100.95.190.17"], "attr": ["mullvad"]},
+		{"target": ["100.90.44.89"], "attr": ["mullvad"]},
+	],
+
+	// Run by the PROVIDER AT APPLY TIME against the real API, so a rule that
 	// stops being true fails `tofu plan` rather than being discovered later.
 	// That is the part of this worth having: the policy above is a claim, and
 	// these are the claim being checked.
 	//
+	// APPLY TIME, NOT PLAN TIME — MEASURED, NOT ASSUMED. An earlier draft of
+	// this comment said plan. A real `tofu plan` then succeeded against a
+	// policy carrying both an empty `vps` host and the deny entries below,
+	// neither of which can pass validation, which means the provider diffs the
+	// string locally and ships it to the API only on apply. So a broken policy
+	// reaches `tofu apply` before anything objects.
+	//
 	// THE `deny` ENTRIES ONLY HOLD ONCE tag:vps IS APPLIED — until then the
-	// broad device-to-device rule still covers the VPS and a plan will fail
-	// here saying so. That failure is not a bug to work around, it is this file
-	// telling you the narrowing is not live yet. See the rollout order in
-	// tailscale.tf.
+	// broad device-to-device rule still covers the VPS on every port, and the
+	// apply fails here saying so. That failure is not a bug to work around, it
+	// is this file telling you the narrowing is not live yet. See the rollout
+	// order in tailscale.tf.
 	"tests": [
 		{
 			"src": "autogroup:member",

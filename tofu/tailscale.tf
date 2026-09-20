@@ -23,15 +23,32 @@
 # ------------------------------------------------------------------------------
 # ROLLOUT ORDER, ONCE
 # ------------------------------------------------------------------------------
-#   1. Create the OAuth client: admin console -> Settings -> OAuth clients, one
-#      scope, `acl` (write). Put the id and secret in terraform.tfvars.
+#   0. Set `tailnet_ipv4` in terraform.tfvars, from `tailscale status`. It is
+#      OPTIONAL for the DNS records and MANDATORY here: unset, it renders
+#      `"vps": ""` and every rule keyed on that host silently becomes a rule
+#      about nothing. A plan will not catch it — one did not. Setting it also
+#      creates the dozzle/grafana/syncthing A records, which is the documented
+#      behaviour of the variable and shows up as `3 to add`.
 #
-#   2. READ THE CURRENT POLICY FIRST, in the admin console. This resource
-#      replaces it wholesale and `overwrite_existing_content` is left at its
-#      default of false precisely so the import in imports.tf is mandatory — but
-#      an import only puts the old policy in STATE, it does not stop the apply
-#      from replacing it. Whatever is in there today that is not in
-#      tailscale-policy.hujson is about to be gone.
+#   1. Create the OAuth client: admin console -> Settings -> Trust-credentials
+#      -> Credential -> OAuth. One scope: Policy File (write). Read is implied,
+#      and the console auto-selects a few adjacent read scopes — expected, and
+#      harmless. Put the id and secret in terraform.tfvars.
+#
+#   2. READ THE CURRENT POLICY FIRST, in the admin console, and diff it against
+#      tailscale-policy.hujson BY EYE. This resource replaces it wholesale and
+#      `overwrite_existing_content` is left at its default of false precisely so
+#      the import in imports.tf is mandatory — but an import only puts the old
+#      policy in STATE, it does not stop the apply from replacing it. Whatever
+#      is in there today that is not in the file is about to be gone.
+#
+#      THIS STEP HAS ALREADY EARNED ITS KEEP. The first real plan showed the
+#      live policy carried a `nodeAttrs` block granting four devices Mullvad
+#      exit-node access and the tailnet Funnel, plus a `tag:friends-ssh` tagOwner and
+#      ssh rule — none of it in the first draft of this file, all of it deleted
+#      on apply, and none of it named in the plan as a loss. It is carried over
+#      verbatim now. Read the `-` lines in that diff as deletions, because that
+#      is exactly what they are.
 #
 #   3. Tag the VPS: Machines -> hu-tao -> Edit ACL tags -> tag:vps. Do this
 #      BEFORE the apply, not after. It is safe in that order because the stock
