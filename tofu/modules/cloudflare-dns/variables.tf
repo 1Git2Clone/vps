@@ -107,5 +107,5 @@ variable "caa_iodef" {
     kind of news. Bare address; the mailto: is added.
   EOT
   type        = string
-  default     = "ivan@hu-tao.org"
+  default     = "ivan@hu-tao.dev"
 }
