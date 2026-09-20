@@ -52,6 +52,13 @@
 #
 #   3. `tofu apply -var vps_is_tagged=false`
 #
+#      With `-out`, THE VARIABLE GOES ON THE PLAN, not the apply: a saved plan
+#      already has its values baked in, and `tofu apply -var ... the.tfplan`
+#      either ignores the flag or refuses the extra argument depending on where
+#      it lands in the command. So either apply directly as above, or
+#      `tofu plan -out main.tfplan -var vps_is_tagged=false` and then a bare
+#      `tofu apply main.tfplan`.
+#
 #      THE ORDER HERE WAS WRONG UNTIL 2026-09-20 and the mistake is worth
 #      keeping, because it looks correct. It said to tag the VPS first. You
 #      cannot: Tailscale refuses to assign a tag that no tagOwners entry
