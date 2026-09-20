@@ -96,3 +96,16 @@ variable "dmarc_rua" {
 variable "bsky_record" {
   type = string
 }
+
+variable "caa_iodef" {
+  description = <<-EOT
+    Address a CA reports a REFUSED issuance to, through the CAA iodef record.
+    It is the only way these records ever tell you someone tried.
+
+    Defaults to infra.acmeEmail from modules/options.nix — the same person
+    already gets Let's Encrypt expiry mail, and a refused issuance is the same
+    kind of news. Bare address; the mailto: is added.
+  EOT
+  type        = string
+  default     = "ivan@hu-tao.org"
+}

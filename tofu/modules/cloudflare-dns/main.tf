@@ -130,3 +130,68 @@ resource "cloudflare_dns_record" "bsky" {
   content = var.bsky_record
   ttl     = 1
 }
+
+# ==============================================================================
+# CAA — which certificate authorities may issue for this zone
+# ==============================================================================
+# Without these records, ANY of the ~150 CAs in the public trust stores can
+# issue a certificate for hu-tao.dev, and a misissuance is a valid certificate
+# for this domain in someone else's hands. DNSSEC does not help: a certificate
+# is not a DNS answer, so signing the zone says nothing about who may sign for
+# its name.
+#
+# THREE ISSUANCE PATHS FEED THIS LIST, and only one of them is this server.
+# That the apex and www are Netlify's is already stated at the top of this file;
+# what a CAA record needs on top of it is WHICH CA each path uses, and that came
+# from inspecting the live certificates on 2026-09-20. A list written from
+# modules/acme.nix alone would have been right about the VPS and would have
+# broken the other two.
+#
+#   letsencrypt.org  The VPS: lego issues the apex certificate and its ten SANs
+#                    over DNS-01 (modules/acme.nix). AND Netlify, which serves
+#                    the apex itself — hu-tao.dev's A records are 75.2.60.5 and
+#                    99.83.231.61, which are Netlify, not this server. Netlify
+#                    issues through Let's Encrypt too, so one entry covers both.
+#
+#   pki.goog         Cloudflare Universal SSL. www.hu-tao.dev is a PROXIED
+#                    CNAME, so Cloudflare terminates TLS for it at its edge
+#                    using a certificate of its own — currently Google Trust
+#                    Services, and a WILDCARD covering hu-tao.dev and
+#                    *.hu-tao.dev. `cansignhttpexchanges=yes` is the spelling
+#                    Cloudflare documents for this CA, not decoration.
+#
+# NO issuewild RECORDS, DELIBERATELY. RFC 8659: when no issuewild record is
+# present, `issue` governs wildcard issuance as well. The tempting hardening
+# here is `issuewild ";"` to forbid wildcards outright — that would break the
+# Cloudflare edge certificate above, because it IS a wildcard, and the break
+# would not surface until renewal roughly 30 days before expiry with nothing in
+# this repo to point at.
+#
+# CLOUDFLARE MAY PUBLISH MORE CAA RECORDS THAN THESE, and they will never
+# appear in a plan. When Cloudflare is the DNS provider it adds its own CAs on
+# your behalf, so Universal SSL keeps renewing if it rotates from Google to
+# ssl.com or sectigo.com. Those records are live and are not managed here:
+# `dig CAA hu-tao.dev` is the truth, this resource is only the part tofu owns.
+resource "cloudflare_dns_record" "caa" {
+  # Keyed by CA rather than generated from the value, so a state address stays
+  # readable and adding an issuer is one line rather than a re-index.
+  for_each = {
+    letsencrypt = { tag = "issue", value = "letsencrypt.org" }
+    google      = { tag = "issue", value = "pki.goog; cansignhttpexchanges=yes" }
+    iodef       = { tag = "iodef", value = "mailto:${var.caa_iodef}" }
+  }
+
+  zone_id = var.zone_id
+  name    = var.domain
+  type    = "CAA"
+  ttl     = 1
+
+  data = {
+    # 0 = non-critical. A CA that does not understand the tag may proceed;
+    # every CA understands issue and iodef, so this costs nothing and avoids
+    # the failure mode where a critical unknown tag blocks all issuance.
+    flags = 0
+    tag   = each.value.tag
+    value = each.value.value
+  }
+}
