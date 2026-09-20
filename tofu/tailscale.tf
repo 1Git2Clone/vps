@@ -50,13 +50,31 @@
 #      verbatim now. Read the `-` lines in that diff as deletions, because that
 #      is exactly what they are.
 #
-#   3. Tag the VPS: Machines -> hu-tao -> Edit ACL tags -> tag:vps. Do this
-#      BEFORE the apply, not after. It is safe in that order because the stock
-#      policy's `dst: ["*:*"]` covers tagged devices too, so nothing loses
-#      access in the gap — and the policy file's `deny` tests cannot pass until
-#      it is done, so a plan will refuse while the narrowing would be a no-op.
+#   3. `tofu apply -var vps_is_tagged=false`
 #
-#   4. `tofu plan`, read the diff against the old policy, then apply.
+#      THE ORDER HERE WAS WRONG UNTIL 2026-09-20 and the mistake is worth
+#      keeping, because it looks correct. It said to tag the VPS first. You
+#      cannot: Tailscale refuses to assign a tag that no tagOwners entry
+#      defines, and tag:vps is defined only in the policy that is waiting to be
+#      applied. The policy in turn cannot be applied, because its deny
+#      assertions fail while the VPS is untagged. Each step blocks the other,
+#      and `tailscale_device_tags` would hit the same wall — it is the API's
+#      rule, not a limitation of the console or of this provider.
+#
+#      This apply is the way out. It publishes tagOwners and the tag:vps rules
+#      with the two unmeetable assertions omitted, and CHANGES NO ACCESS:
+#      nothing carries the tag yet, so the VPS is still reached through the
+#      autogroup:self rule exactly as before. Measured against
+#      /acl/validate before being written down — the false rendering is
+#      accepted, the true one is rejected with both errors.
+#
+#   4. Tag the VPS: Machines -> vps -> Edit ACL tags -> tag:vps. Offered now,
+#      because step 3 defined it. Tailscale SSH keeps working across this
+#      because step 3 also installed the tag:vps ssh rule.
+#
+#   5. `tofu plan`, read the diff, then `tofu apply`. The assertions come back
+#      and now hold. THIS is the apply that narrows anything; the one in step 3
+#      only made it possible.
 #
 # To undo any of it: remove the tag in the console and the broad
 # device-to-device rule covers the VPS again, no apply needed.
@@ -86,7 +104,8 @@ resource "tailscale_acl" "main" {
   # tailnet address, taken from the same var the dozzle/grafana/syncthing A
   # records use. One address in the repo, not two.
   acl = templatefile("${path.module}/tailscale-policy.hujson", {
-    vps_ipv4 = var.tailnet_ipv4
+    vps_ipv4   = var.tailnet_ipv4
+    vps_tagged = var.vps_is_tagged
   })
 
   # BOTH LEFT AT false, BOTH ON PURPOSE.

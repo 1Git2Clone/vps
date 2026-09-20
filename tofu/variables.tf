@@ -108,6 +108,38 @@ variable "legacy_server_ids" {
   default     = []
 }
 
+variable "vps_is_tagged" {
+  description = <<-EOT
+    Whether the VPS already carries tag:vps. Gates the two deny assertions in
+    the tailnet policy's tests block, and exists to break a genuine deadlock.
+
+    THE DEADLOCK. The policy cannot be applied while the VPS is untagged,
+    because `autogroup:self:*` still covers it on every port and the deny tests
+    say otherwise. And the VPS cannot be tagged while the policy is unapplied,
+    because Tailscale refuses to assign a tag that no tagOwners entry defines —
+    tag:vps is defined only in the policy waiting to be applied. Neither the
+    console nor tailscale_device_tags gets around that; it is the API's rule,
+    not a tooling limit.
+
+    So the bootstrap is three steps, once in the life of the tailnet:
+
+      1. tofu apply -var vps_is_tagged=false
+         Publishes tagOwners and the tag:vps rules. Changes no access: nothing
+         carries the tag yet, so the VPS is still reached through the
+         autogroup:self rule exactly as before.
+      2. Machines -> vps -> Edit ACL tags -> tag:vps. Now offered, because
+         step 1 defined it.
+      3. tofu apply
+         The deny assertions come back and now hold. This is the apply that
+         actually narrows anything.
+
+    Default true, so the un-narrowed policy is never what you get by accident —
+    reaching for the weaker one has to be deliberate and visible in the command.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "tailnet_ipv4" {
   description = <<-EOT
     This box's tailscale address, from `tailscale status`. dozzle, grafana and

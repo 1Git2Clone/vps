@@ -36,8 +36,14 @@
 	// THIS IS WHY THE ROLLOUT HAS NO OUTAGE WINDOW. Apply this file while the
 	// VPS is still untagged and nothing changes: it is still a self-owned
 	// device, still covered by the broad rule. Then tag it in the admin console
-	// (Machines -> hu-tao -> Edit ACL tags -> tag:vps) and the narrowing turns
-	// on, with the ssh rule below already in place to catch it. Untag to revert.
+	// (Machines -> vps -> Edit ACL tags -> tag:vps) and the narrowing turns on,
+	// with the ssh rule below already in place to catch it. Untag to revert.
+	//
+	// THAT FIRST APPLY NEEDS `-var vps_is_tagged=false`, and the reason is a
+	// deadlock rather than an ordering preference: a tag cannot be assigned
+	// until some applied policy defines it in tagOwners, and this policy cannot
+	// be applied while its deny assertions reference an untagged VPS. The
+	// variable drops exactly those two assertions for exactly that one apply.
 	"tagOwners": {
 		"tag:vps": ["autogroup:owner"],
 
@@ -256,12 +262,21 @@
 				"tag:friends-ssh:22",
 			],
 			"deny": [
+%{~ if vps_tagged}
 				// pgbouncer and tempo are for the bot over the docker bridge.
 				// A tailnet peer reaching postgres is the shape of the incident
 				// this file exists to make impossible.
+				//
+				// OMITTED WHEN var.vps_is_tagged IS FALSE, and only then. These
+				// two are the assertions that cannot hold until the VPS carries
+				// the tag, and dropping them is what lets the bootstrap apply go
+				// through at all. See the variable for why that is a deadlock
+				// rather than an ordering mistake.
 				"vps:6432",
 				"vps:4317",
-				// tag:friends-ssh is an ssh destination and nothing more.
+%{~ endif}
+				// tag:friends-ssh is an ssh destination and nothing more. Holds either
+				// way: it depends on tag:friends-ssh, which is already applied.
 				"tag:friends-ssh:80",
 			],
 		},
