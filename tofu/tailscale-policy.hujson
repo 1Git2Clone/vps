@@ -41,22 +41,41 @@
 	"tagOwners": {
 		"tag:vps": ["autogroup:owner"],
 
-		// PRE-EXISTING, carried over verbatim. Something in the tailnet holds
-		// this tag today. Dropping a tagOwner for a tag a device still carries
-		// orphans that device, so it stays until you decide otherwise.
+		// PRE-EXISTING. Friends' machines carry this tag, and the tag exists
+		// for exactly one reason: so they can be SSHed INTO without the rest of
+		// the tailnet's members reaching them. Tagging them took them out of
+		// their owner's `autogroup:self`, which is the same lever tag:vps uses
+		// above — see there for why that is the only way to narrow anything.
+		//
+		// Dropping this entry while a device still carries the tag orphans that
+		// device, so it stays as long as those machines are tagged.
 		"tag:friends-ssh": ["autogroup:admin"],
 	},
 
 	"acls": [
-		// Your own devices, to each other, unchanged. Laptops, desktop, phone —
-		// syncthing pairs over this, and there is nothing to gain by taking a
-		// scalpel to a set of machines that are all equally yours.
+		// Your own devices, to each other. Laptops, desktop, phone — syncthing
+		// pairs over this, and there is nothing to gain by taking a scalpel to a
+		// set of machines that are all equally yours.
+		//
+		// SRC IS THE OWNER ACCOUNT, NOT autogroup:member. Worth spelling out why,
+		// because the stock rule said member and that is NOT the hole it looks
+		// like: `autogroup:self` as a DESTINATION means "devices belonging to
+		// whoever opened this connection", evaluated per-connection. So member A
+		// could never reach member B's laptop through it — each member only ever
+		// reached their own machines. What naming the account removes is the one
+		// remaining case, a second member reaching THEIR own devices. On a tailnet
+		// with one real user that is a no-op today and a closed door the day it
+		// stops being one.
+		//
+		// Spelled as the account rather than `autogroup:owner` because the ssh
+		// section already proves this spelling works in this tailnet, and one
+		// spelling used everywhere is one thing to change on a rename.
 		//
 		// Once tag:vps is applied this NO LONGER INCLUDES THE VPS. That is the
 		// whole mechanism; see tagOwners above.
 		{
 			"action": "accept",
-			"src": ["autogroup:member"],
+			"src": ["1git2clone@github"],
 			"dst": ["autogroup:self:*"],
 		},
 
@@ -88,31 +107,48 @@
 		// rather than reaching for `tailscale up --shields-up` on a laptop.
 		{
 			"action": "accept",
-			"src": ["autogroup:member"],
+			"src": ["1git2clone@github"],
 			"dst": ["tag:vps:22,80,443,2222,3000,8080,8384,8443,8880"],
 		},
 
-		// PRE-EXISTING BEHAVIOUR, PRESERVED RATHER THAN GUESSED AT. The policy
-		// this file replaces was the stock `src: ["*"], dst: ["*:*"]`, and `*`
-		// as a source includes TAGGED devices — so whatever carries tag:friends-ssh can
-		// currently initiate anything. Narrowing it blind would be a silent
-		// outage for a machine neither this repo nor its author can identify.
+		// tag:friends-ssh IS A DESTINATION ONLY. Those machines exist here to be SSHed
+		// into; nothing on them has any business opening a connection into this
+		// tailnet. Since Tailscale has no deny rules, "cannot initiate" is not a
+		// rule you write — it is what you get by never naming tag:friends-ssh as a src.
+		// The stock policy named it implicitly, because `src: ["*"]` covers
+		// tagged devices; the absence of that wildcard is the whole fix.
 		//
-		// TODO: find out what tag:friends-ssh is (admin console -> Machines, filter by
-		// tag) and give it a port list like tag:vps has above. Until then this
-		// is exactly the access it already had, written down instead of implied.
+		// THIS RULE IS WHAT MAKES THE SSH RULE BELOW WORK, and it is the least
+		// obvious line in the file. A Tailscale SSH rule is an EXTRA check on top
+		// of ordinary ACL matching, not a substitute for it — the connection
+		// still has to be allowed to reach port 22 on the destination. The stock
+		// `dst: ["*"]` granted that for free. With the wildcard gone, port 22 has
+		// to be granted here explicitly, and nothing else is.
 		{
 			"action": "accept",
-			"src": ["tag:friends-ssh"],
-			"dst": ["*:*"],
+			"src": ["1git2clone@github"],
+			"dst": ["tag:friends-ssh:22"],
 		},
 	],
 
 	"ssh": [
-		// Your own devices. This is the stock rule and is left alone.
+		// Your own devices, owner only — same narrowing as the first acl rule,
+		// for the same reason.
+		//
+		// WHAT `check` ACTUALLY CHECKS, because the name invites a wrong guess:
+		// it does NOT verify that the connecting user owns the destination. That
+		// decision was already made, above, by src and dst matching. `check` adds
+		// FRESHNESS — the connecting user has to re-authenticate to their
+		// Tailscale identity in a browser, and the answer is cached (12h by
+		// default). It is the difference between "a device still holding a valid
+		// tailnet key" and "a person sitting at that device right now".
+		//
+		// So: ownership comes from `autogroup:self` and from naming the account
+		// in src. `check` is what makes a stolen, still-enrolled laptop not be
+		// enough on its own.
 		{
 			"action": "check",
-			"src": ["autogroup:member"],
+			"src": ["1git2clone@github"],
 			"dst": ["autogroup:self"],
 			"users": ["autogroup:nonroot", "root"],
 		},
@@ -135,20 +171,22 @@
 		// doors into the box from disagreeing about whether root may log in.
 		{
 			"action": "check",
-			"src": ["autogroup:member"],
+			"src": ["1git2clone@github"],
 			"dst": ["tag:vps"],
 			"users": ["autogroup:nonroot"],
 		},
 
-		// PRE-EXISTING, WITH ONE DELIBERATE NARROWING. The live rule read
-		// `dst: ["autogroup:tagged", "tag:friends-ssh"]` with `action: accept`, and
-		// `autogroup:tagged` would start covering tag:vps the moment the VPS is
-		// tagged — handing it accept-without-re-auth and quietly overriding the
-		// `check` rule directly above, which is the entire point of this file.
+		// Friends' machines. This is the rule the tag was created for.
 		//
-		// So tag:friends-ssh keeps exactly what it had; the wildcard that would have
-		// swallowed the VPS does not. If you want the VPS on accept too, say so
-		// here rather than by re-widening this.
+		// NARROWED FROM THE LIVE POLICY, which read
+		// `dst: ["autogroup:tagged", "tag:friends-ssh"]`. `autogroup:tagged` starts
+		// covering tag:vps the moment the VPS is tagged — handing the VPS
+		// accept-without-re-auth and quietly overriding the `check` rule directly
+		// above, which is the entire point of this file. Naming tag:friends-ssh means it
+		// keeps exactly what it had and the VPS does not inherit it.
+		//
+		// `accept` rather than `check` is kept as found: these are not your
+		// machines and a re-auth prompt buys nothing on a box you are visiting.
 		{
 			"action": "accept",
 			"src": ["1git2clone@github"],
@@ -157,20 +195,24 @@
 		},
 	],
 
-	// PERSONAL POLICY, SPLICED IN FROM tailscale-personal.hujson.
+	// CARRIED OVER VERBATIM FROM THE POLICY THIS FILE REPLACES. None of it is
+	// an access rule, all of it is load-bearing, and the resource overwrites
+	// the whole document — so anything omitted here is deleted on apply.
 	//
-	// Sections that are wholly about your own devices live in that file so this
-	// one stays about the VPS. It is a readability boundary and nothing more:
-	// a tailnet has ONE policy document and no include mechanism, so the apply
-	// writes both halves together, and anything deleted there is deleted from
-	// the tailnet. Today it carries nodeAttrs — the Funnel grant and the four
-	// Mullvad exit-node targets.
-	//
-	// The split stops where sections are shared. tag:friends-ssh's tagOwner, acl and
-	// ssh entries stay above, marked PRE-EXISTING, because a policy document
-	// cannot repeat a top-level key and this file must already define those
-	// three sections for the VPS.
-${personal}
+	//   funnel   the stock grant. Removing it disables Tailscale Funnel
+	//            tailnet-wide.
+	//   mullvad  THIS ATTRIBUTE IS THE MULLVAD EXIT-NODE GATE. These four
+	//            addresses are devices with the integration enabled; drop one
+	//            and that machine loses its Mullvad exit nodes, with nothing in
+	//            the apply output saying so. Targets are raw tailnet addresses
+	//            rather than names because that is how the console wrote them.
+	"nodeAttrs": [
+		{"target": ["autogroup:member"], "attr": ["funnel"]},
+		{"target": ["100.108.24.65"], "attr": ["mullvad"]},
+		{"target": ["100.111.243.14"], "attr": ["mullvad"]},
+		{"target": ["100.95.190.17"], "attr": ["mullvad"]},
+		{"target": ["100.90.44.89"], "attr": ["mullvad"]},
+	],
 
 	// Run by the PROVIDER AT APPLY TIME against the real API, so a rule that
 	// stops being true fails `tofu plan` rather than being discovered later.
@@ -191,7 +233,7 @@ ${personal}
 	// order in tailscale.tf.
 	"tests": [
 		{
-			"src": "autogroup:member",
+			"src": "1git2clone@github",
 			"accept": [
 				// Deploys. The single most load-bearing line in the file.
 				"vps:2222",
@@ -199,6 +241,10 @@ ${personal}
 				"vps:443",
 				// dozzle direct, for when caddy is what broke.
 				"vps:8080",
+				// The acl grant the tag:friends-ssh ssh rule silently depends on. If
+				// someone "tidies up" that rule, ssh to those boxes stops working
+				// and the ssh section will look innocent; this catches it.
+				"tag:friends-ssh:22",
 			],
 			"deny": [
 				// pgbouncer and tempo are for the bot over the docker bridge.
@@ -206,6 +252,8 @@ ${personal}
 				// this file exists to make impossible.
 				"vps:6432",
 				"vps:4317",
+				// tag:friends-ssh is an ssh destination and nothing more.
+				"tag:friends-ssh:80",
 			],
 		},
 	],

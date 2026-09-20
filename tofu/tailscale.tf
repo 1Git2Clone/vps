@@ -82,25 +82,11 @@ provider "tailscale" {
 }
 
 resource "tailscale_acl" "main" {
-  # templatefile rather than file, for two substitutions.
-  #
-  # vps_ipv4 is the VPS's tailnet address, taken from the same var the
-  # dozzle/grafana/syncthing A records use. One address in the repo, not two.
-  #
-  # personal splices in tailscale-personal.hujson, which holds the sections that
-  # are wholly about personal devices — today nodeAttrs, i.e. the Funnel grant
-  # and the Mullvad exit-node targets. A tailnet has ONE policy document and no
-  # include mechanism, so THIS IS NOT A SECOND OWNER: both halves are written by
-  # this apply, under this credential, and a line deleted from that file is
-  # deleted from the tailnet. What it buys is a policy file about the VPS that
-  # reads as one, and a smaller diff to review when only personal settings move.
-  #
-  # `file()`, not a nested templatefile: the personal half has no substitutions,
-  # and reading it verbatim means a stray `${"$"}{...}` in it can never be
-  # interpolated by accident.
+  # templatefile rather than file, for exactly one substitution: the VPS's
+  # tailnet address, taken from the same var the dozzle/grafana/syncthing A
+  # records use. One address in the repo, not two.
   acl = templatefile("${path.module}/tailscale-policy.hujson", {
     vps_ipv4 = var.tailnet_ipv4
-    personal = file("${path.module}/tailscale-personal.hujson")
   })
 
   # BOTH LEFT AT false, BOTH ON PURPOSE.
