@@ -128,17 +128,53 @@ in
         # can be asserted rather than eyeballed, like the vps_* pair above.
         counter dns_from_jobs { }
 
+        # Who may ssh in. Both halves named, because the interesting assertion
+        # is the negative one and the chain's catch-all drop carries an
+        # anonymous counter — a refused ssh would otherwise be indistinguishable
+        # from any other dropped packet.
+        counter ssh_from_vps { }
+        counter ssh_blocked { }
+
         chain input {
           type filter hook input priority filter; policy drop;
 
           iifname lo accept
           ct state { established, related } accept
 
-          # Administration, permanently. The cloud firewall is what narrows the
-          # source to 167.233.24.58/32 — this rule cannot, because a host rule
-          # keyed on the VPS's address would also have to survive the VPS's
-          # address changing, and the cloud rule is the one tofu owns.
-          tcp dport 22 ct state new accept
+          # ── ADMINISTRATION, NARROWED HERE TOO ────────────────────────────
+          # `ssh -J vps root@<this box>` is the only way in. The runner is
+          # deliberately off the tailnet, and a home connection has no static
+          # address to allow-list, so the VPS is the one host that may knock.
+          #
+          # THIS USED TO BE `tcp dport 22 ct state new accept`, on the reasoning
+          # that only the cloud firewall should key on the VPS's address, since
+          # a host rule would have to survive that address changing. The rest of
+          # this file had already taken that bet: the output and forward chains
+          # key their one-way drops on the same ${vps4}, there is an assertion
+          # below that it is non-empty, and the VM test exists precisely to
+          # override it. Ingress was the inconsistent half, and "the cloud rule
+          # is the one tofu owns" argued for a single layer in a file whose
+          # whole thesis is that each layer survives the other's mistakes.
+          #
+          # THE TWO FAILURE MODES ARE NOT SYMMETRIC, which is what settles it.
+          # A stale vps4 in the egress rules fails OPEN — the drop matches
+          # nothing, the runner reaches the new address on every port, and the
+          # one-way design is gone with no error anywhere. Stale here fails
+          # CLOSED: nobody can ssh in, Hetzner's web console still works, and
+          # the fix is one rebuild. Closed is the direction to be wrong in.
+          #
+          # IPv4 ONLY, matching the cloud rule, which lists a v4 /32 and no v6
+          # source at all. The documented path is
+          # `ssh -J vps root@46.225.61.172`, a v4 literal, so v6 ssh was never
+          # reachable through the cloud layer — this stops the host from
+          # quietly allowing more than the layer above it.
+          ip saddr ${vps4} tcp dport 22 ct state new counter name ssh_from_vps accept
+
+          # Redundant with the chain's drop policy, and named on purpose: see
+          # the counter declaration above. tests/runner-firewall.nix asserts on
+          # both counters, so "only the VPS may ssh in" is proved rather than
+          # read.
+          tcp dport 22 ct state new counter name ssh_blocked log prefix "DROP_ssh: " drop
 
           # The Actions cache proxy, reached by job containers at this host's
           # own address. `cache.host` is unset in modules/runner/default.nix, so
