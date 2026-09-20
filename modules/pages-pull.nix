@@ -214,6 +214,40 @@ in
             -o "$tmp/pages.zip"
           unzip -q "$tmp/pages.zip" -d "$tmp/out"
 
+          # THE ARTIFACT IS UNTRUSTED CONTENT AND THIS IS WHERE IT STOPS BEING
+          # ABLE TO POINT SOMEWHERE ELSE.
+          #
+          # It was built on the CI runner, the one machine this estate treats as
+          # hostile (docs/src/architecture/runner.md). Layers 1-5 there are
+          # address-and-path controls; an artifact is the one thing that crosses
+          # the boundary carrying CONTENT, and the caddy allow-list has to admit
+          # the ArtifactService route for publishing to work at all.
+          #
+          # Info-ZIP already refuses the two obvious escapes — it strips `../`
+          # and "warning: stripped absolute path spec from /x", and it will not
+          # write THROUGH a symlink ("checkdir error: exists but is not
+          # directory"). What it does do is RESTORE a symlink, target and all,
+          # and `cp -a` below then preserves it. Verified on unzip 6.00.
+          #
+          # That is enough on its own, because caddy's file_server follows a
+          # symlink out of its root — verified against caddy 2.11 with a tree
+          # containing `leak -> <file outside the root>` and `slash -> /`, both
+          # answered 200. The caddy container mounts /etc/caddy/certs, and
+          # modules/acme.nix group-owns that directory BY caddy precisely so it
+          # can read key.pem. So one `ln -s` in a published artifact reads out
+          # the private key for the apex certificate and all eleven SANs, over
+          # https://pages.<domain>/<owner>/<repo>/.
+          #
+          # A published site is files and directories. A symlink in one has no
+          # legitimate use here, so it is deleted rather than resolved or
+          # rejected: a rejection would let one malformed artifact wedge a repo's
+          # publishing, and this way the rest of the tree still goes live.
+          #
+          # -type l is the LINK itself, never its target, so this cannot follow
+          # a link out of $tmp and delete something real. Covered by
+          # checks.pages-pull-strips-symlinks.
+          find "$tmp/out" -type l -delete
+
           # ATOMIC SWAP. caddy serves this read-only and a half-written tree
           # is a half-broken site, so the new content is staged as a sibling
           # and renamed over the old one — rename(2) within a filesystem is

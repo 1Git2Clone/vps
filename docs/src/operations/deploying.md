@@ -10,7 +10,7 @@ other:
 
 ```sh
 deploy .#vps              # the VPS
-deploy .#forgejo-runner   # the CI runner, via ProxyJump through the VPS
+deploy .#runner-forgejo-runner   # the CI runner, via ProxyJump through the VPS
 ```
 
 Everything below assumes the ssh key is loaded, because it is passphrase-
@@ -93,12 +93,13 @@ this host on 2026-09-04, cold cache including the base image pulls: 3m28s.
 
 ### The runner is deployed through the VPS
 
-The runner is deliberately off the tailnet and its cloud firewall admits tcp/22
-from the VPS `/32` and nothing else, so the only route in is a jump:
+The runner is deliberately off the tailnet, and inbound ssh is narrowed to the
+VPS `/32` at **both** layers — its cloud firewall and its own nftables — so the
+only route in is a jump:
 
 ```sh
-deploy .#forgejo-runner    # sshOpts carry -J vps
-ssh -J vps root@46.225.61.172    # by hand
+deploy .#runner-forgejo-runner    # sshOpts carry -J vps
+ssh -J vps root@46.225.61.172     # by hand
 ```
 
 Magic rollback matters more here than anywhere: a mistake in
@@ -107,6 +108,15 @@ host cannot help with that. Deploy the **VPS first and the runner last** when a
 change touches both — the runner's route in is defined by the VPS's outbound
 rules, so a VPS deploy that has not landed yet means a runner you cannot
 reach.
+
+**The jump hop hits Tailscale SSH.** `ProxyJump=vps` names no port, so it lands
+on port 22, which `tailscaled` intercepts — and the policy's `check` rule opens
+a browser for re-authentication before the jump is established. That is not a
+misconfiguration, it is the rule working; the answer is cached for about 12
+hours, so it fires once a day at most. The VPS's own deploy avoids it by going
+to 2222 with an ordinary key, which is why that port is listed in the policy
+and called deploy-critical there. See
+[The tailnet policy](../architecture/tailnet.md#what-check-actually-checks).
 
 ### Ports and names, so nothing surprises you
 

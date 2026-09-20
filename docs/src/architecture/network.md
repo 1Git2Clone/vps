@@ -10,7 +10,8 @@ flowchart TB
 
     net --> edge["<b>Door 1</b> · Hetzner edge firewall<br/><code>tofu/modules/hetzner-firewall</code>"]
     edge --> nft["<b>Door 2</b> · host nftables<br/><code>modules/firewall.nix</code>"]
-    tailnet --> ts["<b>Door 3</b> · tailscale0<br/>accepted wholesale on input"]
+    tailnet --> pol["<b>Door 3</b> · tailnet policy file<br/><code>tofu/tailscale-policy.hujson</code>"]
+    pol --> ts["tailscale0<br/>accepted wholesale on input"]
 
     nft --> inp["input hook"]
     nft --> fwd["prerouting DNAT → forward"]
@@ -23,7 +24,7 @@ flowchart TB
     caddy --> priv["tailnet vhosts :8443"]
 
     classDef door fill:#2d4a7c,stroke:#16233c,color:#fff
-    class edge,nft,ts door
+    class edge,nft,pol door
 ```
 
 ## The two firewalls
@@ -77,19 +78,54 @@ which stops every container. A wrong value here costs one failed container
 start and a rollback; pinning it costs a full container restart on every deploy
 that touches the line.
 
+The input rule that makes that route work is
+`iifname "br-*" ip saddr != 172.30.0.0/24 tcp dport { 3000, 8384, 8443 }`, and
+the exclusion is the point. The rule above it grants the bot exactly two ports
+(4317, 6432) from exactly `botSubnet`; without the `!=`, this one immediately
+handed the same bridge three more, so a narrow grant was followed by a broad one
+and only the broad one meant anything. The bot is the right container to
+subtract first — it is the only one here whose input is arbitrary text from
+strangers that it then ships to a third-party model.
+
+What remains matched is **deliberate and worth knowing**: searxng, kuma,
+forgejo, navidrome and the two minecraft servers share the proxy bridge with
+caddy, so they are still admitted to those three ports. Both services behind
+them are credential-protected (grafana has a real admin login with sign-up off;
+syncthing's GUI has a password), so this is defence in depth, not a hole being
+closed. Subtracting the rest needs a **positive** source match, which needs a
+pinned subnet on `proxy`, which means deleting a network that already exists and
+detaching every container on it — a maintenance window, not an edit.
+
+One silent consequence of adding `ip saddr`: the rule is now **IPv4-only**,
+where the bare version matched both families. That is free today because
+docker's bridges here carry no IPv6, but turning on docker IPv6 would need an
+`ip6 saddr !=` sibling or those three ports go dark over v6 with every other
+check still passing.
+
 ## Tailscale
 
-`--ssh` is on, so administrative access is Tailscale SSH. The tailnet interface
-is accepted wholesale on the input hook, which is how the tailnet-only services
-(grafana, tempo, dozzle, pgbouncer, syncthing GUI) are kept private — by the
-_absence_ of an internet rule, not by their bind address. Several bind
-`0.0.0.0` and rely entirely on this.
+The tailnet interface is accepted **wholesale** on the input hook, which is how
+the tailnet-only services (grafana, tempo, dozzle, pgbouncer, syncthing GUI)
+are kept private — by the _absence_ of an internet rule, not by their bind
+address. Several bind `0.0.0.0` and rely entirely on this.
 
-Three of them also answer by name — `dozzle.`, `grafana.` and `syncthing.` —
-and that is the same mechanism wearing a hat. Caddy runs a **second listener**
-on `infra.tailnetHttpsPort` (8443) carrying those three vhosts and nothing
-else; like every other private port it is published on `0.0.0.0` and kept
-private by being in neither allow-list.
+That is also why door 3 is a policy file and not an nftables rule. **nftables
+cannot tell tailnet peers apart**: every packet off `tailscale0` looks the same
+to it, so "which peers may reach what" is a question this layer is structurally
+unable to answer. `tofu/tailscale-policy.hujson` is the layer that can, and it
+narrows the VPS to nine ports for the owner account — 6432 and 4317/4318 are
+no longer tailnet-reachable at all. See
+[The tailnet policy](tailnet.md).
+
+`--ssh` is on, so interactive administrative access is Tailscale SSH — with a
+`check` rule, so it wants a browser re-auth. Scripted access (`deploy .#vps`)
+goes to port 2222 with an ordinary key for exactly that reason.
+
+Three of those services also answer by name — `dozzle.`, `grafana.` and
+`syncthing.` — and that is the same mechanism wearing a hat. Caddy runs a
+**second listener** on `infra.tailnetHttpsPort` (8443) carrying those three
+vhosts and nothing else; like every other private port it is published on
+`0.0.0.0` and kept private by being in neither allow-list.
 
 What makes the URL portless is two lines in a `nat` prerouting chain:
 

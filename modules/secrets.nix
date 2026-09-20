@@ -183,7 +183,17 @@
       };
 
       # === Bootstrap ===
-      tailscale_authkey = { };
+      # An OAUTH CLIENT SECRET, not a `tskey-auth-` key. Tailscale accepts one
+      # in place of an auth key, and the reason to prefer it is that it does not
+      # expire: the auth keys it replaces capped out at 90 days, so the box was
+      # one forgotten rotation away from being unable to rejoin its own tailnet
+      # after a rebuild.
+      #
+      # Consumed through sops.templates."tailscale-authkey" in
+      # modules/services.nix rather than directly, because the query parameters
+      # that go with it decide whether this node survives being switched off.
+      # See there.
+      tailscale_oauth_client_secret = { };
     };
   };
 }

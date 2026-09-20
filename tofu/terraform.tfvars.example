@@ -32,6 +32,18 @@ dkim_default_key    = "v=DKIM1; p=YOUR_DEFAULT_DKIM_KEY"
 # publishing it exposes nothing; leave it out and those records are not created.
 tailnet_ipv4 = "100.101.102.103"
 
+# === Tailnet policy ===
+# OAuth client for tofu/tailscale.tf, from the admin console at
+# Settings -> OAuth clients. ONE scope: `acl` (write). This client rewrites the
+# tailnet policy file and needs nothing else -- not device listing, not auth
+# keys.
+#
+# REQUIRED, not optional: there is one state and one provider set, so a plan for
+# an unrelated DNS change fails without these. The secret is shown exactly once
+# at creation.
+tailscale_oauth_client_id     = "YOUR_TAILSCALE_OAUTH_CLIENT_ID"
+tailscale_oauth_client_secret = "YOUR_TAILSCALE_OAUTH_CLIENT_SECRET"
+
 # Get it from Settings -> Account on BlueSky.
 bsky_record = "did=did:plc:..."
 

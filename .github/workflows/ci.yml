@@ -148,3 +148,13 @@ jobs:
         run: |
           nix build --print-build-logs \
             .#checks.x86_64-linux.runner-has-no-secrets
+
+      # The strip that keeps a hostile CI artifact from pointing caddy at the
+      # TLS private key. Same "only a build runs the builder" reason as the two
+      # steps above: this one asserts rule ORDER inside pages-pull's script and
+      # then EVALs the real line against a tree unpacked from a hostile zip, so
+      # `nix flake check --no-build` would never run either half.
+      - name: Check pages-pull strips symlinks from artifacts
+        run: |
+          nix build --print-build-logs \
+            .#checks.x86_64-linux.pages-pull-strips-symlinks

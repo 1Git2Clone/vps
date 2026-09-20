@@ -47,6 +47,22 @@ pkgs.testers.runNixOSTest {
         };
       };
 
+    # NOT the VPS, and that is its whole job. Without a third node the ingress
+    # half could only show that ssh FROM the VPS is accepted, which was never
+    # the half in doubt.
+    #
+    # NAMED `wan` DELIBERATELY. The harness assigns addresses in node-name
+    # order, so anything sorting before `vps` would push it off 192.168.1.2 and
+    # trip the guard in the test script. `wan` sorts after, and lands on .3 —
+    # which is also the address the last subtest already used as a stand-in for
+    # "somewhere that is not the VPS".
+    wan =
+      { pkgs, ... }:
+      {
+        networking.firewall.enable = false;
+        environment.systemPackages = [ pkgs.netcat-openbsd ];
+      };
+
     runner =
       { pkgs, ... }:
       {
@@ -74,6 +90,7 @@ pkgs.testers.runNixOSTest {
     start_all()
     vps.wait_for_unit("listener-443.service")
     vps.wait_for_unit("listener-2222.service")
+    wan.wait_for_unit("multi-user.target")
     runner.wait_for_unit("nftables.service")
 
     # Confirms the address the brief hardcodes is what the test harness
@@ -86,10 +103,40 @@ pkgs.testers.runNixOSTest {
         "update vpsAddr in tests/runner-firewall.nix"
     )
 
+    actual_wan_addr = wan.succeed("ip -4 -o addr show dev eth1 | awk '{print $4}' | cut -d/ -f1").strip()
+    assert actual_wan_addr != "${vpsAddr}", (
+        "harness gave wan the VPS's address '" + actual_wan_addr + "' — "
+        "the 'nothing else may ssh in' subtest would be testing nothing"
+    )
+
     def counter(name):
         out = runner.succeed(f"nft list counter inet nixos-fw {name}")
         # `counter vps_blocked_fwd { packets 3 bytes 180 }`
         return int(out.split("packets")[1].split()[0])
+
+    # ── input chain: who may ssh in ───────────────────────────────────────
+    # THE COUNTERS ARE THE ASSERTION, not nc's exit status. This runner node
+    # imports only options.nix and firewall.nix, so no sshd is listening and a
+    # permitted connection is refused exactly like a filtered one is — the exit
+    # status cannot tell the two apart, and that is the whole question here.
+    runner_addr = runner.succeed(
+        "ip -4 -o addr show dev eth1 | awk '{print $4}' | cut -d/ -f1"
+    ).strip()
+
+    with subtest("the VPS may ssh in"):
+        before = counter("ssh_from_vps")
+        vps.execute(f"timeout 5 nc -z {runner_addr} 22")
+        assert counter("ssh_from_vps") > before, \
+            "ssh from the VPS did not match the allow rule — the runner is now unreachable"
+
+    with subtest("nothing else may ssh in"):
+        before_allowed = counter("ssh_from_vps")
+        before_blocked = counter("ssh_blocked")
+        wan.execute(f"timeout 5 nc -z {runner_addr} 22")
+        assert counter("ssh_blocked") > before_blocked, \
+            "ssh from a non-VPS host did not hit the drop — the host rule is not narrowing"
+        assert counter("ssh_from_vps") == before_allowed, \
+            "ssh from a non-VPS host matched the VPS allow rule — check the ip saddr match"
 
     # ── output chain: the host's own traffic ──────────────────────────────
     with subtest("the host reaches the VPS on 443"):

@@ -116,11 +116,28 @@
 
     acmeEmail = lib.mkOption {
       type = lib.types.str;
-      default = "ivan@hu-tao.org";
+      default = "ivan@hu-tao.dev";
       description = ''
         ACME account contact. A plain string rather than a sops secret because
         `security.acme` needs it at evaluation time — and a registration
         contact address is not a credential.
+
+        ON THIS DOMAIN, NOT hu-tao.org, which is where it used to point. That
+        address is Google-hosted (`MX 1 smtp.google.com`) and does receive, so
+        this is not a bounce being fixed — it is expiry warnings and CAA
+        violation reports arriving at the mailserver this repo actually runs,
+        rather than at a mailbox nothing here describes.
+
+        CHANGING THIS REGISTERS A NEW ACME ACCOUNT. lego keys its account
+        directory by the contact address, so the next renewal registers afresh
+        rather than updating the existing registration. Harmless — issuance is
+        unaffected and the old account simply goes unused — but it is a real
+        change at Let's Encrypt and not only a string in this file.
+
+        Three places follow it, and only two are NixOS: security.acme's default
+        contact, dozzle's admin user record, and — by hand, because it is a
+        different tool — var.caa_iodef in tofu/modules/cloudflare-dns. Keep that
+        one equal to this.
       '';
     };
 
