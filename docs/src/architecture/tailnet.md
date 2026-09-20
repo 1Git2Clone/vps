@@ -24,11 +24,11 @@ one string attribute.
 
 **So anything omitted from that file is deleted on apply, and the plan does not
 say so.** The first real plan here carried a `nodeAttrs` block granting four
-devices Mullvad exit-node access plus tailnet Funnel, and a `tag:friends-ssh` owner and
-ssh rule — none of it in the first draft, all of it silently on its way out.
-It is carried over verbatim now, with a comment saying why each line cannot be
-tidied. Before any apply that replaces this resource, read the live policy in
-the admin console and diff it by eye.
+devices Mullvad exit-node access plus tailnet Funnel, and a second tagOwner
+with its ssh rule — none of it in the first draft, all of it silently on its
+way out. It is carried over verbatim now, with a comment saying why each line
+cannot be tidied. Before any apply that replaces this resource, read the live
+policy in the admin console and diff it by eye.
 
 HuJSON comments survive the apply and show up in the console, so the file is
 also the documentation the next person reads _there_.
@@ -78,7 +78,7 @@ acls: 1git2clone@github -> autogroup:self:*
       1git2clone@github -> tag:friends-ssh:22
 ssh:  check  -> autogroup:self   as nonroot, root
       check  -> tag:vps          as nonroot
-      accept -> tag:friends-ssh          as nonroot, root
+      accept -> tag:friends-ssh  as nonroot, root
 ```
 
 Every `src` is the owner account rather than `autogroup:member`, and that is a
@@ -110,10 +110,22 @@ impossible.
 
 ## `tag:friends-ssh` is a destination and never a source
 
-The tag predates this file. Friends' machines carry it for exactly one
-reason: so they can be SSHed _into_ without the rest of the tailnet's members
-reaching them. Tagging them took them out of their owner's `autogroup:self` —
-the same lever `tag:vps` uses.
+The tag predates this file. A friend's machine carries it for exactly one
+reason: so it can be SSHed _into_ without the rest of the tailnet's members
+reaching it. Tagging it took it out of its owner's `autogroup:self` — the same
+lever `tag:vps` uses.
+
+**One tag for the class, not one per machine.** A second friend's laptop joins
+this tag rather than arriving with a tagOwner, three rules and two tests of its
+own that a reviewer would have to read in full to discover they grant exactly
+what this one already grants.
+
+Assigning it is a console action, and the order matters the same way it does
+for `tag:vps`: a device cannot be given `tag:friends-ssh` until an applied
+policy defines it, so `tofu apply` comes first and
+**Machines → the device → Edit ACL tags** second. A device whose tag no rule
+here names has no grant at all — `autogroup:self` does not cover it either,
+because it is tagged.
 
 Nothing on those machines has any business opening a connection into this
 tailnet, and since there are no deny rules, "cannot initiate" is not a rule you
@@ -124,8 +136,9 @@ wildcard is the whole fix.
 Which produced the least obvious line in the file. **A Tailscale SSH rule is an
 extra check layered on top of ordinary ACL matching, not a substitute for it** —
 the connection must still be permitted to reach port 22 on the destination. The
-old `dst: ["*"]` granted that for free; with the wildcard gone, `tag:friends-ssh:22` has
-to be granted explicitly in `acls` or ssh to those boxes simply stops working,
+old `dst: ["*"]` granted that for free; with the wildcard gone,
+`tag:friends-ssh:22` has to be granted explicitly in `acls` or ssh to those
+boxes simply stops working,
 and the `ssh` section looks innocent while it does. A test asserts it.
 
 ## What `check` actually checks
@@ -153,8 +166,8 @@ deny    vps:6432 · vps:4317 · tag:friends-ssh:80
 ```
 
 A rule that stops being true fails the apply. `vps:2222` is there because it is
-the single most load-bearing line in the file, and `tag:friends-ssh:22` because it
-catches exactly the "tidy-up" described above.
+the single most load-bearing line in the file, and `tag:friends-ssh:22` because
+it catches exactly the "tidy-up" described above.
 
 **They run at apply time, not plan time — measured, not assumed.** An earlier
 draft of that comment said plan. A real `tofu plan` then succeeded against a

@@ -44,7 +44,7 @@
 #
 #      THIS STEP HAS ALREADY EARNED ITS KEEP. The first real plan showed the
 #      live policy carried a `nodeAttrs` block granting four devices Mullvad
-#      exit-node access and the tailnet Funnel, plus a `tag:friends-ssh` tagOwner and
+#      exit-node access and the tailnet Funnel, plus a second tagOwner and its
 #      ssh rule — none of it in the first draft of this file, all of it deleted
 #      on apply, and none of it named in the plan as a loss. It is carried over
 #      verbatim now. Read the `-` lines in that diff as deletions, because that
