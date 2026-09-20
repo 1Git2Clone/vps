@@ -14,12 +14,18 @@
 #
 # WHAT A RECOVERY PLAN LOOKS LIKE, so a wrong one is recognisable:
 #
-#   Plan: 24 to import, 0 to add, 1 to change, 0 to destroy.
+#   Plan: 32 to import, 0 to add, 1 to change, 0 to destroy.
 #
 # The one change is hcloud_server.vps gaining three provider-side booleans
 # (ignore_remote_firewall_ids, keep_disk, shutdown_before_deletion) that the
 # importer never sets. Anything else — any `+ public_net`, any `-`, any
 # `-/+` — means stop.
+#
+# Expect a SECOND change, tailscale_acl.main, until the policy in this repo has
+# been applied at least once: the import reads whatever the tailnet is serving,
+# and the diff against tailscale-policy.hujson is the point. Counted here rather
+# than measured from an empty state, which is not something to try casually
+# against live infrastructure.
 #
 # Why public_net in particular: the hcloud importer and its Read both leave it
 # out of state, so before server.tf ignored it a recovery plan proposed ADDING
@@ -49,6 +55,18 @@ locals {
     search    = "77ca2c34bc4fe585462349a4e0cd76b8"
     smtp      = "1a8fa2eac6aab44c98e9cb46a39073d5"
     status    = "2f7cf86c32a9d0f0aab797eebbac6d13"
+  }
+
+  # The tailnet-only names, same idea. These were created in the dashboard
+  # before var.tailnet_ipv4 was set, so tofu's first plan after setting it
+  # proposed CREATING three records that already existed — which is a duplicate
+  # or a 81058, not a no-op. Verified against the API before being written down:
+  # all three are A, unproxied, TTL auto, pointing at the same address
+  # module.dns would have used, so the import is clean and changes nothing.
+  dns_tailnet_records = {
+    dozzle    = "3ab68becc67f0b5cfa1270091b18b720"
+    grafana   = "007693e357dd0d4a75056a3e42882ad8"
+    syncthing = "de30585a21727101a2e0c3480f0eca43"
   }
 }
 
@@ -80,6 +98,26 @@ import {
   id = "p-134632948-167.233.24.58"
 }
 
+# The runner's cloud firewall, and its attachment by the same id — the same
+# pairing module.hetzner-firewall uses below. THESE TWO HAD NO BLOCK until now:
+# `tofu state list` returned thirty resources and this file declared thirty, but
+# NOT THE SAME THIRTY, and the counts matching by coincidence is what let the gap
+# survive under a header claiming this file "cannot forget one".
+#
+# Recovering without them does not fail, which is the problem. It proposes
+# CREATING a second firewall and attaching it, leaving the real one attached to
+# the runner and unmanaged — so the next tightening of the ingress rules would
+# land on a copy that filters nothing, while the plan reads clean.
+import {
+  to = hcloud_firewall.runner
+  id = "11645120"
+}
+
+import {
+  to = hcloud_firewall_attachment.runner
+  id = "11645120"
+}
+
 import {
   to = module.hetzner-firewall.hcloud_firewall.main
   id = "11483636"
@@ -91,12 +129,49 @@ import {
   id = "11483636"
 }
 
+# --- Three resources in state that nothing declares ---------------------------
+# hcloud_network.main, hcloud_network_subnet.main and hcloud_server_network.vps
+# are in terraform.tfstate as ordinary managed resources with real ids
+# (12666492, 12666492-10.0.1.0/24, 163906050-12666492) and NO `resource` block
+# anywhere in this configuration — grep the repo; they appear only in state and
+# in two design docs.
+#
+# THEY GET NO IMPORT BLOCK ON PURPOSE. An import must name a declared resource,
+# and `tofu plan` rejects one that does not with "Configuration for import
+# target does not exist" — which fails every plan in this directory, including
+# unrelated ones. Adding them here was tried on 2026-09-20 and backed out.
+#
+# What they do instead is nothing. Two separate plans that day refreshed all
+# three and then excluded them from `resource_changes` entirely — not created,
+# not destroyed, not even no-op. Reproducible, and deliberately not explained
+# here: guessing at a mechanism would be worse than recording the observation.
+#
+# The declarative fix is a `removed` block with `lifecycle { destroy = false }`,
+# which drops them from state without touching the real network. Not written yet
+# because it changes what the next apply does, and the apply this was last
+# touched for was meant to carry only DNSSEC and the tailnet policy. Decide
+# first whether the 10.0.1.0/24 private network is wanted at all: nothing in
+# this repo addresses it, and the discord bot reaches pgbouncer and tempo over
+# the docker bridge instead.
+
 # --- Cloudflare --------------------------------------------------------------
 # Import id is <zone id>/<record id>.
 
 import {
   for_each = local.dns_a_records
   to       = module.dns.cloudflare_dns_record.a[each.key]
+  id       = "${var.cloudflare_zone_id}/${each.value}"
+}
+
+# The tailnet names carry the SAME for_each GUARD AS THE RESOURCE, and that is
+# not decoration. module.dns creates these only when tailnet_ipv4 is set; an
+# import block naming an instance that the configuration does not declare is a
+# planning error, not a skipped block. Without the guard, a clone that has not
+# set tailnet_ipv4 — a legitimate state, the variable defaults to empty — would
+# fail every plan in this directory rather than simply having no such records.
+import {
+  for_each = var.tailnet_ipv4 == "" ? {} : local.dns_tailnet_records
+  to       = module.dns.cloudflare_dns_record.tailnet[each.key]
   id       = "${var.cloudflare_zone_id}/${each.value}"
 }
 
