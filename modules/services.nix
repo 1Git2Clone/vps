@@ -4,6 +4,33 @@
 { config, lib, ... }:
 
 {
+  # ==============================================================================
+  # The tailnet auth key, assembled rather than stored
+  # ==============================================================================
+  # sops holds the OAuth client secret and nothing else; the two query
+  # parameters live HERE, in the clear, on purpose. They are not sensitive and
+  # one of them is load-bearing in a way that is invisible when it is wrong:
+  #
+  #   ephemeral=false     MANDATORY. An OAuth-minted key defaults to
+  #                       EPHEMERAL=TRUE, and an ephemeral node is REMOVED FROM
+  #                       THE TAILNET when it goes offline. Left at the default,
+  #                       this VPS would delete itself from the tailnet on every
+  #                       reboot and come back as a new node — new tailnet
+  #                       address, so the dozzle/grafana/syncthing A records and
+  #                       the `vps` host in the policy file would both point at
+  #                       nothing. Buried inside the encrypted blob, that is a
+  #                       one-character mistake nobody can review.
+  #
+  #   preauthorized=true  Only matters if device approval is ever turned on for
+  #                       the tailnet. Harmless now, and the difference between
+  #                       an unattended rebuild and one that hangs waiting for a
+  #                       human to click approve.
+  #
+  # The file is read by tailscaled-autoconnect, which passes it to
+  # `tailscale up --auth-key`.
+  sops.templates."tailscale-authkey".content =
+    "${config.sops.placeholder.tailscale_oauth_client_secret}?ephemeral=false&preauthorized=true";
+
   services = {
     openssh = {
       enable = true;
@@ -23,9 +50,27 @@
     };
     tailscale = {
       enable = true;
-      authKeyFile = config.sops.secrets.tailscale_authkey.path;
+      authKeyFile = config.sops.templates."tailscale-authkey".path;
       extraUpFlags = [
         "--ssh"
+
+        # MANDATORY WITH AN OAUTH CLIENT SECRET. Tailscale refuses to register a
+        # device this way untagged — "you must pass in one or more of those tags
+        # to the --advertise-tags flag" — so this is not a hardening option that
+        # could be dropped, it is half of the credential.
+        #
+        # It also closes a gap that tagging by hand left open. tag:vps is what
+        # the policy file in tofu/ narrows against, and a VPS rebuilt without it
+        # rejoins as an ordinary user-owned device — which `autogroup:self:*`
+        # covers on EVERY port. That would be a silent return to the flat
+        # tailnet, visible only at the next `tofu plan`, and `deploy .#vps` does
+        # not run tofu. Joining tagged makes the narrowing survive a rebuild.
+        #
+        # SAFE ON A RUNNING NODE. tailscaled-autoconnect only runs `tailscale
+        # up` when the backend state is NeedsLogin, NeedsMachineAuth or Stopped;
+        # on a node that is already Running it exits without touching anything.
+        # So this takes effect on a fresh join and changes nothing today.
+        "--advertise-tags=tag:vps"
       ];
     };
     fail2ban = {
