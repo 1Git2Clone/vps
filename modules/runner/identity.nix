@@ -133,8 +133,16 @@ let
   # container. nixos/nix carries nix, bash, gitMinimal, curl and coreutils and
   # NOTHING else — no node, so a workflow on that label cannot use a JavaScript
   # action; ci.yml does its own `git fetch`.
+  #
+  # `nix-node` is the way out of that trap rather than a fifth convenience: it
+  # is nix AND node in one image, so a workflow there can use actions/checkout,
+  # which threads the injected job token through on its own and therefore works
+  # on a private repo without the author thinking about it. See
+  # modules/runner/ci-image.nix. Its reference comes from config rather than a
+  # literal so the label and the image it names cannot drift.
   labels = [
     "nix:docker://nixos/nix:2.35.2"
+    "nix-node:docker://${config.runner.ciImageRef}"
     "ubuntu-latest:docker://node:22-bookworm"
     "node-22:docker://node:22-bookworm"
     "alpine:docker://alpine:3.22"
