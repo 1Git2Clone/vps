@@ -108,14 +108,86 @@ variable "legacy_server_ids" {
   default     = []
 }
 
+variable "vps_is_tagged" {
+  description = <<-EOT
+    Whether the VPS already carries tag:vps. Gates the two deny assertions in
+    the tailnet policy's tests block, and exists to break a genuine deadlock.
+
+    THE DEADLOCK. The policy cannot be applied while the VPS is untagged,
+    because `autogroup:self:*` still covers it on every port and the deny tests
+    say otherwise. And the VPS cannot be tagged while the policy is unapplied,
+    because Tailscale refuses to assign a tag that no tagOwners entry defines —
+    tag:vps is defined only in the policy waiting to be applied. Neither the
+    console nor tailscale_device_tags gets around that; it is the API's rule,
+    not a tooling limit.
+
+    So the bootstrap is three steps, once in the life of the tailnet:
+
+      1. tofu apply -var vps_is_tagged=false
+         Publishes tagOwners and the tag:vps rules. Changes no access: nothing
+         carries the tag yet, so the VPS is still reached through the
+         autogroup:self rule exactly as before.
+      2. Machines -> vps -> Edit ACL tags -> tag:vps. Now offered, because
+         step 1 defined it.
+      3. tofu apply
+         The deny assertions come back and now hold. This is the apply that
+         actually narrows anything.
+
+    Default true, so the un-narrowed policy is never what you get by accident —
+    reaching for the weaker one has to be deliberate and visible in the command.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "tailnet_ipv4" {
   description = <<-EOT
     This box's tailscale address, from `tailscale status`. dozzle, grafana and
     syncthing become A records pointing at it — resolvable by anything,
     reachable only from the tailnet. Empty creates no records.
+
+    ALSO THE `vps` HOST IN THE TAILNET POLICY FILE, which is why the validation
+    below arrived alongside tofu/tailscale.tf. Empty is a legitimate answer for
+    the DNS records — it simply makes none — and is NOT one for the policy: it
+    would render `"vps": ""` and turn every rule keyed on that host into a rule
+    about nothing. Silent, and in the permissive direction.
   EOT
   type        = string
   default     = ""
+
+  validation {
+    condition     = var.tailnet_ipv4 == "" || can(cidrhost("${var.tailnet_ipv4}/32", 0))
+    error_message = "tailnet_ipv4 must be a bare IPv4 address (from `tailscale status`), or empty."
+  }
+}
+
+variable "tailscale_oauth_client_id" {
+  description = <<-EOT
+    OAuth client id for the tailnet policy file (tofu/tailscale.tf).
+
+    Created once at admin console -> Settings -> OAuth clients, with the single
+    scope `acl` (write). Nothing else: this client rewrites the policy file and
+    has no business enumerating devices or minting auth keys.
+
+    NOT marked sensitive, unlike its secret. A client id is an identifier that
+    authenticates nothing on its own, and hiding it would only redact it out of
+    the plan output, which is the one place it is useful for telling two clients
+    apart.
+
+    REQUIRED once tofu/tailscale.tf exists: one state means one provider set, so
+    a plan for an unrelated DNS change fails without it.
+  EOT
+  type        = string
+}
+
+variable "tailscale_oauth_client_secret" {
+  description = <<-EOT
+    The secret half of tailscale_oauth_client_id. Shown exactly once when the
+    client is created; if it is lost the client is regenerated rather than
+    recovered.
+  EOT
+  type        = string
+  sensitive   = true
 }
 
 variable "dkim_cloudflare_key" {

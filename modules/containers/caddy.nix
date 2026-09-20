@@ -99,6 +99,31 @@ let
   # Where the pages volume is mounted inside this container.
   pagesRoot = "/srv/pages";
 
+  # HSTS, emitted on EVERY site block below — caddy adds nothing of the sort on
+  # its own, and until this line every vhost here answered without it
+  # (`curl -D - https://git.<domain>/` showed no Strict-Transport-Security on
+  # any of the six public names).
+  #
+  # What it buys is the first request. Every name here is already https-only and
+  # caddy already redirects http->https, but that redirect is a plaintext round
+  # trip that a network attacker can answer instead — sslstrip against
+  # mail.<domain>'s login form, say. After one https visit the browser stops
+  # making it.
+  #
+  # NO `preload`. That is a submission to a list baked into browser binaries,
+  # removal takes months, and it would cover the APEX and therefore every
+  # subdomain — including ones this caddy does not serve. includeSubDomains here
+  # is scoped to the name that sent it (so `git.<domain>` covers
+  # `*.git.<domain>`, not its siblings), which costs nothing and is not a
+  # commitment anyone else has to honour.
+  #
+  # On the tailnet sites too: same certificate, same https, and a browser that
+  # has pinned dozzle.<domain> is a browser that cannot be walked onto the
+  # plaintext listener. The http->https redirect block at the bottom of this
+  # file deliberately does NOT carry it — a browser ignores HSTS on a plaintext
+  # response, so it would be decoration.
+  hsts = ''Strict-Transport-Security "max-age=31536000; includeSubDomains"'';
+
   # WHAT A CI RUNNER IS ALLOWED TO ASK git.<domain> FOR. Everything else from a
   # runner address gets a 403.
   #
@@ -358,6 +383,7 @@ let
           ""
           "${site.host}${lib.optionalString (site.tailnet or false) ":${toString tailnetHttpsPort}"} {"
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
+          "\theader ${hsts}"
         ]
         # Zone keyed on {remote_host} — the client IP — so one address's flood
         # cannot exhaust the budget for everyone. The zone name is the host, so

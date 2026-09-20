@@ -7,10 +7,12 @@
 # actively excluded (see runner/configuration.nix).
 #
 # sshd is on 22, not the VPS's 2222, because nothing on this box publishes 22 —
-# there is no forgejo container to yield it to. The source is narrowed at the
-# cloud firewall instead: `runner-firewall` admits tcp/22 from
-# 167.233.24.58/32 alone, so the only host that can knock is the VPS, and the
-# admin path is `ssh -J vps root@46.225.61.172`.
+# there is no forgejo container to yield it to. The source is narrowed in BOTH
+# layers, which did not used to be true: `runner-firewall` admits tcp/22 from
+# 167.233.24.58/32 at the cloud edge, and modules/runner/firewall.nix now keys
+# the same allow on infra.publicIPv4 with a named counter either side of it. So
+# the only host that can knock is the VPS, and the admin path is
+# `ssh -J vps root@46.225.61.172`.
 #
 # PermitRootLogin is "prohibit-password", which differs from the VPS's "no".
 # Two reasons, both about this being a disposable box rebuilt from an image:

@@ -11,7 +11,7 @@ Two kinds of consumer:
   as a file: the restic password, the DKIM key, the database password.
 - **`sops.templates.*`** — a rendered file mixing secrets with literal text,
   for things that want `KEY=value`: the acme, grafana, caddy, cloudflared and
-  searxng env files.
+  searxng env files — and the tailnet auth key, which is the interesting one.
 
 **Every key in `secrets.nix` must exist in `secrets.yaml`**, or
 `sops-install-secrets` fails during activation. This is validated at _build_
@@ -21,6 +21,30 @@ why a new secret is added to `secrets.yaml` before the module that reads it.
 `acme_email` is deliberately _not_ a secret: `security.acme` needs it at
 evaluation time, and a registration contact address is not a credential. It is
 `infra.acmeEmail`.
+
+## The tailnet key is assembled, not stored
+
+`tailscale_oauth_client_secret` is an **OAuth client secret**, not a
+`tskey-auth-` key. Tailscale accepts one in place of an auth key and it does
+not expire, where the auth keys it replaces capped out at 90 days — leaving the
+box one forgotten rotation away from being unable to rejoin its own tailnet
+after a rebuild.
+
+sops holds that string and nothing else. The two query parameters that go with
+it live in `modules/services.nix`, in the clear, on purpose:
+
+```nix
+sops.templates."tailscale-authkey".content =
+  "${config.sops.placeholder.tailscale_oauth_client_secret}?ephemeral=false&preauthorized=true";
+```
+
+`ephemeral=false` is mandatory and load-bearing. **An OAuth-minted key defaults
+to `ephemeral=true`, and an ephemeral node is removed from the tailnet when it
+goes offline** — so at the default this VPS would delete itself on every reboot
+and rejoin as a new node with a new address, silently invalidating three DNS
+records and the policy file's `vps` host. Inside ciphertext that is a
+one-character mistake nobody can review; in a template it is a line in a diff.
+See [The tailnet policy](tailnet.md#the-vps-joins-tagged-not-tagged-afterwards).
 
 ## The stale-symlink trap
 

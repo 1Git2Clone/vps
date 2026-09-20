@@ -15,7 +15,7 @@ estate.
 The isolation boundary did not get stronger. **It moved** — from a container to
 a VM — and what sits inside it got much smaller.
 
-## Six layers
+## Seven layers
 
 ```mermaid
 flowchart TB
@@ -26,9 +26,9 @@ flowchart TB
     end
 
     job --> L4
-    rd --> L4["④ runner nftables<br/>output policy-drop<br/>VPS on 443, nothing else"]
+    rd --> L4["④ runner nftables<br/>out: policy-drop, VPS on 443<br/>in: ssh from the VPS only"]
     L4 --> L1["① runner cloud firewall<br/>out: 53 / 80 / 443"]
-    L1 --> L2["② VPS cloud firewall<br/>in: tcp/22 from the VPS /32"]
+    L1 --> L2["② VPS cloud firewall<br/>in: tcp/443 from anywhere"]
     L2 --> L3["③ VPS nftables"]
     L3 --> L5["⑤ caddy L7 allow-list<br/>4 paths, everything else 403"]
     L5 --> cad
@@ -42,19 +42,68 @@ flowchart TB
     class L1,L2,L3,L4,L5 ctl
 ```
 
-| #   | Control                                                                                | Where                           |
-| --- | -------------------------------------------------------------------------------------- | ------------------------------- |
-| 1   | Runner cloud firewall: in = tcp/22 from the VPS /32 only; out = 53/80/443              | `tofu/runner-firewall.tf`       |
-| 2   | VPS cloud firewall: tcp/22 outbound to the runner /32                                  | `tofu/modules/hetzner-firewall` |
-| 3   | VPS nftables: output chain is policy-drop, one rule per runner address                 | `modules/firewall.nix`          |
-| 4   | Runner nftables: output policy-drop; the VPS reachable on 443 and nothing else         | `modules/runner/firewall.nix`   |
-| 5   | Caddy: runner addresses restricted to four Actions paths, everything else 403          | `modules/containers/caddy.nix`  |
-| 6   | Job: no engine socket by default; its container is created per job and destroyed after | `modules/runner/default.nix`    |
+| #   | Control                                                                                                                 | Where                           |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 1   | Runner cloud firewall: in = tcp/22 from the VPS /32 only; out = 53/80/443                                               | `tofu/runner-firewall.tf`       |
+| 2   | VPS cloud firewall: tcp/22 outbound to the runner /32                                                                   | `tofu/modules/hetzner-firewall` |
+| 3   | VPS nftables: output chain is policy-drop, one rule per runner address                                                  | `modules/firewall.nix`          |
+| 4   | Runner nftables: output policy-drop, the VPS reachable on 443 and nothing else; inbound ssh accepted from the VPS alone | `modules/runner/firewall.nix`   |
+| 5   | Caddy: runner addresses restricted to four Actions paths, everything else 403                                           | `modules/containers/caddy.nix`  |
+| 6   | Job: no engine socket by default; its container is created per job and destroyed after                                  | `modules/runner/default.nix`    |
+| 7   | `pages-pull`: every symlink deleted out of a fetched artifact before caddy serves it                                    | `modules/pages-pull.nix`        |
 
 Every connection between the two hosts is either initiated **by the VPS**, or
 is HTTPS from the runner to `git.hu-tao.dev` like any other client on the
 internet. There is no private link, deliberately —
 [see why](network.md#why-there-is-no-private-network).
+
+Layer 7 is a different kind of control from the six above it, which is why it
+was missing for a while. Every one of those reads an **address, a port or a
+path**; none of them can read what is _inside_ a request that the allow-list
+legitimately permits. The published artifact is exactly that — content the
+runner authors, travelling through a route layer 5 has to admit, landing in a
+tree caddy serves. [What it strips, and
+why](../operations/pages.md#the-artifact-is-untrusted-content).
+
+## Who may ssh in
+
+Layers 1 and 4 both narrow inbound ssh to the VPS's `/32`, and that duplication
+is the point — it is the same "each survives the other's misconfiguration"
+arrangement as the two firewalls on the VPS. The host rule is:
+
+```text
+ip saddr <vps4> tcp dport 22 ct state new counter name ssh_from_vps accept
+tcp dport 22 ct state new counter name ssh_blocked log prefix "DROP_ssh: " drop
+```
+
+It used to be a bare `tcp dport 22 ct state new accept`, on the reasoning that
+only the cloud firewall should key on the VPS's address, since a host rule would
+have to survive that address changing. The rest of the file had already taken
+that bet: the output and forward chains key their one-way drops on the same
+address, there is an assertion that it is non-empty, and the VM test exists
+precisely to override it.
+
+**What settles it is that the two failure modes are not symmetric.** A stale
+address in the _egress_ rules fails **open** — the drop matches nothing, the
+runner reaches the new address on every port, and the one-way design is gone
+with no error anywhere. Stale here fails **closed**: nobody can ssh in,
+Hetzner's web console still works, and the fix is one rebuild. Closed is the
+direction to be wrong in.
+
+IPv4 only, matching the cloud rule, which lists a v4 `/32` and no v6 source at
+all — so v6 ssh was never reachable through the layer above. The second line is
+redundant with the chain's drop policy and exists to be _named_: the catch-all
+carries an anonymous counter, so without it a refused ssh is indistinguishable
+from any other dropped packet.
+
+Verified live after the deploy, from the VPS:
+
+```console
+$ ssh -J vps root@46.225.61.172 nft list counter inet nixos-fw ssh_from_vps
+counter ssh_from_vps {
+    packets 2 bytes 120
+}
+```
 
 ## The one-way rule, and how it is enforced
 
@@ -81,10 +130,15 @@ v4 rules.
 
 Two things test this:
 
-- `tests/runner-firewall.nix` — a two-node NixOS VM test with real packets.
-  It needs `/dev/kvm` and the VPS does not have it (shared-vCPU Hetzner
-  instance, no nested virtualisation), so it is **hand-run** on a machine with
-  KVM: `nix build .#checks.x86_64-linux.runner-firewall -L`.
+- `tests/runner-firewall.nix` — a three-node NixOS VM test with real packets,
+  six subtests. The third node exists only to be **not** the VPS: without it
+  the ingress half could show that ssh from the VPS is accepted, which was
+  never the half in doubt. It asserts on the counters rather than on `nc`'s
+  exit status, because no sshd is listening on the test node and a permitted
+  connection is refused exactly like a filtered one is. It needs `/dev/kvm` and
+  the VPS does not have it (shared-vCPU Hetzner instance, no nested
+  virtualisation), so it is **hand-run** on a machine with KVM:
+  `nix build .#checks.x86_64-linux.runner-firewall -L`.
 - `runner-firewall-ordering` — greps the _evaluated_ ruleset for line order.
   No KVM, costs seconds, runs in CI. It catches the exact regression the VM
   test exists for — the VPS rules sinking below a broad `podman*` accept — just
