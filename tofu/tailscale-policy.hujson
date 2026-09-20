@@ -157,24 +157,20 @@
 		},
 	],
 
-	// CARRIED OVER VERBATIM FROM THE POLICY THIS FILE REPLACES. None of it is
-	// an access rule, all of it is load-bearing, and the resource overwrites
-	// the whole document — so anything omitted here is deleted on apply.
+	// PERSONAL POLICY, SPLICED IN FROM tailscale-personal.hujson.
 	//
-	//   funnel   the stock grant. Removing it disables Tailscale Funnel
-	//            tailnet-wide.
-	//   mullvad  THIS ATTRIBUTE IS THE MULLVAD EXIT-NODE GATE. These four
-	//            addresses are devices with the integration enabled; drop one
-	//            and that machine loses its Mullvad exit nodes, with nothing in
-	//            the apply output saying so. Targets are raw tailnet addresses
-	//            rather than names because that is how the console wrote them.
-	"nodeAttrs": [
-		{"target": ["autogroup:member"], "attr": ["funnel"]},
-		{"target": ["100.108.24.65"], "attr": ["mullvad"]},
-		{"target": ["100.111.243.14"], "attr": ["mullvad"]},
-		{"target": ["100.95.190.17"], "attr": ["mullvad"]},
-		{"target": ["100.90.44.89"], "attr": ["mullvad"]},
-	],
+	// Sections that are wholly about your own devices live in that file so this
+	// one stays about the VPS. It is a readability boundary and nothing more:
+	// a tailnet has ONE policy document and no include mechanism, so the apply
+	// writes both halves together, and anything deleted there is deleted from
+	// the tailnet. Today it carries nodeAttrs — the Funnel grant and the four
+	// Mullvad exit-node targets.
+	//
+	// The split stops where sections are shared. tag:friends-ssh's tagOwner, acl and
+	// ssh entries stay above, marked PRE-EXISTING, because a policy document
+	// cannot repeat a top-level key and this file must already define those
+	// three sections for the VPS.
+${personal}
 
 	// Run by the PROVIDER AT APPLY TIME against the real API, so a rule that
 	// stops being true fails `tofu plan` rather than being discovered later.
