@@ -231,6 +231,15 @@
 	// apply fails here saying so. That failure is not a bug to work around, it
 	// is this file telling you the narrowing is not live yet. See the rollout
 	// order in tailscale.tf.
+	//
+	// CONFIRMED 2026-09-20, applying against an untagged VPS:
+	//
+	//   [acl test error]: address "vps:6432" (protocol "tcp"): want: Drop, got: Accept
+	//   [acl test error]: address "vps:4317" (protocol "tcp"): want: Drop, got: Accept
+	//
+	// The provider reports only `test(s) failed (400)` and swallows that detail.
+	// To see it, POST this file to /api/v2/tailnet/-/acl/validate with an OAuth
+	// token — the endpoint validates what you hand it and installs nothing.
 	"tests": [
 		{
 			"src": "1git2clone@github",
