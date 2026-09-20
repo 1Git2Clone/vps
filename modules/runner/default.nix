@@ -134,6 +134,12 @@ let
       # each other's databases.
       "  network: \"\""
       "  privileged: false"
+      # Already the upstream default, and now load-bearing enough to say out
+      # loud: the `nix-node` label resolves to a localhost/ reference that
+      # modules/runner/ci-image.nix loads into podman at activation, and no
+      # registry can serve it. force_pull true would turn every job on that
+      # label into a failed pull of an image sitting on the disk.
+      "  force_pull: false"
       # EMPTY. The VPS runner allow-lists exactly one volume — the pages
       # volume — and the pages volume does not exist on this box; caddy
       # serves it from the VPS.
@@ -174,6 +180,7 @@ in
     ./users.nix
     ./identity.nix
     ./firewall.nix
+    ./ci-image.nix
   ];
 
   # ONE value crosses into identity.nix: the derivation for the static half of

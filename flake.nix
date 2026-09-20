@@ -365,6 +365,23 @@
                 inherit nixpkgs system;
               };
 
+              # Does the nix-node job image actually carry a node? See the
+              # header of tests/ci-image.nix for why nothing cheaper than
+              # running the image answers that — the obvious static checks all
+              # pass vacuously on a broken image.
+              #
+              # HAND-RUN ONLY, NOT IN CI, and for the same reason as
+              # runner-firewall above: `nix build .#checks.x86_64-linux.ci-image
+              # -L` needs /dev/kvm, and this repo's CI box has no nested
+              # virtualisation. There is no static stand-in here because the
+              # one thing a static check could have caught — the label and the
+              # image reference disagreeing — is prevented structurally instead:
+              # modules/runner/identity.nix builds the label from
+              # config.runner.ciImageRef, so there is no second copy to drift.
+              ci-image = import ./tests/ci-image.nix {
+                inherit nixpkgs system;
+              };
+
               # The static, CI-run counterpart to runner-firewall above. It
               # cannot prove the kernel enforces the one-way rule — only a
               # booted VM sending real packets can, which is what
