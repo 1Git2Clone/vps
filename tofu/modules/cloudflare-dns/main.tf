@@ -167,11 +167,31 @@ resource "cloudflare_dns_record" "bsky" {
 # would not surface until renewal roughly 30 days before expiry with nothing in
 # this repo to point at.
 #
-# CLOUDFLARE MAY PUBLISH MORE CAA RECORDS THAN THESE, and they will never
-# appear in a plan. When Cloudflare is the DNS provider it adds its own CAs on
-# your behalf, so Universal SSL keeps renewing if it rotates from Google to
-# ssl.com or sectigo.com. Those records are live and are not managed here:
-# `dig CAA hu-tao.dev` is the truth, this resource is only the part tofu owns.
+# CLOUDFLARE PUBLISHES MORE CAA RECORDS THAN THESE, and they never appear in a
+# plan. When Cloudflare is the DNS provider it adds its own CAs on your behalf
+# so Universal SSL stays renewable. MEASURED IMMEDIATELY AFTER THIS APPLY on
+# 2026-09-20 — eight records appeared alongside the three below, and the zone
+# now answers:
+#
+#   issue      comodoca.com, digicert.com, letsencrypt.org, pki.goog, ssl.com
+#   issuewild  the same five
+#   iodef      the address below
+#
+# READ THE RESULT HONESTLY: issuance went from roughly 150 CAs to five, not to
+# one. That is a real reduction and a modest one, and it is the ceiling for as
+# long as anything in this zone is proxied — the three records below cannot
+# narrow past what Cloudflare adds back.
+#
+# It also overtakes the issuewild paragraph above. That reasoning still holds
+# for what TOFU publishes, which is none; the zone nonetheless carries five,
+# because Cloudflare needs its wildcard edge certificate to keep renewing.
+#
+# The only way to the tighter list is to stop needing Universal SSL at all:
+# un-proxy www, which today is a 301 to an apex that Netlify serves anyway. That
+# is a website decision rather than a security one, so it is written down here
+# instead of being made here.
+#
+# `dig CAA hu-tao.dev` is the truth; this resource is only the part tofu owns.
 resource "cloudflare_dns_record" "caa" {
   # Keyed by CA rather than generated from the value, so a state address stays
   # readable and adding an issuer is one line rather than a re-index.
