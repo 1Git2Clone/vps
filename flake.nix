@@ -567,11 +567,21 @@
                     }
 
                     unzip_at=$(line 'unzip -q "$tmp/pages.zip" -d "$tmp/out"')
-                    strip_at=$(line 'find "$tmp/out" -type l -delete')
+                    strip_at=$(line 'find "$tmp/out" ! -type f ! -type d -delete')
+                    mode_at=$(line 'chmod -R a-s,go-w "$tmp/out"')
                     copy_at=$(line 'cp -a "$tmp/out" "$staging"')
 
                     if [ "$strip_at" -le "$unzip_at" ] || [ "$strip_at" -ge "$copy_at" ]; then
                       echo "pages-pull-strips-symlinks: the strip (line $strip_at) must sit between the unzip (line $unzip_at) and the cp (line $copy_at)" >&2
+                      exit 1
+                    fi
+
+                    # The chmod must come AFTER the strip, or chmod -R walks a
+                    # tree that still contains symlinks and follows one out of
+                    # $tmp — which is the exact escape the strip exists to
+                    # close, reintroduced by the line meant to harden it.
+                    if [ "$mode_at" -le "$strip_at" ] || [ "$mode_at" -ge "$copy_at" ]; then
+                      echo "pages-pull-strips-symlinks: the chmod (line $mode_at) must sit between the strip (line $strip_at) and the cp (line $copy_at)" >&2
                       exit 1
                     fi
 
@@ -597,12 +607,46 @@
                     test -L "$tmp/out/leak"
                     test -L "$tmp/out/nested/slash"
 
-                    # PRODUCTION'S OWN LINE, not a copy of it.
+                    # The entry types a zip cannot carry but the extracted tree
+                    # can still acquire, planted directly because the point of
+                    # the broadened strip is that it does not enumerate them.
+                    # A fifo is the one that matters: cp -a preserves it and
+                    # caddy's file_server blocks forever on open(2).
+                    mkfifo "$tmp/out/pipe"
+                    # Mode bits DO survive a zip, so this is the realistic half:
+                    # a world-writable page that anyone on the host could rewrite
+                    # after publication, with caddy serving whatever it finds.
+                    #
+                    # NO setuid/setgid FIXTURE, deliberately. The nix build
+                    # sandbox mounts /build nosuid and the kernel refuses both
+                    # bits ("install: cannot change permissions"), so a fixture
+                    # here fails the check for a reason that has nothing to do
+                    # with the code under test. The /6000 assertion below is kept
+                    # anyway — it costs nothing and catches the day one appears.
+                    install -m 0666 /dev/null "$tmp/out/worldwritable"
+
+                    # PRODUCTION'S OWN LINES, not copies of them.
                     eval "$(sed -n "''${strip_at}p" "$clean")"
+                    eval "$(sed -n "''${mode_at}p" "$clean")"
 
                     if find "$tmp/out" -type l | grep -q .; then
                       echo "pages-pull-strips-symlinks: a symlink survived the strip:" >&2
                       find "$tmp/out" -type l >&2
+                      exit 1
+                    fi
+                    if find "$tmp/out" ! -type f ! -type d | grep -q .; then
+                      echo "pages-pull-strips-symlinks: a non-file non-directory entry survived the strip:" >&2
+                      find "$tmp/out" ! -type f ! -type d >&2
+                      exit 1
+                    fi
+                    if find "$tmp/out" -perm /6000 | grep -q .; then
+                      echo "pages-pull-strips-symlinks: a setuid/setgid bit survived the chmod:" >&2
+                      find "$tmp/out" -perm /6000 >&2
+                      exit 1
+                    fi
+                    if find "$tmp/out" -perm /022 | grep -q .; then
+                      echo "pages-pull-strips-symlinks: a group/other-writable entry survived the chmod:" >&2
+                      find "$tmp/out" -perm /022 >&2
                       exit 1
                     fi
                     if [ ! -f "$tmp/out/index.html" ]; then
