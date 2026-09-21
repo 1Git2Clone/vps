@@ -35,6 +35,10 @@ nft list table inet nixos-fw
 tailscale status                          # peers, and this node's own address
 tailscale whois 100.109.115.12            # THIS node: `Tags: tag:vps` or the ACL does not apply
 
+systemctl status image-archive.timer      # 23:30, ahead of restic's 00:00-01:00 window
+systemctl start image-archive             # docker save every pullable image now
+ls -la /var/lib/image-archive             # one .tar + one .id per image
+
 systemctl status vuln-scan.timer          # Saturdays 06:00 UTC
 systemctl start vuln-scan                 # run one now — it posts to Discord
 journalctl -u vuln-scan -n 50
@@ -58,6 +62,25 @@ A scan that cannot run reports a failure — it never degrades into an all-clear
 If a run dies before reporting, an exit trap posts an ABORTED notice, because
 silence and "no findings" must not look the same.
 
+## When an image cannot be pulled
+
+Nothing to do — every pullable container's unit runs `ensure-image` before it
+starts, which tries the local image, then a pull, then the nightly archive,
+then restic. `journalctl -u docker-<name>` names whichever step it reached.
+
+The recovery path can be exercised by hand without touching a running service:
+
+```sh
+restic-b2 restore latest --path /var/lib/image-archive \
+  --include /var/lib/image-archive/<slug>.tar --target /tmp/rt
+```
+
+`--path` is not optional: this repository also holds the weekly minecraft
+snapshots, and a bare `latest` can name one of those, which carries no archive.
+`--target /` is what `ensure-image` uses, because restic recreates the absolute
+path under the target. The slug is the image reference with `/`, `:` and `@`
+each replaced by `_`. Verified end to end on 2026-09-21.
+
 The weekly minecraft job stops both worlds' servers, snapshots, and starts
 them again from `ExecStopPost` — so they come back whether restic succeeded or
 not. A live world is not consistent on disk: the server holds region files open
@@ -76,6 +99,8 @@ journalctl -u gitea-runner-forgejo -f     # a job that never starts shows here
 journalctl -u forgejo-runner-identity     # the uuid/secret compose step
 
 podman ps                                 # job containers, one per running job
+podman images                             # localhost/forgejo-ci-nix-node must be here
+systemctl restart forgejo-runner-ci-image # reload it if the prune ate it
 du -sh /var/lib/forgejo-runner/cache      # the Actions cache
 nft list table inet nixos-fw              # the one-way rules; counters included
 ```
