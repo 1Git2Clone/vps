@@ -176,6 +176,24 @@ pkgs.testers.runNixOSTest {
         runner.execute("timeout 5 ip netns exec job nc -z ${vpsAddr} 443")
         assert counter("vps_allowed_fwd") > before, "443 from a container was not matched by the allow rule"
 
+    # The metadata service holds this box's Forgejo registration pair on any
+    # tofu-created runner, so a job container reaching it is a credential leak
+    # and not merely an information one. The host reads the same endpoint at
+    # boot from its own netns, which the output chain still allows — that path
+    # is deliberately untouched here.
+    with subtest("a job container cannot reach the cloud metadata service"):
+        before = counter("metadata_blocked_fwd")
+        runner.fail("timeout 5 ip netns exec job nc -z 169.254.169.254 80")
+        assert counter("metadata_blocked_fwd") > before, \
+            "a container's packet to 169.254.169.254 did not hit the metadata drop — " \
+            "check that the rule sits ABOVE `iifname \"podman*\" accept`"
+
+    with subtest("the metadata drop is scoped to link-local, not all container egress"):
+        before = counter("metadata_blocked_fwd")
+        runner.execute("timeout 5 ip netns exec job nc -z 192.168.1.3 80")
+        assert counter("metadata_blocked_fwd") == before, \
+            "ordinary container egress hit the metadata drop"
+
     with subtest("the VPS drop did not swallow ordinary container egress"):
         before = counter("vps_blocked_fwd")
         runner.execute("timeout 5 ip netns exec job nc -z 192.168.1.3 80")
