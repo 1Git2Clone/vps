@@ -14,6 +14,7 @@
     ./modules/acme.nix
     ./modules/postgres.nix
     ./modules/backups.nix
+    ./modules/image-archive.nix
     ./modules/vuln-scan.nix
     ./modules/renovate.nix
     ./modules/pages-pull.nix

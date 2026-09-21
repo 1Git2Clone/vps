@@ -29,9 +29,16 @@
     # fires in 00:00-01:00. postgresqlBackup therefore runs at 23:15, BEFORE it.
     # Moving that past midnight would have restic archive a dump up to 23 hours
     # stale every night while both units report success.
+    # The third path is modules/image-archive.nix: a `docker save` of every
+    # pullable image, refreshed at 23:30 so it lands here the same night. It is
+    # the answer to forgejo 16.0.2, whose tag still resolved while the bytes
+    # behind it were gone — see the comment in that module. Restic dedupes it
+    # against yesterday's copy, so an unchanged image costs nothing after the
+    # first snapshot.
     paths = [
       "/var/lib/docker/volumes"
       "/var/backup/postgresql"
+      "/var/lib/image-archive"
     ];
 
     # The minecraft worlds are snapshotted separately, with the servers stopped
