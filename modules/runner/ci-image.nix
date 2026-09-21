@@ -182,15 +182,43 @@ in
       };
 
       # `podman load` is idempotent for an identical archive and cheap when the
-      # layers are already present, so this can run on every boot without
-      # guarding on whether the tag exists. The guard that DOES matter is the
-      # tag check: autoPrune runs daily with --all and will delete this image if
-      # no container references it, so re-loading unconditionally is what makes
-      # the image survive its own garbage collector.
+      # layers are already present, so this can run unguarded.
       script = ''
         ${config.virtualisation.podman.package}/bin/podman load \
           --input ${config.runner.ciImage}
       '';
     };
+
+    # THE GARBAGE COLLECTOR EATS THIS IMAGE, and the unit above cannot notice.
+    #
+    # autoPrune runs `podman system prune -f --all` daily. `--all` removes every
+    # image no container references, and between jobs nothing references this
+    # one — so it is deleted like any other cold image. The load unit is a
+    # oneshot with RemainAfterExit, which means that after its first success at
+    # activation systemd considers it active forever and will not run it again.
+    # Nothing puts the image back until the next reboot.
+    #
+    # The failure is not subtle once seen but is invisible in review: with
+    # force_pull false the runner tries to use a localhost/ reference that no
+    # registry can serve, and every job on the nix-node label dies in about
+    # three seconds, on workflows that were green hours earlier and did not
+    # change. Observed 2026-09-21 across cv-template, skavex and nixos-dotfiles
+    # at once.
+    #
+    # ExecStartPost rather than OnSuccess=: OnSuccess only STARTS a unit, and
+    # starting a RemainAfterExit oneshot that systemd already believes is active
+    # does nothing at all — which is the same trap again one layer up. `restart`
+    # runs it regardless of what state systemd thinks it is in. --no-block so
+    # prune does not wait on a unit that is ordered after it.
+    # mkIf, because this attribute is the only thing this module says about
+    # podman-prune. With autoPrune disabled that unit is not defined by anything
+    # else, and setting serviceConfig on it would conjure a unit with an
+    # ExecStartPost and no ExecStart — a broken service invented by a module
+    # trying to protect against a collector that is not running.
+    systemd.services.podman-prune.serviceConfig.ExecStartPost =
+      lib.mkIf config.virtualisation.podman.autoPrune.enable
+        [
+          "${config.systemd.package}/bin/systemctl restart --no-block forgejo-runner-ci-image.service"
+        ];
   };
 }
