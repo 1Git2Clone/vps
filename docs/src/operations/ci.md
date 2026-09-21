@@ -37,6 +37,12 @@ Not tidiness — each difference is forced.
   inside the job container, so the CI file has no `uses:` whatsoever and does
   its own `git fetch` in place of `actions/checkout`.
 
+  That is a property of **this label**, not of the runner. Since 2026-09-21
+  there is also `nix-node` — nix and node in one locally built image — on which
+  `uses:` works normally. These two workflows have not moved to it and do not
+  need to; see [the job image](../architecture/runner.md#the-job-image-and-the-second-label)
+  for when a repo should.
+
   `pages.yml` is the exception that proves it. It needs one action —
   `upload-artifact`, which has no shell equivalent — so it puts the dev shell's
   node on `$GITHUB_PATH` first, which is why `nodejs` is in the `ci` shell
@@ -84,16 +90,24 @@ nix build .#checks.x86_64-linux.runner-firewall -L
 ## Writing a workflow that runs here
 
 The runner is a different machine from the VPS, with no access to its volumes
-and a four-path allow-list to its Forgejo instance. Three consequences:
+and a four-path allow-list to its Forgejo instance. Four consequences:
 
-1. **`upload-artifact` must be the Forgejo fork.** GitHub's bundles
+1. **The label decides whether `uses:` works at all.** `nix` has no node, so a
+   JavaScript action cannot execute on it — the failure is
+   `crun: executable file 'node' not found in $PATH`, before the action runs.
+   Pick `nix-node` for a workflow that wants `actions/checkout` or any other
+   action, and pick it for **any private repo**: a hand-written `git fetch` is
+   anonymous unless the author threads the job token through it, which works on
+   a public repo and fails on a private one. Full list of labels and what each
+   carries: [the job image](../architecture/runner.md#the-job-image-and-the-second-label).
+2. **`upload-artifact` must be the Forgejo fork.** GitHub's bundles
    `@actions/artifact` v2, which decides a Forgejo instance is GitHub
    Enterprise Server and **throws before opening a socket** — zero HTTP
    requests, invisible in access logs. Use `forgejo/upload-artifact@v5`; a bare
    `uses:` resolves against `https://code.forgejo.org`, which is correct for
    it.
-2. **Publishing writes an artifact, never a volume.** See [Pages](pages.md).
-3. **A bare `uses:` resolves against `DEFAULT_ACTIONS_URL`** — which defaults
+3. **Publishing writes an artifact, never a volume.** See [Pages](pages.md).
+4. **A bare `uses:` resolves against `DEFAULT_ACTIONS_URL`** — which defaults
    to `https://data.forgejo.org`, a mirror of `actions/*` and nothing
    third-party. A third-party action must name its host, or it fails with
    `remote: Not found`. Pointing `DEFAULT_ACTIONS_URL` at github.com would fix
@@ -107,5 +121,13 @@ Caching works normally — see
 ## Known gaps
 
 - Actions are pinned by **moving tag** rather than commit SHA.
+- `pages.yml` still puts the dev shell's node on `$GITHUB_PATH` before its one
+  `uses:` step. Moving that job to `nix-node` would delete the step; it has not
+  been done, because the same file is `skavex`'s and the two are kept identical
+  deliberately.
+- The `nix-node` image is rebuilt only when `flake.lock` moves, so a CVE in its
+  node or curl waits for a flake bump. `vuln-scan` does not see it: that scanner
+  reads `virtualisation.oci-containers` on the VPS, and this image is neither a
+  container nor on that host.
 - The artifact pull has no size cap (`--max-time` bounds time, not bytes).
 - Job containers do not yet use `--userns=auto`.
