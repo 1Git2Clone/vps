@@ -67,8 +67,55 @@ in
 
     serviceConfig = {
       Type = "oneshot";
-      # Writes into a docker volume, which is root-owned.
+
+      # STILL ROOT, AND THE REASON IS THE DESTINATION, NOT THE WORK. The tree
+      # lands in /var/lib/docker/volumes/<vol>/_data, and /var/lib/docker is
+      # 0710 root:root — a non-root user cannot even traverse it. The only way
+      # to drop this User= is to stop using a docker volume for pages and hand
+      # caddy a plain bind-mounted directory instead, which is a volume
+      # migration, not an edit. Adding this user to the `docker` group is NOT
+      # the alternative: that group is root-equivalent by design.
       User = "root";
+
+      # So root is bounded instead. This unit parses a ZIP fetched over the
+      # network with unzip, which is the one place in this module where hostile
+      # CONTENT meets a parser, and the mitigation that matters is that a win
+      # there reaches nothing worth having. Under these settings a compromised
+      # unzip can write to the pages volume and its own PrivateTmp and nothing
+      # else — not /var/lib/sops-nix, not /etc, not /home, not the docker
+      # socket, with no way to gain a capability back.
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      # /var/lib/docker/volumes, not the volume's own _data path: this is
+      # resolved at unit start and the _data directory does not exist until
+      # docker first creates the volume, which would fail the unit on a fresh
+      # box. The parent exists whenever docker does.
+      ReadWritePaths = [ "/var/lib/docker/volumes" ];
+      ProtectHome = true;
+      NoNewPrivileges = true;
+      PrivateDevices = true;
+      RestrictSUIDSGID = true;
+      RestrictNamespaces = true;
+      RestrictRealtime = true;
+      LockPersonality = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectKernelLogs = true;
+      ProtectControlGroups = true;
+      ProtectClock = true;
+      ProtectHostname = true;
+      # curl needs inet + the unix socket that nsswitch/resolved answer on.
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
+      SystemCallFilter = [ "@system-service" ];
+      SystemCallArchitectures = "native";
+      # root owns every path this writes, so DAC never needs overriding and the
+      # whole bounding set can go. Keeps a setuid binary in the closure from
+      # being useful even if RestrictSUIDSGID were ever relaxed.
+      CapabilityBoundingSet = [ ];
     };
 
     path = with pkgs; [
@@ -246,7 +293,25 @@ in
           # -type l is the LINK itself, never its target, so this cannot follow
           # a link out of $tmp and delete something real. Covered by
           # checks.pages-pull-strips-symlinks.
-          find "$tmp/out" -type l -delete
+          #
+          # BROADENED FROM `-type l` to an allow-list of entry types. A
+          # published site is regular files and directories; everything else
+          # goes. The concrete gap that closed: a zip cannot carry a device
+          # node or a socket, but it CAN carry a fifo, and `cp -a` preserves
+          # one into the served tree, where caddy's file_server blocks forever
+          # on open(2) the first time anyone requests that path. Deleting by
+          # what is ALLOWED rather than by what is known-bad also means the
+          # next entry type an archive format learns does not get a free pass.
+          find "$tmp/out" ! -type f ! -type d -delete
+
+          # Info-ZIP already drops setuid/setgid on extraction, so `a-s` is
+          # belt-and-braces against a future extractor that does not. `go-w` is
+          # NOT redundant: zip stores a mode, and a world-writable file in the
+          # pages volume is one that any process on this host can rewrite after
+          # publication, with caddy serving whatever it finds on the next
+          # request. Runs AFTER the delete above, so there is no symlink left
+          # for chmod -R to follow out of $tmp.
+          chmod -R a-s,go-w "$tmp/out"
 
           # ATOMIC SWAP. caddy serves this read-only and a half-written tree
           # is a half-broken site, so the new content is staged as a sibling

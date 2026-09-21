@@ -50,7 +50,7 @@ flowchart TB
 | 4 | Runner nftables: output policy-drop, the VPS reachable on 443 and nothing else; inbound ssh accepted from the VPS alone | `modules/runner/firewall.nix`   |
 | 5 | Caddy: runner addresses restricted to four Actions paths, everything else 403                                           | `modules/containers/caddy.nix`  |
 | 6 | Job: no engine socket by default; its container is created per job and destroyed after                                  | `modules/runner/default.nix`    |
-| 7 | `pages-pull`: every symlink deleted out of a fetched artifact before caddy serves it                                    | `modules/pages-pull.nix`        |
+| 7 | `pages-pull`: a fetched artifact reduced to files and directories, modes normalised, before caddy serves it             | `modules/pages-pull.nix`        |
 
 Every connection between the two hosts is either initiated **by the VPS**, or
 is HTTPS from the runner to `git.hu-tao.dev` like any other client on the
@@ -127,6 +127,40 @@ job containers route through it rather than through `output`.
 The v6 line drops the VPS's whole `/64` outright: nothing legitimate goes there
 over v6, and a runner that can reach the box on any v6 address has defeated the
 v4 rules.
+
+### The metadata service is the host's alone
+
+The `forward` chain carries one drop the `output` chain deliberately does not:
+
+```nft
+iifname "podman*" ip daddr 169.254.0.0/16 counter name metadata_blocked_fwd drop
+```
+
+`169.254.169.254` answers this server's own `user_data`, and `tofu/server.tf`
+puts the box's **Forgejo registration pair** there — the per-runner entry from
+`var.runner_identities`.
+`modules/runner/identity.nix` reads it once at boot from the host's netns,
+which is why the output chain allows `tcp/80` and this drop leaves that path
+alone.
+
+A job container is a different netns, so its packets are _forwarded_ and land
+here instead. Without the rule they reach the same endpoint, and one `curl` in
+a workflow returns the uuid and secret — enough to register a second runner
+daemon against the instance, call `FetchTask`, and receive other jobs along
+with their tokens. That is precisely the persistence `container.docker_host:
+"-"` was chosen to deny, arriving by a route that never touches a container
+socket.
+
+It matches the whole `169.254.0.0/16` rather than the single address: nothing a
+job does has business in link-local space, and a provider that moves its
+endpoint within that block does not get to reopen this quietly.
+
+**Not live on the current box.** It predates the mechanism and tofu holds
+`user_data` in `ignore_changes`, so the endpoint returns `204` today and the
+identity instead sits in a `0700` root-owned file a job cannot reach. The rule
+is there for the next runner tofu **creates**, which
+`tofu/variables.tf` documents as the ordinary
+way to add one.
 
 Two things test this:
 
