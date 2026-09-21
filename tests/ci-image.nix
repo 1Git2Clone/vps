@@ -96,7 +96,16 @@ pkgs.testers.runNixOSTest {
 
   testScript = ''
     runner.start()
-    runner.wait_for_unit("forgejo-runner-ci-image.service")
+    runner.wait_for_unit("multi-user.target")
+
+    # Waiting on the RESULT, not the state. The loader is a oneshot with no
+    # RemainAfterExit — deliberately, so that activation and a runner restart
+    # both re-run it — which means it is inactive the moment it has done its
+    # job. wait_for_unit waits for "active" and would hang forever here.
+    runner.wait_until_succeeds(
+        "systemctl show forgejo-runner-ci-image.service -p Result --value "
+        "| grep -qx success"
+    )
 
     # Ordering, before anything else: if the runner can win the race the image
     # being correct does not help.
@@ -137,6 +146,25 @@ pkgs.testers.runNixOSTest {
     # set NIX_CONFIG to get a flake command to run.
     runner.succeed(f"podman run --rm {ref} nix flake --help >/dev/null")
 
+    # ------------------------------------------------------------ /usr/bin/env
+    # The most common shebang in the JavaScript ecosystem, and the one thing
+    # `node --version` passing does NOT prove. dockerTools links contents into
+    # /bin and creates no /usr at all, while nixos/nix ships /usr/bin/env — so
+    # every binary npm or pnpm installs ran on the old label and died on this
+    # one, naming the interpreter rather than the script:
+    #
+    #   sh: node_modules/.../tsc: /usr/bin/env: bad interpreter
+    #   [runner]: exitcode '126': failure
+    #
+    # Executed as a real shebang rather than by calling `env` directly: it is
+    # the kernel's interpreter lookup that fails, so invoking env as a command
+    # would pass on an image that still could not run a single npm bin.
+    runner.succeed(
+        f"podman run --rm {ref} sh -c "
+        "'printf \"#!/usr/bin/env node\\nconsole.log(1)\\n\" > /tmp/shebang "
+        "&& chmod +x /tmp/shebang && /tmp/shebang'"
+    )
+
     # ---------------------------------------------------------------- prune
     # The image has to survive its own garbage collector, and the first version
     # of this module did not. autoPrune runs `podman system prune -f --all`
@@ -152,10 +180,14 @@ pkgs.testers.runNixOSTest {
     runner.succeed(f"podman rmi -f {ref}")
     runner.fail(f"podman image exists {ref}")
 
-    # 2. The loader can be made to run a SECOND time. `restart` and not `start`
-    #    is the whole point: starting a RemainAfterExit oneshot systemd already
-    #    considers active is a silent no-op, which is the trap being guarded.
-    runner.succeed("systemctl restart forgejo-runner-ci-image.service")
+    # 2. `start`, deliberately NOT `restart`. This is the assertion that would
+    #    have caught the second outage: activation starts wanted-but-inactive
+    #    units, so `start` is the verb a deploy effectively uses. While the
+    #    unit carried RemainAfterExit, systemd thought it was permanently
+    #    active and this was a silent no-op — the image stayed missing and a
+    #    deploy could not heal it. `restart` passes either way, which is
+    #    exactly why testing with it proved nothing.
+    runner.succeed("systemctl start forgejo-runner-ci-image.service")
     runner.succeed(f"podman image exists {ref}")
 
     # 3. The collector itself puts it back, via the ExecStartPost coupling.
