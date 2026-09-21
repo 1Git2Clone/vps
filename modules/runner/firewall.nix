@@ -124,6 +124,12 @@ in
         counter vps_allowed_out { }
         counter vps_allowed_fwd { }
 
+        # The cloud metadata service, blocked for job containers only. Named for
+        # the same reason as the VPS counters: the forward chain's catch-all drop
+        # cannot tell "the metadata rule caught it" from "nothing matched", and
+        # tests/runner-firewall.nix asserts on this one specifically.
+        counter metadata_blocked_fwd { }
+
         # Job containers reaching aardvark-dns on the host. Named so the rule
         # can be asserted rather than eyeballed, like the vps_* pair above.
         counter dns_from_jobs { }
@@ -300,9 +306,38 @@ in
           ip daddr ${vps4} counter name vps_blocked_fwd log prefix "DROP_vps_fwd: " drop
           ip6 daddr ${vps6} counter name vps_blocked_fwd6 log prefix "DROP_vps_fwd6: " drop
 
+          # ── THE CLOUD METADATA SERVICE, and it is the HOST's alone ────────
+          # 169.254.169.254 answers the server's own user_data, and tofu puts
+          # this box's Forgejo registration pair there (tofu/server.tf, user_data
+          # = var.runner_identities[each.key]). modules/runner/identity.nix reads
+          # it once at boot, from the HOST's netns, which is why the output chain
+          # allows tcp/80 and this drop does not affect it.
+          #
+          # A job container is a different netns, so its packets are FORWARDED
+          # and land here instead — and without this rule they reach the same
+          # endpoint. One `curl` in a workflow would then return the uuid+secret,
+          # which is enough to register a second runner daemon against the
+          # instance, call FetchTask, and receive other jobs along with their
+          # tokens. That is exactly the persistence `container.docker_host: "-"`
+          # in modules/runner/default.nix was chosen to deny, reachable by a
+          # route that never touches a container socket.
+          #
+          # Above `iifname "podman*" accept` for the same first-match reason as
+          # the VPS drops. The whole 169.254.0.0/16 rather than the single
+          # address: nothing a job does has any business in link-local space, and
+          # a provider that moves its endpoint within that block does not get to
+          # reopen this silently.
+          #
+          # NOT live on the current box — it predates the mechanism and tofu
+          # holds user_data in ignore_changes, so the endpoint returns 204 today.
+          # It goes live the moment tofu CREATES a runner, which
+          # tofu/variables.tf documents as the ordinary way to add one. Covered
+          # by tests/runner-firewall.nix.
+          iifname "podman*" ip daddr 169.254.0.0/16 counter name metadata_blocked_fwd log prefix "DROP_metadata_fwd: " drop
+
           # Container egress to the internet, and container-to-container on a
           # per-job network. Everything a job legitimately does goes through
-          # here, which is why the two rules above have to come first.
+          # here, which is why the three rules above have to come first.
           iifname "podman*" accept
 
           log prefix "DROP_fwd: " counter drop
