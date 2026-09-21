@@ -59,6 +59,22 @@ in
       USER_UID = "1000";
       USER_GID = "1000";
 
+      # THE INSTALL WIZARD, CLOSED EXPLICITLY RATHER THAN BY THE VOLUME BEING
+      # NON-EMPTY. The image's setup script writes app.ini only when it is
+      # absent, and it flips INSTALL_LOCK itself only when SECRET_KEY is set —
+      # which it is not here. So an instance whose forgejo_data volume has no
+      # app.ini serves /install to whoever asks, and completing that wizard sets
+      # the admin account and the database settings.
+      #
+      # Nothing is exploitable on the running instance, whose volume was
+      # populated long ago. The window is a restore or a rebuild onto fresh
+      # storage, where git.<domain> is public on 443 with no basic_auth
+      # (modules/containers/caddy.nix) and the operator is racing the internet
+      # to finish setup. This turns that race into a 500 and no admin account,
+      # which is a deploy that visibly failed rather than one that quietly let
+      # someone else finish it.
+      FORGEJO__security__INSTALL_LOCK = "true";
+
       FORGEJO__service__DISABLE_REGISTRATION = "true";
       FORGEJO__service__REQUIRE_SIGNIN_VIEW = "false";
       FORGEJO__admin__DISABLE_REGULAR_ORG_CREATION = "true";
