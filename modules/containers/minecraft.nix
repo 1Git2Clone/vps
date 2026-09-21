@@ -132,7 +132,11 @@ in
   '';
 
   virtualisation.oci-containers.containers.minecraft = {
-    image = "itzg/minecraft-server:java25";
+    # Digest-pinned: java25 is a ROLLING tag, so the tag alone says nothing
+    # about what runs. The digest is the image the world is currently on, read
+    # off the box — a rebuild or a re-pull can no longer swap the JRE under a
+    # live world without the swap appearing here as a diff.
+    image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";
 
     environment = {
       EULA = "TRUE";
@@ -197,7 +201,10 @@ in
     # java21, not java25 like world 1: 1.21.1 targets Java 21, and its mods are
     # compiled against it. Mixin/ASM on a JDK newer than the one a mod was built
     # for is the classic modded-server crash, and there is nothing to gain here.
-    image = "itzg/minecraft-server:java21";
+    # Digest-pinned for the same reason as world 1, and it matters more here:
+    # a rolling tag could move this world onto a newer JDK point release, which
+    # is exactly the mixin/ASM break the paragraph above warns about.
+    image = "itzg/minecraft-server:java21@sha256:50bdc4b0746c48456d8e737a017786a94c02295b14a8f0f4cb02592a0388cc09";
 
     environment = {
       EULA = "TRUE";

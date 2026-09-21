@@ -99,7 +99,12 @@
     {
       customType: "regex",
       managerFilePatterns: ["/^modules/containers/.*\\.nix$/"],
-      matchStrings: ['image = "(?<depName>[^"$:]+):(?<currentValue>[^"$]+)";'],
+      // The digest group is optional: most images here are `repo:tag`, but the
+      // rolling-tag ones are `repo:tag@sha256:...` and without `currentDigest`
+      // the tag group would swallow the digest and make the version unparseable.
+      matchStrings: [
+        'image = "(?<depName>[^"$:@]+):(?<currentValue>[^"$@]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?";',
+      ],
       datasourceTemplate: "docker",
       versioningTemplate: "docker",
     },
@@ -132,10 +137,21 @@
     },
     // `itzg/minecraft-server:java25` is a rolling JRE tag, not a version.
     // Renovate would eventually offer java26, which is a runtime swap under a
-    // live world rather than a patch. Bump it deliberately.
+    // live world rather than a patch. Bump that deliberately.
+    //
+    // Digest updates are the exception and are re-enabled below. Before the
+    // images were digest-pinned this rule disabled everything, which read as
+    // caution but meant the opposite: a rolling tag has no version to bump, so
+    // there was nothing to be deliberate WITH. The content moved on the next
+    // pull and no PR ever said so. A digest PR is that missing signal.
     {
       matchPackageNames: ["itzg/minecraft-server"],
       enabled: false,
+    },
+    {
+      matchPackageNames: ["itzg/minecraft-server"],
+      matchUpdateTypes: ["digest"],
+      enabled: true,
     },
   ],
 }
