@@ -91,8 +91,22 @@ What remains matched is **deliberate and worth knowing**: searxng, kuma,
 forgejo, navidrome and the two minecraft servers share the proxy bridge with
 caddy, so they are still admitted to those three ports. Both services behind
 them are credential-protected (grafana has a real admin login with sign-up off;
-syncthing's GUI has a password), so this is defence in depth, not a hole being
-closed. Subtracting the rest needs a **positive** source match, which needs a
+syncthing's GUI password is declared by `modules/syncthing.nix` through
+`guiPasswordFile` and re-applied on every deploy), so this is defence in depth,
+not a hole being closed.
+
+That syncthing half used to be an **assertion about the live box** rather than
+something the deploy enforced. The config directory came across from the old
+host with a password already set by hand, and nothing in the repo would have
+noticed its absence: on fresh state syncthing comes up with a generated API key
+and **no password at all**, bound to `0.0.0.0` and reachable from every bridge
+in the list above. That mattered more than a login form normally does, because
+syncthing's REST API is not a viewer — `/rest/config/folders` takes a
+versioning block of type `external` with a `params.command` that syncthing
+execs, and a folder rooted at `~/.ssh` writes `authorized_keys` as `hutao`, who
+has passwordless sudo. The credential is now declarative, so it fails closed.
+
+Subtracting the rest needs a **positive** source match, which needs a
 pinned subnet on `proxy`, which means deleting a network that already exists and
 detaching every container on it — a maintenance window, not an edit.
 

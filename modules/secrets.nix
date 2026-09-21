@@ -49,6 +49,18 @@
         key = "cloudflare/tunnel_token";
       };
 
+      # === Syncthing ===
+      # The PLAINTEXT GUI password. The nixos module bcrypts it at runtime with
+      # mkpasswd and PATCHes /rest/config/gui, so the hash is what lands in
+      # config.xml and neither form ever enters the nix store.
+      #
+      # owner, because syncthing-init runs as services.syncthing.user (hutao),
+      # not root, and reads this file directly.
+      syncthing_gui_password = {
+        key = "syncthing/gui_password";
+        owner = "hutao";
+      };
+
       # === Dozzle ===
       dozzle_admin_user = {
         key = "dozzle/admin_user";
