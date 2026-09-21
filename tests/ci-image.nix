@@ -57,7 +57,19 @@ pkgs.testers.runNixOSTest {
         # has no Hetzner metadata service to answer it — the test would then be
         # measuring provisioning, not the image. ci-image.nix's load unit needs
         # podman and nothing else from that module.
-        podman.enable = true;
+        podman = {
+          enable = true;
+
+          # The collector this image has to survive. Enabled here with the same
+          # flags the runner host uses, because the regression it caused —
+          # `--all` deleting a cold image that nothing then reloads — is exactly
+          # what the last block of the test script exercises.
+          autoPrune = {
+            enable = true;
+            dates = "daily";
+            flags = [ "--all" ];
+          };
+        };
 
         # The image is several hundred MB of nix and node closures and podman
         # unpacks it into the VM's own disk, which the harness sizes for a much
@@ -124,5 +136,31 @@ pkgs.testers.runNixOSTest {
     # experimental-features baked into the image, so a workflow does not have to
     # set NIX_CONFIG to get a flake command to run.
     runner.succeed(f"podman run --rm {ref} nix flake --help >/dev/null")
+
+    # ---------------------------------------------------------------- prune
+    # The image has to survive its own garbage collector, and the first version
+    # of this module did not. autoPrune runs `podman system prune -f --all`
+    # daily; `--all` removes every image no container references, which between
+    # jobs is this one. The load unit is a oneshot with RemainAfterExit, so once
+    # it had succeeded at activation systemd never ran it again and nothing put
+    # the image back until a reboot. Every job on the nix-node label then died
+    # in about three seconds against a localhost/ reference no registry serves.
+    #
+    # Three steps, because each one can break independently.
+
+    # 1. The image really is deletable — otherwise the rest proves nothing.
+    runner.succeed(f"podman rmi -f {ref}")
+    runner.fail(f"podman image exists {ref}")
+
+    # 2. The loader can be made to run a SECOND time. `restart` and not `start`
+    #    is the whole point: starting a RemainAfterExit oneshot systemd already
+    #    considers active is a silent no-op, which is the trap being guarded.
+    runner.succeed("systemctl restart forgejo-runner-ci-image.service")
+    runner.succeed(f"podman image exists {ref}")
+
+    # 3. The collector itself puts it back, via the ExecStartPost coupling.
+    #    --no-block means the reload races the prune's own exit, so poll.
+    runner.succeed("systemctl start podman-prune.service")
+    runner.wait_until_succeeds(f"podman image exists {ref}", timeout=180)
   '';
 }
