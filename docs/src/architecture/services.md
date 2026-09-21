@@ -31,8 +31,8 @@ jail that reads the journal.
 | `dozzle`         | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
 | `grafana`        | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
 | `tempo`          | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address                                                                                                                                                                                                                     |
-| `minecraft`      | 25565; RCON on loopback only (25575)                                                                                                                                                                                                                                                                                                        |
-| `minecraft2`     | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576)                                                                                                                                                  |
+| `minecraft`      | 25565; RCON on loopback only (25575). Heap 1 G floor / 6 G ceiling — see below                                                                                                                                                                                                                                                              |
+| `minecraft2`     | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576). Heap 1 G / 4 G                                                                                                                                  |
 | `serenity-bot-0` | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669`                                                                                                                                                                                                                       |
 | `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback                                                                                                                                                                                                                                                               |
 | `postgres`       | not a container — a host service; unix socket + loopback only, never on `botnet`                                                                                                                                                                                                                                                            |
@@ -41,6 +41,25 @@ jail that reads the journal.
 
 The Forgejo Actions runner is **not on this list any more**: it lives on its
 own machine. See [CI runner isolation](runner.md).
+
+### Why the Minecraft heap is two numbers
+
+itzg's `MEMORY` sets `-Xms` **and** `-Xmx` to the same value, so the JVM commits
+the whole heap at startup and never gives any of it back. That is why an idle
+world with nobody on it sat at 4.38 G of RSS at 0–1% CPU. Both worlds therefore
+set `INIT_MEMORY` and `MAX_MEMORY` separately — a low floor, the same ceiling as
+before — rather than `MEMORY`.
+
+The floor alone is not enough. G1 only uncommits at the end of a GC cycle, and
+an idle server triggers no GCs at all, so the heap would stay at its
+high-water mark forever. `-XX:G1PeriodicGCInterval=300000` (JEP 346) is the
+other half: one concurrent cycle per five idle minutes, which is what actually
+returns the pages. The two are a pair — either one on its own does nothing
+useful.
+
+RSS is still not heap. Metaspace, the code cache, GC structures and direct
+buffers live outside `-Xmx`, so the ceiling is not a bound on what the container
+reports.
 
 Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is
 over Tailscale SSH. Keeping 22 is what lets git remotes stay portless: ssh has
@@ -59,6 +78,38 @@ It is still caddy 2.11.4 — the version tracks nixpkgs, which matches the tag
 the official image used — and keeps the full container hardening: non-root uid
 from `ids.nix`, read-only rootfs, `--cap-drop=ALL`, and tmpfs for `/data`,
 `/config` and `/tmp`.
+
+## Images are pinned where the tag moves
+
+Most images here are `repo:tag` on a release tag, which is both a version and a
+promise that the content behind it does not change. Three are not, and they
+carry a digest as well:
+
+| Image                          | Why the tag alone says nothing                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `itzg/minecraft-server:java25` | a rolling JRE tag; a re-pull can swap the JRE under a live world                                                               |
+| `itzg/minecraft-server:java21` | the same, and it matters more — world 2's mods are compiled against Java 21, and mixin/ASM on a newer JDK is the classic crash |
+| `redis:8-alpine`               | a rolling minor tag                                                                                                            |
+
+A digest also makes the
+[image archive's restore](data.md#restoring-is-automatic) sound: a pinned pull
+either returns those exact bytes or fails, so falling back to an archived copy
+cannot silently substitute a different image.
+
+Renovate is configured to match this. Its regex manager captures
+`currentDigest` as an **optional** group — without it the tag group would
+swallow the digest and leave the version unparseable — and the rule that keeps
+`itzg/minecraft-server` off automatic version bumps is split so that
+`matchUpdateTypes: ["digest"]` stays enabled. Before the pin, disabling that
+package read as caution and meant the opposite: a rolling tag has no version to
+bump, so there was nothing to be deliberate _with_, and the content moved on the
+next pull with no PR ever saying so. A digest PR is that missing signal.
+
+`docker.autoPrune` is weekly and its `flags` are empty, so it is a plain
+`docker system prune` — **dangling layers only**, never a tagged or digest-
+referenced image, and never a volume. The runner's podman prune is the one that
+runs `--all`, and what that costs is covered in
+[CI runner isolation](runner.md#the-garbage-collector-eats-it).
 
 ## Three things are deliberately not containers
 

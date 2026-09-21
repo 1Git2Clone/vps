@@ -42,15 +42,15 @@ flowchart TB
     class L1,L2,L3,L4,L5 ctl
 ```
 
-| #   | Control                                                                                                                 | Where                           |
-| --- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| 1   | Runner cloud firewall: in = tcp/22 from the VPS /32 only; out = 53/80/443                                               | `tofu/runner-firewall.tf`       |
-| 2   | VPS cloud firewall: tcp/22 outbound to the runner /32                                                                   | `tofu/modules/hetzner-firewall` |
-| 3   | VPS nftables: output chain is policy-drop, one rule per runner address                                                  | `modules/firewall.nix`          |
-| 4   | Runner nftables: output policy-drop, the VPS reachable on 443 and nothing else; inbound ssh accepted from the VPS alone | `modules/runner/firewall.nix`   |
-| 5   | Caddy: runner addresses restricted to four Actions paths, everything else 403                                           | `modules/containers/caddy.nix`  |
-| 6   | Job: no engine socket by default; its container is created per job and destroyed after                                  | `modules/runner/default.nix`    |
-| 7   | `pages-pull`: every symlink deleted out of a fetched artifact before caddy serves it                                    | `modules/pages-pull.nix`        |
+| # | Control                                                                                                                 | Where                           |
+| - | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 1 | Runner cloud firewall: in = tcp/22 from the VPS /32 only; out = 53/80/443                                               | `tofu/runner-firewall.tf`       |
+| 2 | VPS cloud firewall: tcp/22 outbound to the runner /32                                                                   | `tofu/modules/hetzner-firewall` |
+| 3 | VPS nftables: output chain is policy-drop, one rule per runner address                                                  | `modules/firewall.nix`          |
+| 4 | Runner nftables: output policy-drop, the VPS reachable on 443 and nothing else; inbound ssh accepted from the VPS alone | `modules/runner/firewall.nix`   |
+| 5 | Caddy: runner addresses restricted to four Actions paths, everything else 403                                           | `modules/containers/caddy.nix`  |
+| 6 | Job: no engine socket by default; its container is created per job and destroyed after                                  | `modules/runner/default.nix`    |
+| 7 | `pages-pull`: every symlink deleted out of a fetched artifact before caddy serves it                                    | `modules/pages-pull.nix`        |
 
 Every connection between the two hosts is either initiated **by the VPS**, or
 is HTTPS from the runner to `git.hu-tao.dev` like any other client on the
@@ -205,6 +205,84 @@ shells out to docker needs no edit.
 `forgejo-runner` 13.1.0's `daemon` has **no `--ephemeral`/`--once` flag**, so
 one-job-per-runner-lifetime is not available upstream. Per-job disposability
 comes from the container being created and destroyed per job instead.
+
+## The job image, and the second label
+
+Every JavaScript action — `actions/checkout` included — is executed by a `node`
+binary **inside the job container**, not by the runner. The `nix` label is
+`nixos/nix`, which carries nix, bash, gitMinimal, curl and coreutils and no
+node, so on that label `uses:` cannot run at all and every workflow hand-writes
+its checkout as a `git fetch`.
+
+That is a correctness trap and not only an inconvenience. A hand-written fetch
+is anonymous unless the author remembers to thread the job token through it —
+and on a **public** repo an anonymous fetch works. The omission is therefore
+invisible on five of the six repos on this instance and fatal on the sixth:
+`cv-template`, the one private repo, failed with `could not read Username for
+'https://git.hu-tao.dev'`. `actions/checkout` defaults its `token` input to the
+injected job token, so on an image with node the private-repo case needs no
+thought from the workflow author.
+
+So there is a second label, and it is **additive**:
+
+| Label           | Image                           | node | Notes                                                                          |
+| --------------- | ------------------------------- | ---- | ------------------------------------------------------------------------------ |
+| `nix`           | `nixos/nix:2.35.2`              | no   | what this repo's own workflows run on                                          |
+| `nix-node`      | `localhost/forgejo-ci-nix-node` | yes  | nix **and** node; built here, not pulled                                       |
+| `ubuntu-latest` | `node:22-bookworm`              | yes  | no nix, and no `sudo` — see [CI](../operations/ci.md#why-the-two-files-differ) |
+| `node-22`       | `node:22-bookworm`              | yes  |                                                                                |
+| `alpine`        | `alpine:3.22`                   | no   |                                                                                |
+
+`nix` is untouched, so `vps`, `skavex`, `compress` and `serenity-discord-bot`
+keep building on exactly the image they build on today; a repo opts in by
+changing `runs-on`. A broken image here cannot take CI down for four working
+repos.
+
+### Why it is not in a registry
+
+`force_pull` is `false`, so the runner uses a locally present image without
+reaching for a registry. That lets the image be an ordinary Nix derivation
+(`modules/runner/ci-image.nix`) loaded into podman at activation — pinned by
+`flake.lock`, rebuilt only when its inputs change, with no push credential, no
+pull secret and no package visibility to get wrong. The label's reference comes
+from `config.runner.ciImageRef` rather than a repeated string literal, so the
+label and the image it names cannot drift apart.
+
+`buildLayeredImageWithNixDb`, not `buildLayeredImage`. The plain builder copies
+the store paths in but leaves `/nix/var/nix/db` empty, and a nix that cannot
+read its own database treats every path in the image as absent — `nix develop`
+then rebuilds a closure that is already sitting on the disk.
+
+The image provides `/usr/bin/env` and nothing else from the FHS. dockerTools
+links `contents` into `/bin` and creates no `/usr` at all, while `nixos/nix`
+ships the usual `env` — so a workflow that worked on the `nix` label dies here
+on the most common shebang in the ecosystem, `#!/usr/bin/env node`. Every binary
+npm and pnpm install starts that way, which is why `pnpm check` on `skavex`
+failed at its first step with a message naming the interpreter rather than the
+script.
+
+### The garbage collector eats it
+
+`podman system prune -f --all` runs daily, and `--all` removes every image no
+container references. Between jobs nothing references this one, so it is deleted
+like any other cold image — and every job on `nix-node` then dies in about three
+seconds on a pull of a `localhost/` reference no registry can serve. Observed
+2026-09-21 across `cv-template`, `skavex` and `nixos-dotfiles` at once, on
+workflows that were green hours earlier and had not changed.
+
+Two things were wrong, and the second is the one worth carrying forward:
+
+- **Nothing put the image back.** `podman-prune` now carries an `ExecStartPost`
+  that restarts the load unit. `ExecStartPost` rather than `OnSuccess=`, because
+  `OnSuccess` only _starts_ a unit — which is the same trap one layer up.
+- **The load unit had `RemainAfterExit`.** systemd therefore believed it active
+  forever after its first success and would not run it again; and because the
+  unit's own text does not change when the image does, a deploy could not
+  restart it either. So the deploy that installed the prune hook fixed the
+  _next_ deletion and left the current one in place, and every job kept failing
+  until the unit was restarted by hand. Dropping the flag is what makes both
+  healing paths work, since activation starts wanted-but-inactive units. It only
+  ever bought skipping a `podman load` whose layers were already on disk.
 
 ## Identity, and why it is not a Nix string
 

@@ -76,9 +76,15 @@ in
     # A json-file default would put unbounded logs back on the disk and break
     # the forgejo fail2ban jail, which reads the journal.
 
-    # Images are pinned to release tags, so a dangling layer left behind by a
-    # bump is dead weight rather than something to keep. Volumes are never
-    # touched: `docker system prune` without --volumes cannot delete data.
+    # `flags` is deliberately empty, so this is a plain `docker system prune`:
+    # DANGLING LAYERS ONLY. It is not `--all`, so a tagged or digest-pinned
+    # image no container currently references is never touched — which matters
+    # now that three images are pinned by digest and modules/image-archive.nix
+    # keeps a saved copy of every one of them. Volumes are never touched
+    # either: without --volumes, prune cannot delete data.
+    #
+    # The runner's podman prune IS `--all`, and it eats the locally built job
+    # image; see modules/runner/ci-image.nix.
     docker.autoPrune = {
       enable = true;
       dates = "weekly";
