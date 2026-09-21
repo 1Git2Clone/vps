@@ -8,7 +8,10 @@ and the machine boots with no credentials, its own login included.
 Two kinds of consumer:
 
 - **`sops.secrets.*`** — a decrypted file at `/run/secrets/…`, for things read
-  as a file: the restic password, the DKIM key, the database password.
+  as a file: the restic password, the DKIM key, the database password, the
+  syncthing GUI password. The last one is `owner`-ed to `hutao` rather than
+  left at the default `0400 root`, because `syncthing-init` reads it as
+  `services.syncthing.user` and not as root.
 - **`sops.templates.*`** — a rendered file mixing secrets with literal text,
   for things that want `KEY=value`: the acme, grafana, caddy, cloudflared and
   searxng env files — and the tailnet auth key, which is the interesting one.
@@ -80,8 +83,20 @@ why `searxng`'s bcrypt hash reaches caddy that way — see
 
 `mkRunner` does not pass `sops-nix.nixosModules.sops`. The runner holds no age
 key and can decrypt nothing in `secrets.yaml`; the only credential on the box
-is its own runner token, delivered through Hetzner user-data and useless
-elsewhere because it is checked against the live `instance-id` first.
+is its own Forgejo registration pair, delivered through Hetzner user-data.
+
+**The `instance-id` check does not make that pair useless elsewhere**, and it is
+worth being precise about what it does do. The stamp lives in the _staged_ file
+at `/var/lib/forgejo-runner-identity/userdata` and is compared against the live
+metadata value, so a pair staged for one box is not silently adopted by
+another. Forgejo knows nothing about Hetzner instance IDs — it accepts the
+uuid and secret from anywhere. Anyone holding that pair can register a second
+runner daemon against the instance and start receiving jobs.
+
+Which is why `modules/runner/firewall.nix` drops link-local traffic from job
+containers: the same user-data that delivers the pair is readable with one
+`curl` from inside a job unless the `forward` chain stops it. See [the metadata
+service is the host's alone](runner.md#the-metadata-service-is-the-hosts-alone).
 
 This is asserted, not merely intended: `checks.runner-has-no-secrets` is a
 `nix build`, because a check that is only evaluated never runs its builder.

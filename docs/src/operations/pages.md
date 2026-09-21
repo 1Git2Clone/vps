@@ -112,12 +112,13 @@ controls; **an artifact is the one thing that crosses the boundary carrying
 content**, and the caddy allow-list has to admit the `ArtifactService` route or
 publishing does not work at all.
 
-So `pages-pull` deletes every symlink out of the unpacked tree before anything
-is pointed at it:
+So `pages-pull` reduces the unpacked tree to what a published site is actually
+made of, before anything is pointed at it:
 
 ```sh
 unzip -q "$tmp/pages.zip" -d "$tmp/out"
-find "$tmp/out" -type l -delete
+find "$tmp/out" ! -type f ! -type d -delete
+chmod -R a-s,go-w "$tmp/out"
 ```
 
 Info-ZIP already refuses the two obvious escapes — it strips `../`, it warns
@@ -132,13 +133,56 @@ eleven SANs — at `https://pages.<domain>/<owner>/<repo>/x`.
 
 A published site is files and directories; a symlink in one has no legitimate
 use here. They are **deleted rather than rejected** so that one malformed
-artifact cannot wedge a repo's publishing, and `-type l` matches the link
-itself and never its target, so this cannot follow a link out of `$tmp`.
+artifact cannot wedge a repo's publishing, and the match is on the entry itself
+and never its target, so this cannot follow a link out of `$tmp`.
 
-`checks.pages-pull-strips-symlinks` holds it: it asserts the strip sits between
-the unzip and the copy, and then `eval`s **that exact line** — lifted out of the
-evaluated unit, not retyped — against a tree unpacked from a hostile zip built
-in the check.
+The filter is an **allow-list of entry types**, not a list of known-bad ones.
+A zip cannot carry a device node or a socket, but it _can_ carry a fifo, and
+`cp -a` would preserve it into the served tree — where caddy's `file_server`
+blocks forever on `open(2)` the first time anyone requests that path. Deleting
+everything that is not a regular file or a directory also means the next entry
+type an archive format learns does not get a free pass.
+
+The `chmod` covers the other thing a zip carries: a mode. Info-ZIP already
+drops setuid and setgid on extraction, so `a-s` is belt-and-braces against an
+extractor that someday does not — but `go-w` is not redundant. A world-writable
+file in the pages volume is one that any process on this host can rewrite after
+publication, with caddy serving whatever it finds on the next request. It runs
+**after** the delete, so there is no symlink left for `chmod -R` to follow out
+of `$tmp`.
+
+`checks.pages-pull-strips-symlinks` holds both: it asserts the strip sits
+between the unzip and the copy **and that the chmod sits between the strip and
+the copy** — a chmod ordered before the strip would walk a tree that still
+contains symlinks and follow one out, reintroducing the exact escape the strip
+exists to close. It then `eval`s **those exact lines** — lifted out of the
+evaluated unit, not retyped — against a tree unpacked from a hostile zip, with
+a fifo and a world-writable file planted on top of it.
+
+## Why the unit is still root
+
+`pages-pull` runs as `root`, and the reason is the destination rather than the
+work. The tree lands in `/var/lib/docker/volumes/<vol>/_data`, and
+`/var/lib/docker` is `0710 root:root` — nothing unprivileged can even traverse
+it. Adding the unit's user to the `docker` group is not the alternative: that
+group is root-equivalent by design. Dropping the privilege properly means
+moving pages off a docker volume onto a plain bind-mounted directory, which is
+a volume migration rather than an edit.
+
+So root is **bounded** instead. The unit parses a network-fetched ZIP with
+`unzip`, which is the one place in this module where hostile content meets a
+parser, and the mitigation that matters is that winning there reaches nothing
+worth having. Under `ProtectSystem=strict` with `ReadWritePaths` naming only
+`/var/lib/docker/volumes`, plus `PrivateTmp`, `NoNewPrivileges`, an empty
+`CapabilityBoundingSet` and `SystemCallFilter=@system-service`, a compromised
+`unzip` can write to the pages volume and its own private `/tmp` and nothing
+else — not `/var/lib/sops-nix`, not `/etc`, not `/home`, not the docker socket,
+with no way to gain a capability back.
+
+`ReadWritePaths` names the volumes **parent**, not the volume's own `_data`
+path, on purpose: `_data` does not exist until docker first creates the volume,
+and a `ReadWritePaths` entry that does not resolve fails the unit on a fresh
+box.
 
 ## When it runs
 
