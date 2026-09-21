@@ -136,6 +136,29 @@ let
       build-users-group =
       sandbox = false
       CONF
+
+      # /usr/bin/env, which this image otherwise does not have. dockerTools
+      # links `contents` into /bin and creates no /usr at all, while nixos/nix
+      # ships the usual /usr/bin/env — so a workflow that worked on the `nix`
+      # label dies here on anything with the most common shebang in the
+      # ecosystem:
+      #
+      #   #!/usr/bin/env node
+      #
+      # Every binary npm and pnpm install starts that way, so `pnpm check` on
+      # skavex failed at its first step with a message that names the
+      # interpreter rather than the script, which reads like a broken install:
+      #
+      #   sh: node_modules/@typescript/native/bin/tsc:
+      #   /usr/bin/env: bad interpreter: No such file or directory
+      #   [runner]: exitcode '126': failure
+      #
+      # This is the one FHS path worth providing. It is not a step toward
+      # making the image look like a distro: /usr/bin/env is load-bearing for
+      # portable shebangs specifically, which is why it survives in images that
+      # otherwise have no /usr.
+      mkdir -p usr/bin
+      ln -s ${pkgs.coreutils-full}/bin/env usr/bin/env
     '';
   };
 in
@@ -166,8 +189,23 @@ in
     # Ordered BEFORE the runner rather than merely wanted by multi-user: a
     # runner that starts first will advertise the nix-node label and can be
     # handed a job for an image that is not loaded yet, and the job fails on a
-    # pull of a localhost/ reference no registry can serve. RemainAfterExit so
-    # a restart of the runner does not re-run a load that already happened.
+    # pull of a localhost/ reference no registry can serve.
+    #
+    # NO RemainAfterExit, and its absence is the fix for a real outage rather
+    # than a style choice. With it set, systemd considered this unit active
+    # forever after its first success, so it never ran again — and because the
+    # unit's own definition does not change when anything else in this file
+    # does, a deploy could not restart it either. When the daily prune deleted
+    # the image, `deploy` installed the prune hook that would prevent the NEXT
+    # deletion and left the CURRENT one in place: every job on the label kept
+    # failing in three seconds until the unit was restarted by hand.
+    #
+    # Without it the unit goes inactive on success, which is what makes both
+    # healing paths work: activation starts wanted-but-inactive units, so a
+    # deploy reloads the image, and so does every restart of the runner. The
+    # flag only ever bought skipping a `podman load` whose layers are already
+    # on disk — a second or two, traded for a failure mode that needed an ssh
+    # session to clear.
     systemd.services.forgejo-runner-ci-image = {
       description = "Load the nix+node job image into podman";
       wantedBy = [ "multi-user.target" ];
@@ -178,7 +216,6 @@ in
 
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = true;
       };
 
       # `podman load` is idempotent for an identical archive and cheap when the
