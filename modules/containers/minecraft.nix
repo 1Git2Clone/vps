@@ -141,7 +141,17 @@ in
       TYPE = "FABRIC";
       VERSION = "26.1.2";
 
-      MEMORY = "6G";
+      # -Xms/-Xmx, split. itzg's MEMORY sets BOTH to the same value, so the JVM
+      # commits the whole heap at boot and never gives it back — which is why an
+      # idle server sat at 4+ G of RSS. A low floor plus G1's periodic
+      # concurrent GC (JEP 346) lets it uncommit while nobody is on.
+      INIT_MEMORY = "1G";
+      MAX_MEMORY = "6G";
+
+      # G1 only uncommits at the end of a GC cycle, and an idle server triggers
+      # no GCs at all — so without a periodic one the heap stays at its
+      # high-water mark forever. Costs one concurrent cycle per 5 min idle.
+      JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
 
       ONLINE_MODE = "TRUE";
       ENABLE_WHITELIST = "TRUE";
@@ -176,8 +186,8 @@ in
   # Second world. Same image, its own volume, its own RCON password — the two
   # consoles are deliberately not interchangeable.
   #
-  # MEMORY is 4G rather than 6G: the box is a cx43 (16 G) and also runs mail,
-  # forgejo, grafana and tempo. 6G + 6G leaves no headroom.
+  # MAX_MEMORY is 4G rather than 6G: the box is a cx43 (16 G) and also runs
+  # mail, forgejo, grafana and tempo. 6G + 6G leaves no headroom.
   #
   # VERSION IS 1.21.1, NOT world 1's 26.1.2. The zombie mods this world exists
   # for are built for 1.21.1 and stop there, so the version is the whole point
@@ -196,7 +206,17 @@ in
       TYPE = "FABRIC";
       VERSION = "1.21.1";
 
-      MEMORY = "4G";
+      # -Xms/-Xmx, split. itzg's MEMORY sets BOTH to the same value, so the JVM
+      # commits the whole heap at boot and never gives it back — which is why an
+      # idle server sat at 4+ G of RSS. A low floor plus G1's periodic
+      # concurrent GC (JEP 346) lets it uncommit while nobody is on.
+      INIT_MEMORY = "1G";
+      MAX_MEMORY = "4G";
+
+      # G1 only uncommits at the end of a GC cycle, and an idle server triggers
+      # no GCs at all — so without a periodic one the heap stays at its
+      # high-water mark forever. Costs one concurrent cycle per 5 min idle.
+      JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
 
       ONLINE_MODE = "TRUE";
       ENABLE_WHITELIST = "TRUE";
