@@ -99,6 +99,20 @@
       runner-hetzner = mkRunner [
         { disko.devices.disk.main.device = "/dev/sda"; }
       ];
+
+      # ── The Minecraft mod compatibility check ──────────────────────────────
+      # Built from the EVALUATED container config, not a restated list, so the
+      # slugs and MC versions it validates are the ones the host actually ships.
+      # See tests/minecraft-mods.nix for the whole rationale, the itzg
+      # `:beta`/`:alpha`/`?` grammar it implements, and why it needs
+      # `sandbox = false` to reach api.modrinth.com.
+      #
+      # vps-hetzner rather than vps: the two share every container, and the
+      # deploy target is the one whose mod lists matter.
+      minecraftMods = import ./tests/minecraft-mods.nix {
+        inherit nixpkgs system;
+        containers = self.nixosConfigurations.vps-hetzner.config.virtualisation.oci-containers.containers;
+      };
     in
     {
       nixosConfigurations = {
@@ -340,6 +354,18 @@
                       "touch $out";
                 in
                 pkgs.runCommand "runner-has-no-secrets" { } script;
+
+              # Every Modrinth slug the Minecraft containers declare, checked
+              # against api.modrinth.com for the exact MC version + loader each
+              # container runs. The lists come from the evaluated config (see
+              # minecraftMods above), so a world that adds or drops a slug is
+              # covered without this file changing.
+              #
+              # NEEDS THE NETWORK, so it is __noChroot and therefore only builds
+              # where `sandbox = false` — the Forgejo runner already is, and the
+              # GitHub mirror's step passes `--option sandbox false` for this one
+              # build. Locally use `nix run .#minecraft-mod-check`.
+              minecraft-mods = minecraftMods.check;
 
               # The one-way rule, proven rather than asserted. See the header of
               # tests/runner-firewall.nix — the property it protects is rule
@@ -857,6 +883,19 @@
               '';
             }
           );
+        };
+
+        # ── Minecraft mod compatibility, locally ───────────────────────────────
+        #   nix run .#minecraft-mod-check
+        #
+        # The same script the `minecraft-mods` check runs, but as an ordinary
+        # process rather than a sandboxed build — which is the whole point: it
+        # queries api.modrinth.com, and a workstation's Nix builds in a sandbox
+        # with no network. This builds offline and runs with your shell's
+        # network, so no `--option sandbox false` is needed.
+        minecraft-mod-check = {
+          type = "app";
+          program = nixpkgs.lib.getExe minecraftMods.modCheck;
         };
 
         default = {

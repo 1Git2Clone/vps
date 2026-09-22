@@ -158,3 +158,17 @@ jobs:
         run: |
           nix build --print-build-logs \
             .#checks.x86_64-linux.pages-pull-strips-symlinks
+
+      # Every Modrinth slug the Minecraft containers declare, validated against
+      # api.modrinth.com for the exact MC version + loader each container runs.
+      # The lists are read from the evaluated config, so this cannot go stale
+      # the way a hand-checked list does.
+      #
+      # `--option sandbox false` for this ONE build: the check is __noChroot
+      # because it needs the network, and a GitHub runner's Nix sandboxes builds
+      # by default, where Nix refuses to build a __noChroot derivation. The
+      # Forgejo runner needs no flag — its image already sets sandbox = false.
+      - name: Check the Minecraft mod lists against Modrinth
+        run: |
+          nix build --print-build-logs --option sandbox false \
+            .#checks.x86_64-linux.minecraft-mods
