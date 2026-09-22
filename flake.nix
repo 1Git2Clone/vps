@@ -99,6 +99,20 @@
       runner-hetzner = mkRunner [
         { disko.devices.disk.main.device = "/dev/sda"; }
       ];
+
+      # ── The Minecraft mod compatibility check ──────────────────────────────
+      # Built from the EVALUATED container config, not a restated list, so the
+      # slugs and MC versions it validates are the ones the host actually ships.
+      # See tests/minecraft-mods.nix for the whole rationale, the itzg
+      # `:beta`/`:alpha`/`?` grammar it implements, and why it needs
+      # `sandbox = false` to reach api.modrinth.com.
+      #
+      # vps-hetzner rather than vps: the two share every container, and the
+      # deploy target is the one whose mod lists matter.
+      minecraftMods = import ./tests/minecraft-mods.nix {
+        inherit nixpkgs system;
+        containers = self.nixosConfigurations.vps-hetzner.config.virtualisation.oci-containers.containers;
+      };
     in
     {
       nixosConfigurations = {
@@ -762,7 +776,26 @@
         }
       );
 
-      packages.${system}.default = vps.config.system.build.toplevel;
+      packages.${system} = {
+        default = vps.config.system.build.toplevel;
+
+        # ── The Minecraft mod compatibility check ──────────────────────────────
+        #   nix build .#minecraft-mods --option sandbox false
+        #   nix run .#minecraft-mod-check   (no sandbox trick needed)
+        #
+        # Every Modrinth slug the Minecraft containers declare, checked against
+        # api.modrinth.com for the exact MC version + loader each container runs.
+        # The lists come from the evaluated config (see minecraftMods above), so a
+        # world that adds or drops a slug is covered without this file changing.
+        #
+        # A PACKAGE AND NOT A `checks` ENTRY, deliberately: it needs the network,
+        # so it is __noChroot, and Nix refuses to build a __noChroot derivation
+        # while `sandbox = true`. In `checks` that would not fail this output
+        # alone — it fails a plain `nix flake check` and takes every other check
+        # with it on any machine with a normal sandbox. Both CI files build it by
+        # name instead. See the header of tests/minecraft-mods.nix.
+        minecraft-mods = minecraftMods.check;
+      };
 
       apps.${system} = {
         # ── The handbook, served locally ───────────────────────────────────────
@@ -857,6 +890,19 @@
               '';
             }
           );
+        };
+
+        # ── Minecraft mod compatibility, locally ───────────────────────────────
+        #   nix run .#minecraft-mod-check
+        #
+        # The same script the `minecraft-mods` package runs, but as an ordinary
+        # process rather than a sandboxed build — which is the whole point: it
+        # queries api.modrinth.com, and a workstation's Nix builds in a sandbox
+        # with no network. This builds offline and runs with your shell's
+        # network, so no `--option sandbox false` is needed.
+        minecraft-mod-check = {
+          type = "app";
+          program = nixpkgs.lib.getExe minecraftMods.modCheck;
         };
 
         default = {

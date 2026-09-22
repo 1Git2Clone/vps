@@ -106,8 +106,9 @@ let
     "no-chat-reports"
     "placeholder-api"
     "serversleep"
-    # :alpha, not :beta — at 1.21.1 this mod has never published past alpha.
-    # The suffix is the only thing standing between this list and a failed start.
+    # :alpha, not :beta — at 1.21.1 this mod has published no RELEASE, so a bare
+    # slug fails the start. :beta would install, but stops at fabric-1.21.1-1.4.10
+    # (March 2025); :alpha is what reaches the newest build for this version.
     "sound-physics-remastered:alpha"
     "voxy-server-side"
     "yacl"
