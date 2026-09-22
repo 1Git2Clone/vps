@@ -355,18 +355,6 @@
                 in
                 pkgs.runCommand "runner-has-no-secrets" { } script;
 
-              # Every Modrinth slug the Minecraft containers declare, checked
-              # against api.modrinth.com for the exact MC version + loader each
-              # container runs. The lists come from the evaluated config (see
-              # minecraftMods above), so a world that adds or drops a slug is
-              # covered without this file changing.
-              #
-              # NEEDS THE NETWORK, so it is __noChroot and therefore only builds
-              # where `sandbox = false` — the Forgejo runner already is, and the
-              # GitHub mirror's step passes `--option sandbox false` for this one
-              # build. Locally use `nix run .#minecraft-mod-check`.
-              minecraft-mods = minecraftMods.check;
-
               # The one-way rule, proven rather than asserted. See the header of
               # tests/runner-firewall.nix — the property it protects is rule
               # ORDER in two nftables chains, which review cannot see and which
@@ -788,7 +776,26 @@
         }
       );
 
-      packages.${system}.default = vps.config.system.build.toplevel;
+      packages.${system} = {
+        default = vps.config.system.build.toplevel;
+
+        # ── The Minecraft mod compatibility check ──────────────────────────────
+        #   nix build .#minecraft-mods --option sandbox false
+        #   nix run .#minecraft-mod-check   (no sandbox trick needed)
+        #
+        # Every Modrinth slug the Minecraft containers declare, checked against
+        # api.modrinth.com for the exact MC version + loader each container runs.
+        # The lists come from the evaluated config (see minecraftMods above), so a
+        # world that adds or drops a slug is covered without this file changing.
+        #
+        # A PACKAGE AND NOT A `checks` ENTRY, deliberately: it needs the network,
+        # so it is __noChroot, and Nix refuses to build a __noChroot derivation
+        # while `sandbox = true`. In `checks` that would not fail this output
+        # alone — it fails a plain `nix flake check` and takes every other check
+        # with it on any machine with a normal sandbox. Both CI files build it by
+        # name instead. See the header of tests/minecraft-mods.nix.
+        minecraft-mods = minecraftMods.check;
+      };
 
       apps.${system} = {
         # ── The handbook, served locally ───────────────────────────────────────
@@ -888,7 +895,7 @@
         # ── Minecraft mod compatibility, locally ───────────────────────────────
         #   nix run .#minecraft-mod-check
         #
-        # The same script the `minecraft-mods` check runs, but as an ordinary
+        # The same script the `minecraft-mods` package runs, but as an ordinary
         # process rather than a sandboxed build — which is the whole point: it
         # queries api.modrinth.com, and a workstation's Nix builds in a sandbox
         # with no network. This builds offline and runs with your shell's

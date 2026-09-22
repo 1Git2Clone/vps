@@ -164,11 +164,15 @@ jobs:
       # The lists are read from the evaluated config, so this cannot go stale
       # the way a hand-checked list does.
       #
-      # `--option sandbox false` for this ONE build: the check is __noChroot
+      # `--option sandbox false` for this ONE build: the derivation is __noChroot
       # because it needs the network, and a GitHub runner's Nix sandboxes builds
       # by default, where Nix refuses to build a __noChroot derivation. The
       # Forgejo runner needs no flag — its image already sets sandbox = false.
+      #
+      # A package rather than a check, and named here rather than reached by
+      # `nix flake check`: a __noChroot entry in `checks` fails that command
+      # outright on any sandboxed machine, every other check with it.
       - name: Check the Minecraft mod lists against Modrinth
         run: |
           nix build --print-build-logs --option sandbox false \
-            .#checks.x86_64-linux.minecraft-mods
+            .#packages.x86_64-linux.minecraft-mods
