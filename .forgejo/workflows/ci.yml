@@ -177,11 +177,15 @@ jobs:
       # The lists are read from the evaluated config, so this cannot go stale
       # the way a hand-checked list does.
       #
-      # NEEDS THE NETWORK: the check is __noChroot, which Nix only allows when
-      # sandboxing is off. This runner already sets `sandbox = false` (see the
-      # NIX_CONFIG note above), so no flag is needed here — unlike the GitHub
+      # NEEDS THE NETWORK: the derivation is __noChroot, which Nix only allows
+      # when sandboxing is off. This runner already sets `sandbox = false` (see
+      # the NIX_CONFIG note above), so no flag is needed here — unlike the GitHub
       # mirror, whose step passes `--option sandbox false`.
+      #
+      # A package rather than a check, and named here rather than reached by
+      # `nix flake check`: a __noChroot entry in `checks` fails that command
+      # outright on any sandboxed machine, every other check with it.
       - name: Check the Minecraft mod lists against Modrinth
         run: |
           nix build --print-build-logs \
-            .#checks.x86_64-linux.minecraft-mods
+            .#packages.x86_64-linux.minecraft-mods

@@ -17,22 +17,34 @@
 # The compatibility rule is itzg's own, not an invention here. Per its docs,
 # MODRINTH_PROJECTS entries are `[prefix:]project[:version|:release_type][?]`:
 #
-#   project            newest RELEASE (MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE
-#                      defaults to release)
+#   project            newest build of the container's DEFAULT CHANNEL, which is
+#                      MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE — release unless the
+#                      container says otherwise, and read out of the env here
+#                      rather than assumed, so that variable cannot drift from
+#                      what this check enforces
 #   project:beta       newest release OR beta
 #   project:alpha      newest release, beta OR alpha
-#   project:<ver|id>   a pinned version, which itzg installs WITHOUT checking
-#                      compatibility — so a pinned entry is only reported as
-#                      missing when Modrinth does not have it at all
+#   project:<id>       a pinned version ID, which per itzg's docs "will override
+#                      Minecraft and loader compatibility checks" — so the only
+#                      question worth asking is whether Modrinth has it at all,
+#                      and the lookup for it is deliberately UNFILTERED
+#   project:<number>   a pinned version NUMBER. That override is documented for
+#                      IDs alone, so this one is looked up unfiltered and THEN
+#                      checked against our MC version + loader.
 #   project?           optional: no compatible build is a warning, not a failure
-#   fabric:project     loader override (a Fabric mod on a non-Fabric server)
+#   fabric:project     loader override (a Fabric mod on a non-Fabric server).
+#                      itzg documents datapack/fabric/forge/paper; neoforge and
+#                      quilt are accepted here too, which is only more lenient.
 #
 # `:beta`/`:alpha` are load-bearing in this repo, not decoration: at 1.21.1
-# sound-physics-remastered has never published past alpha, and `:alpha` is the
-# only thing standing between that list and a failed start. Getting the rule
-# backwards would make the check bless a slug the image then refuses to install.
+# sound-physics-remastered has published no RELEASE at all, so the bare slug
+# fails the start outright. `:alpha` is what reaches the newest build
+# (fabric-1.21.1-1.5.1, 2025-09-25); `:beta` would also install, but pins that
+# world to fabric-1.21.1-1.4.10 from March 2025 — so the suffix chooses WHICH
+# build, not whether there is one. Getting the rule backwards would make the
+# check bless a slug the image then refuses to install.
 #
-# WHY THIS IS NOT PART OF `nix flake check`'s BUILD SET ON A WORKSTATION.
+# WHY THIS IS A PACKAGE AND NOT A `checks` ENTRY.
 # It queries api.modrinth.com, so it needs the network, and Nix builds in a
 # sandbox with no network by default. A derivation that needs the network must be
 # marked __noChroot, and Nix refuses to build one while `sandbox = true`:
@@ -40,10 +52,12 @@
 #   error: derivation '...' has '__noChroot' set, but that's not allowed when
 #   'sandbox' is 'true'
 #
-# The Forgejo runner's image already sets `sandbox = false`, so `checks.minecraft-mods`
-# builds there as-is; the GitHub mirror runs with the default sandbox, so its CI
-# step passes `--option sandbox false` for this one build. Locally, use the app
-# instead — `nix run .#minecraft-mod-check` builds the script offline and runs it
+# In `checks` that error is not confined to this derivation: it fails a plain
+# `nix flake check` outright and takes every OTHER check down with it on any
+# machine with a normal sandbox. So it lives in `packages.minecraft-mods` and CI
+# builds it by name — the Forgejo runner's image already sets `sandbox = false`,
+# and the GitHub mirror's step passes `--option sandbox false` for this one
+# build. Locally, use the app instead — it builds the script offline and runs it
 # with your shell's network:
 #
 #   nix run .#minecraft-mod-check
@@ -103,6 +117,11 @@ let
         {
           version = env.VERSION;
           loader = loaderFor (env.TYPE or "VANILLA");
+          # What a BARE slug resolves to. itzg's default is release, but a
+          # container is free to say otherwise, and a check that hardcoded
+          # `release` would be a second copy of exactly the policy this file
+          # exists to stop restating.
+          defaultChannel = env.MODRINTH_PROJECTS_DEFAULT_VERSION_TYPE or "release";
           projects = splitProjects env.MODRINTH_PROJECTS;
         }
       else
@@ -160,7 +179,7 @@ let
       echo "Modrinth compatibility — $servers server(s)"
       checked=0
 
-      while IFS=$'\t' read -r server version loader project; do
+      while IFS=$'\t' read -r server version loader default project; do
         checked=$((checked + 1))
 
         optional=0
@@ -187,20 +206,33 @@ let
         fi
 
         # A release-type spec selects a channel; anything else is a pinned
-        # version number or ID.
+        # version number or ID. No spec at all means the container's own default.
         pinned=""
-        channel=release
+        channel=$default
         case "$spec" in
-          "" | release) channel=release ;;
-          beta) channel=beta ;;
-          alpha) channel=alpha ;;
+          "") ;;
+          release | beta | alpha) channel=$spec ;;
           *) pinned=$spec ;;
         esac
 
+        # UNFILTERED for a pinned entry, and that is the point: itzg documents
+        # a version ID as overriding the MC and loader compatibility checks, so
+        # asking Modrinth only for versions matching OUR version and loader would
+        # report a deliberate cross-version pin as missing. Compatibility is
+        # asked below instead, and only for a pin that turns out to be a version
+        # number rather than an ID.
+        filter=(
+          -G
+          --data-urlencode "loaders=[\"$loader\"]"
+          --data-urlencode "game_versions=[\"$version\"]"
+        )
+        if [ -n "$pinned" ]; then
+          filter=()
+        fi
+
         if ! resp=$(curl -sS -m 30 --retry 3 --retry-delay 2 \
-            -G -H "User-Agent: $UA" -w $'\n%{http_code}' \
-            --data-urlencode "loaders=[\"$loader\"]" \
-            --data-urlencode "game_versions=[\"$version\"]" \
+            -H "User-Agent: $UA" -w $'\n%{http_code}' \
+            "''${filter[@]}" \
             "$API/project/$slug/version"); then
           record "$server" "$project" "$optional" "request failed (network or DNS)"
           continue
@@ -223,13 +255,31 @@ let
         fi
 
         if [ -n "$pinned" ]; then
-          chosen=$(jq -r --arg p "$pinned" \
-            '[.[] | select(.id == $p or .version_number == $p)] | .[0].version_number // empty' \
+          # Matched by .id -> itzg skips the compatibility check, so merely
+          # existing is enough. Matched by .version_number -> that documented
+          # override does not apply, so the build still has to carry our loader
+          # and MC version.
+          verdict=$(jq -r --arg p "$pinned" --arg l "$loader" --arg v "$version" \
+            '([.[] | select(.id == $p or .version_number == $p)] | .[0]) as $m
+             | if $m == null then "missing"
+               elif $m.id == $p then "ok " + $m.version_number
+               elif ($m.loaders | index($l)) and ($m.game_versions | index($v))
+                 then "ok " + $m.version_number
+               else "incompatible " + $m.version_number
+               end' \
             <<<"$body")
-          if [ -z "$chosen" ]; then
-            record "$server" "$project" "$optional" "pinned version '$pinned' not found"
-            continue
-          fi
+          case "$verdict" in
+            missing)
+              record "$server" "$project" "$optional" "pinned version '$pinned' is not on Modrinth"
+              continue
+              ;;
+            incompatible*)
+              record "$server" "$project" "$optional" \
+                "pinned version '$pinned' has no $loader build for MC $version (pin the version ID to override)"
+              continue
+              ;;
+          esac
+          chosen=''${verdict#ok }
         else
           # Newest-first from the API, so the first match is the one itzg would
           # install. $t is the set of version types the channel admits.
@@ -247,7 +297,7 @@ let
         fi
 
         printf '  %-12s %-30s %s\n' "$server" "$project" "$chosen"
-      done < <(jq -r 'to_entries[] | .key as $s | .value as $v | $v.projects[] | [$s, $v.version, $v.loader, .] | @tsv' "$SERVERS")
+      done < <(jq -r 'to_entries[] | .key as $s | .value as $v | $v.projects[] | [$s, $v.version, $v.loader, $v.defaultChannel, .] | @tsv' "$SERVERS")
 
       if [ "$checked" -eq 0 ]; then
         echo "minecraft-mod-check: MODRINTH_PROJECTS is declared but empty — refusing to pass vacuously" >&2
