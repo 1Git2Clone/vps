@@ -56,6 +56,25 @@ let
     abuse@${domain} ${aliasTarget}
   '';
 
+  # DMS runs its own fail2ban (ENABLE_FAIL2BAN below) and its stock
+  # [DEFAULT] exempts only 127.0.0.1/8. Roundcube's IMAP logins arrive from a
+  # docker address, so six mistyped webmail passwords in a week would ban
+  # ROUNDCUBE — webmail down for everyone for a week, and trivially triggered
+  # by anyone on the login page. Same for any client whose connection came
+  # through docker's userland proxy with the gateway as its source.
+  #
+  # DMS copies this file to jail.d/user-jail.local at startup, which fail2ban
+  # reads after jail.local, so only ignoreip changes: 6 failures a week still
+  # buys a week's ban. Mounted nested inside dms_config like virtualAliases,
+  # so a hand-made fail2ban-jail.cf in that volume is shadowed by this one.
+  #
+  # Brute force through webmail is capped before it gets here: caddy's login
+  # zone (10 a minute per address) and Roundcube's per-account lockout.
+  fail2banJail = pkgs.writeText "fail2ban-jail.cf" ''
+    [DEFAULT]
+    ignoreip = 127.0.0.1/8 ::1 172.16.0.0/12 100.64.0.0/10
+  '';
+
   # Roundcube's managesieve plugin defaults to a plaintext localhost connection,
   # which is wrong on a container network: the host is the mailserver container
   # and the TLS peer name must match the certificate, not the container name.
@@ -190,6 +209,7 @@ in
         "dms_config:/tmp/docker-mailserver"
         # Nested inside the volume above; see the comment on virtualAliases.
         "${virtualAliases}:/tmp/docker-mailserver/postfix-virtual.cf:ro"
+        "${fail2banJail}:/tmp/docker-mailserver/fail2ban-jail.cf:ro"
         "/var/lib/acme/${domain}:${certDir}:ro"
         "/etc/localtime:/etc/localtime:ro"
         "${dkimKey}:${dkimKeyInContainer}:ro"
