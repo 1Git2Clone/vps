@@ -295,6 +295,19 @@ let
     {
       host = "status.${domain}";
       upstream = "kuma:3001";
+
+      # The public status page never opens socket.io — kuma 2.5.5 lists
+      # /status* and / in noSocketIOPages and loads everything over
+      # /api/status-page/* — so /socket.io/ is ONLY the admin login and
+      # dashboard. It is closed here, and open on the tailnet copy of this
+      # same name further down.
+      #
+      # A rate limit could not do this job: kuma's login is a message INSIDE
+      # an open websocket, so caddy sees one request however many passwords go
+      # through it. kuma's own limiter (20 a minute) is then the only layer,
+      # and one bad line there is a brute-force hole. Not exposing the socket
+      # at all is the layer that cannot be one line away from failing.
+      blockedPaths = [ "/socket.io/*" ];
     }
     {
       host = "pages.${domain}";
@@ -385,6 +398,15 @@ let
       tailnet = true;
     }
     {
+      # status.<domain> AGAIN, on the tailnet listener and with /socket.io/
+      # open: kuma's admin dashboard and login, for tailnet devices only. The
+      # public name resolves to the public address, so a tailnet device only
+      # lands here if its resolver hands it the tailnet address for this name.
+      host = "status.${domain}";
+      upstream = "kuma:3001";
+      tailnet = true;
+    }
+    {
       host = "grafana.${domain}";
 
       # A dashboard is one request per panel per refresh.
@@ -433,6 +455,10 @@ let
 
   tailnetSites = lib.filter (s: s.tailnet or false) sites;
 
+  # status.<domain> is served on both listeners, and rate-limit zones are
+  # named per site, so the tailnet copy's zones carry a suffix.
+  zoneName = site: site.host + lib.optionalString (site.tailnet or false) "-tailnet";
+
   # Tabs and this exact shape are what `caddy fmt` produces, so `caddy validate`
   # on the generated file is clean rather than warning about formatting every
   # time someone checks it.
@@ -480,7 +506,7 @@ let
         ++ lib.optionals (rateLimitOf site != null || site ? loginMatch) (
           [ "\trate_limit {" ]
           ++ lib.optionals (rateLimitOf site != null) [
-            "\t\tzone ${site.host} {"
+            "\t\tzone ${zoneName site} {"
             "\t\t\tmatch {"
             "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
             "\t\t\t}"
@@ -490,7 +516,7 @@ let
             "\t\t}"
           ]
           ++ lib.optionals (site ? basicAuthRateLimit) [
-            "\t\tzone ${site.host}-basic {"
+            "\t\tzone ${zoneName site}-basic {"
             "\t\t\tmatch {"
             "\t\t\t\theader Authorization \"Basic *\""
             "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
@@ -501,7 +527,7 @@ let
             "\t\t}"
           ]
           ++ lib.optionals (site ? loginMatch) [
-            "\t\tzone ${site.host}-login {"
+            "\t\tzone ${zoneName site}-login {"
             "\t\t\tmatch {"
             "\t\t\t\tmethod POST"
             "\t\t\t\t${site.loginMatch}"
@@ -522,6 +548,12 @@ let
           ++ lib.mapAttrsToList (name: value: "\t\t${name} \"${value}\"") h.values
           ++ [ "\t}" ]
         ) (site.headers or [ ])
+        # `respond` is ordered before reverse_proxy, so a blocked path never
+        # reaches the upstream. 404 rather than 403: nothing to see here.
+        ++ lib.optionals (site ? blockedPaths) [
+          "\t@blocked path ${lib.concatStringsSep " " site.blockedPaths}"
+          "\trespond @blocked 404"
+        ]
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
         ++ lib.optionals (site ? basicAuth) [
