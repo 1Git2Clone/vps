@@ -156,9 +156,10 @@
       default = 8443;
       description = ''
         Caddy's SECOND https listener, carrying the vhosts that are meant for
-        the tailnet alone — dozzle, grafana and syncthing. Two places must
-        agree on it: caddy publishes it, and the firewall's prerouting chain
-        rewrites tailscale0's port 443 onto it, which is what lets the URL be
+        the tailnet alone — dozzle, grafana, syncthing, and the admin side of
+        status. Two places must agree on it: caddy publishes it, and the
+        firewall's prerouting chain rewrites tailscale0's port 443 onto it,
+        which is what lets the URL be
         `https://dozzle.<domain>` with no port in it.
 
         It is published on 0.0.0.0 like every other container port and kept

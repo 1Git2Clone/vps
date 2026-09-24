@@ -1,7 +1,10 @@
 # ==============================================================================
 # Uptime Kuma — status page
 # ==============================================================================
-# Reached only through caddy, at status.<domain>. It publishes no port.
+# Reached only through caddy. It publishes no port. The public status page is
+# status.<domain>. The admin dashboard and login are tailnet-only: caddy
+# closes /socket.io/ on the public listener and opens it on the tailnet copy
+# of the same name (see the status sites in modules/containers/caddy.nix).
 #
 # NOTE ON THE ADMIN ACCOUNT: uptime-kuma has no environment variable or config
 # file that seeds it — the first visitor to the fresh instance is prompted to
