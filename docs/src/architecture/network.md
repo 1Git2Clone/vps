@@ -153,9 +153,11 @@ iifname tailscale0 udp dport 443 redirect to :8443
 ```
 
 The udp line is HTTP/3. The tailnet listener speaks it too (8443/udp is
-published, and advertises `h3=":8443"`), and a browser that learned the public
-listener's `h3=":443"` sends QUIC to udp 443 at the tailnet address once split
-DNS points `git.` or `status.` there. Without the redirect that traffic hung —
+published), and its sites advertise `h3=":443"` rather than caddy's default
+`h3=":8443"`: udp 8443 sent directly over the tailnet did not get through when
+measured, while udp 443 through this redirect did. A browser that learned the
+public listener's `h3=":443"` takes the same path once split DNS points `git.`
+or `status.` at the tailnet address. Without the redirect that traffic hung —
 Forgejo's webpack chunk loads failed on it — and with docker's rule it would
 reach the public listener, whose copies of those names close the admin paths.
 

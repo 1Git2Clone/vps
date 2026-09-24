@@ -537,6 +537,17 @@ let
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
           "\theader ${hsts}"
         ]
+        # HTTP/3 ON THE TAILNET, ADVERTISED ON 443. caddy fills Alt-Svc from
+        # the LISTENER's port, so the tailnet sites would say h3=":8443". udp
+        # 8443 sent directly over the tailnet does not get through — measured
+        # after the deploy that published it, while tcp 8443 direct and udp
+        # 443 redirected by the firewall both did — and a browser following
+        # that advertisement hung exactly as before. 443 is also the port
+        # every tailnet client already uses for these names, so the
+        # advertisement names the path that works.
+        ++ lib.optionals (site.tailnet or false) [
+          "\theader Alt-Svc \"h3=\\\":443\\\"; ma=2592000\""
+        ]
         # Zones keyed on {remote_host} — the client IP — so one address's flood
         # cannot exhaust the budget for everyone. Zone names start with the
         # host, so every site keeps separate counters. See `defaultRateLimit`
@@ -687,11 +698,11 @@ in
       # accept` reaches them.
       "${toString tailnetHttpPort}:${toString tailnetHttpPort}"
       "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}"
-      # HTTP/3 on the tailnet listener. It advertises `h3=":8443"`, which a
-      # tailnet client reaches directly (the policy's 8443 grant covers udp),
-      # and the firewall redirects tailscale0's udp 443 here as well, so a
-      # browser still holding the public listener's `h3=":443"` lands on this
-      # listener too. Kept private like its tcp twin: in neither allow-list.
+      # HTTP/3 on the tailnet listener. The firewall redirects tailscale0's
+      # udp 443 here, and the tailnet sites advertise `h3=":443"` (see the
+      # Alt-Svc override above), so every tailnet client takes that path —
+      # including a browser still holding the public listener's `h3=":443"`.
+      # Kept private like its tcp twin: in neither allow-list.
       "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}/udp"
     ];
 
