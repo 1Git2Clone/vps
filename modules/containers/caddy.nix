@@ -526,16 +526,6 @@ let
       ++ lib.optionals anyRateLimit [
         "\torder rate_limit before basic_auth"
       ]
-      # Caddy enables HTTP/3 on every server it builds, and advertises it with
-      # the LISTENER's port — so the tailnet sites would hand the browser
-      # `Alt-Svc: h3=":${toString tailnetHttpsPort}"`. Nothing publishes that
-      # port over udp and the firewall rewrites tcp only, so every visit would
-      # open with a QUIC attempt into a black hole before falling back.
-      ++ lib.optionals (tailnetSites != [ ]) [
-        "\tservers :${toString tailnetHttpsPort} {"
-        "\t\tprotocols h1 h2"
-        "\t}"
-      ]
       ++ [
         "}"
       ]
@@ -546,21 +536,6 @@ let
           "${site.host}${lib.optionalString (site.tailnet or false) ":${toString tailnetHttpsPort}"} {"
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
           "\theader ${hsts}"
-        ]
-        # NO HTTP/3 ADVERTISEMENT ON THE PUBLIC COPY OF A HALF-PUBLIC NAME.
-        # caddy's :443 answers with `Alt-Svc: h3=":443"; ma=2592000`, and a
-        # browser that saw it publicly keeps it for 30 days. Once split DNS
-        # hands it the tailnet address, it tries HTTP/3 over UDP 443 there —
-        # and only TCP 443 is redirected to the tailnet listener, so those
-        # requests hang and fail. Forgejo's webpack chunk loads broke exactly
-        # this way. Dropping the header here means no device learns a promise
-        # the tailnet side cannot keep; the other public sites keep HTTP/3.
-        #
-        # UDP 443 over the tailnet NOT reaching caddy is the safe half of this:
-        # if it did, it would land on the PUBLIC listener, where the admin
-        # paths are 404.
-        ++ lib.optionals (!(site.tailnet or false) && lib.elem site.host splitDnsHosts) [
-          "\theader -Alt-Svc"
         ]
         # Zones keyed on {remote_host} — the client IP — so one address's flood
         # cannot exhaust the budget for everyone. Zone names start with the
@@ -712,6 +687,12 @@ in
       # accept` reaches them.
       "${toString tailnetHttpPort}:${toString tailnetHttpPort}"
       "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}"
+      # HTTP/3 on the tailnet listener. It advertises `h3=":8443"`, which a
+      # tailnet client reaches directly (the policy's 8443 grant covers udp),
+      # and the firewall redirects tailscale0's udp 443 here as well, so a
+      # browser still holding the public listener's `h3=":443"` lands on this
+      # listener too. Kept private like its tcp twin: in neither allow-list.
+      "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}/udp"
     ];
 
     volumes = [

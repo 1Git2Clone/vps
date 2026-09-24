@@ -143,13 +143,21 @@ Three of those services also answer by name — `dozzle.`, `grafana.` and
 vhosts and nothing else; like every other private port it is published on
 `0.0.0.0` and kept private by being in neither allow-list.
 
-What makes the URL portless is two lines in a `nat` prerouting chain:
+What makes the URL portless is a `nat` prerouting chain:
 
 ```text
 type nat hook prerouting priority -110; policy accept;
 iifname tailscale0 tcp dport 443 redirect to :8443
 iifname tailscale0 tcp dport 80  redirect to :8880
+iifname tailscale0 udp dport 443 redirect to :8443
 ```
+
+The udp line is HTTP/3. The tailnet listener speaks it too (8443/udp is
+published, and advertises `h3=":8443"`), and a browser that learned the public
+listener's `h3=":443"` sends QUIC to udp 443 at the tailnet address once split
+DNS points `git.` or `status.` there. Without the redirect that traffic hung —
+Forgejo's webpack chunk loads failed on it — and with docker's rule it would
+reach the public listener, whose copies of those names close the admin paths.
 
 Two details in those lines do all the work, and they are independent:
 
