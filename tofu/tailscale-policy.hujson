@@ -104,7 +104,9 @@
 		//         here (flake.nix pins -p 2222 precisely because 22 is forgejo
 		//         and Tailscale SSH cannot be scripted past its re-auth check).
 		//         Drop this port and deploys stop working.
-		//   22    forgejo's ssh, for git over the tailnet
+		//   22    forgejo's ssh, for git over the tailnet. Forgejo's only because
+		//         Tailscale SSH is off on the vps (modules/services.nix); with it
+		//         on, tailscaled owned this port on the tailnet address.
 		//   53    the split-DNS resolver (udp and tcp), which answers the
 		//         half-public names git.<domain> and status.<domain> with
 		//         this box's tailnet address — see tofu/tailscale.tf
@@ -175,28 +177,10 @@
 			"users": ["autogroup:nonroot", "root"],
 		},
 
-		// The VPS, once tagged — WITHOUT THIS, TAGGING IT BREAKS TAILSCALE SSH,
-		// because the rule above stops matching a device that is no longer
-		// "self". modules/services.nix calls Tailscale SSH the normal
-		// administrative path, so that would be a bad surprise for a one-click
-		// console action.
-		//
-		// `check`, not `accept`: it forces a browser re-auth (12h by default)
-		// rather than letting any device holding a tailnet key open a shell.
-		// This is already how the tailnet behaves — flake.nix's deploy node
-		// notes Tailscale SSH "would hit its interactive re-auth check", which
-		// is why deploys go to 2222 instead — so keeping `check` preserves both
-		// behaviours rather than changing either.
-		//
-		// nonroot only, matching sshd's own PermitRootLogin = "no". hutao has
-		// passwordless sudo via wheel, so this costs nothing and stops the two
-		// doors into the box from disagreeing about whether root may log in.
-		{
-			"action": "check",
-			"src": ["1git2clone@github"],
-			"dst": ["tag:vps"],
-			"users": ["autogroup:nonroot"],
-		},
+		// NO RULE FOR tag:vps. Tailscale SSH is off on the vps
+		// (modules/services.nix): port 22 on its tailnet address is forgejo's,
+		// and administration is sshd on 2222 with an ordinary key. A rule here
+		// would grant nothing and read as if it did.
 
 		// Friends' machines. This is the rule the tag was created for.
 		//

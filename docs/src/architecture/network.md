@@ -131,9 +131,11 @@ narrows the VPS to nine ports for the owner account — 6432 and 4317/4318 are
 no longer tailnet-reachable at all. See
 [The tailnet policy](tailnet.md).
 
-`--ssh` is on, so interactive administrative access is Tailscale SSH — with a
-`check` rule, so it wants a browser re-auth. Scripted access (`deploy .#vps`)
-goes to port 2222 with an ordinary key for exactly that reason.
+Tailscale SSH is **off** (`tailscale set --ssh=false`). With it on, tailscaled
+owned port 22 on the tailnet address, and once split DNS sent `git.` there on
+tailnet devices, git over ssh landed on Tailscale SSH instead of forgejo.
+Administration, deploys and the runner's jump hop all use sshd on 2222 with an
+ordinary key.
 
 Three of those services also answer by name — `dozzle.`, `grafana.` and
 `syncthing.` — and that is the same mechanism wearing a hat. Caddy runs a

@@ -36,8 +36,9 @@
       enable = true;
       # 2222, not 22: forgejo publishes the host's port 22 so that git clone
       # URLs need no port — ssh reads no SRV record, so anything else has to be
-      # spelled out in every remote. Administrative access is normally over
-      # Tailscale SSH; this is the way in when the tailnet is not.
+      # spelled out in every remote. This is THE administrative way in, over
+      # the tailnet and otherwise: Tailscale SSH is off (see below), and
+      # deploys, the runner's jump hop and interactive logins all come here.
       ports = [ 2222 ];
       settings = {
         PermitRootLogin = "no";
@@ -51,9 +52,16 @@
     tailscale = {
       enable = true;
       authKeyFile = config.sops.templates."tailscale-authkey".path;
+      # TAILSCALE SSH IS OFF. With it on, tailscaled owns port 22 on the
+      # tailnet address, and since split DNS sends git.<domain> to that address
+      # on tailnet devices, `git@git.<domain>` landed on Tailscale SSH instead
+      # of forgejo. sshd on 2222 does the job it did, with an ordinary key.
+      #
+      # extraSetFlags, not merely dropping --ssh from extraUpFlags: `up` only
+      # runs on a fresh join (see below), while `tailscale set` runs on every
+      # start, so this is what actually turns it off on the running node.
+      extraSetFlags = [ "--ssh=false" ];
       extraUpFlags = [
-        "--ssh"
-
         # MANDATORY WITH AN OAUTH CLIENT SECRET. Tailscale refuses to register a
         # device this way untagged — "you must pass in one or more of those tags
         # to the --advertise-tags flag" — so this is not a hardening option that
