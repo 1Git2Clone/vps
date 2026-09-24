@@ -125,11 +125,6 @@
         key = "grafana/admin_password";
       };
 
-      # === Vuln Scan ===
-      vuln_scan_discord_webhook_url = {
-        key = "vuln_scan/discord_webhook_url";
-      };
-
       # === Kuma ===
       # Only the out-of-band probe. uptime-kuma itself has no way to seed its
       # admin account — that is a one-time first-visit setup.
