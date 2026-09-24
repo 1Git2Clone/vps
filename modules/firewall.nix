@@ -138,6 +138,14 @@ in
           #
           # This list therefore mirrors the forward chain exactly. Anything
           # published to the internet must appear in BOTH.
+          #
+          # WHAT THIS DOES NOT DO: mask client addresses. Measured 2026-09-24
+          # (#30): caddy's per-IP rate limit counted a public client's real
+          # address on 330 of 330 requests (exactly 300 through, then 429), and
+          # docker-mailserver's fail2ban logs and bans real public addresses —
+          # six banned by its postfix jail at the time. So services see the
+          # client IP whichever path a connection takes, and per-IP controls
+          # key on the right address.
           tcp dport {
             22,
             25,
