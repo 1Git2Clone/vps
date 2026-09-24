@@ -179,18 +179,79 @@ let
     "/*/*/git-upload-pack"
   ];
 
+  # EVERY SITE IS RATE-LIMITED unless it opts out with `rateLimit = null`.
+  # This was opt-in, and exactly one site (search) had opted in, which left
+  # every login on music, mail and git open to guessing at whatever speed the
+  # service itself allowed. The default has to be the limit.
+  #
+  # Two zones per site, both keyed on the client IP:
+  #
+  #   * SITE-WIDE — a flood brake. `rateLimit` overrides the numbers. Exempt:
+  #     private ranges (every docker bridge, so kuma's probes and anything
+  #     hairpinning through a bridge gateway), this host's own public address
+  #     (renovate and pages-pull reach git.<domain> through it) and the CI
+  #     runners (already confined to runnerApiPaths below, and a limit there
+  #     only breaks CI). None of those is an attacker, and throttling them is
+  #     a self-inflicted outage.
+  #
+  #   * LOGIN — `loginMatch`, a caddy matcher for the site's login request,
+  #     always ANDed with `method POST`. Tight, and exempts NOBODY: nothing on
+  #     this host posts to a login form, so a private address here can only be
+  #     a real client whose address got masked on the way in, and then a shared
+  #     bucket failing closed is the right answer.
+  #
+  # ponytail: the numbers are knobs set from how each app loads, not from
+  # measured traffic. A 429 in normal use means raise that site's `rateLimit`.
+  defaultRateLimit = {
+    events = 300;
+    window = "1m";
+  };
+  loginRateLimit = {
+    events = 10;
+    window = "1m";
+  };
+  rateLimitExempt = [
+    "private_ranges"
+    config.infra.publicIPv4
+  ]
+  ++ lib.attrValues runnerIPv4s;
+  rateLimitOf = site: site.rateLimit or defaultRateLimit;
+
   sites = [
     {
       host = "music.${domain}";
       upstream = "navidrome:4533";
+
+      # Subsonic clients authenticate on EVERY /rest/ call and a library sync
+      # is thousands of them, so the site-wide brake sits high. The Subsonic
+      # brute-force fix is navidrome's own (0.64.1 throttles failed logins);
+      # this caps the web UI's login.
+      rateLimit = {
+        events = 1200;
+        window = "1m";
+      };
+      loginMatch = "path /auth/login";
     }
     {
       host = "mail.${domain}";
       upstream = "webmail:80";
+
+      # Roundcube's login form posts to `/?_task=login`. Roundcube also locks
+      # an account after 3 failures a minute (login_rate_limit), but only per
+      # account and only for accounts it has seen; this is per address.
+      loginMatch = "query _task=login";
     }
     {
       host = "git.${domain}";
       upstream = "forgejo:4242";
+
+      # A repo page pulls a few dozen assets. Forgejo has no login throttle of
+      # its own, so the login zone is the only one there is.
+      rateLimit = {
+        events = 600;
+        window = "1m";
+      };
+      loginMatch = "path /user/login /user/two_factor* /user/forgot_password /user/sign_up";
 
       # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
       # address-and-port control: the cloud firewall, the runner's own nftables,
@@ -273,11 +334,11 @@ let
         hash = "{$SEARXNG_PASSWORD_HASH}";
       };
 
-      # Caps repeated hits per client IP, returning 429 BEFORE basic_auth runs
-      # its bcrypt (see the global `order` below) — so a password flood cannot
-      # turn cost-14 verifications into CPU exhaustion. In-process: a misconfig
-      # throttles requests, it cannot take the box down the way the
-      # forward-chain fail2ban jail did.
+      # Lower than the default: the site-wide zone returns 429 BEFORE
+      # basic_auth runs its bcrypt (see the global `order` below), so a
+      # password flood cannot turn cost-14 verifications into CPU exhaustion.
+      # In-process: a misconfig throttles requests, it cannot take the box
+      # down the way the forward-chain fail2ban jail did.
       #
       # events/window is a KNOB, not a law. It counts EVERY request to the
       # site, and image_proxy means one results page pulls many thumbnails
@@ -310,6 +371,12 @@ let
     {
       host = "grafana.${domain}";
 
+      # A dashboard is one request per panel per refresh.
+      rateLimit = {
+        events = 1200;
+        window = "1m";
+      };
+
       # Not a container name. Grafana runs with --network=host, so it is not on
       # the proxy network and docker's embedded DNS has never heard of it; the
       # route from a container to a host-namespace service is the host's own
@@ -326,6 +393,12 @@ let
       upstream = "${dockerBridgeGateway}:8384";
       tailnet = true;
 
+      # The GUI polls several REST endpoints every few seconds.
+      rateLimit = {
+        events = 1200;
+        window = "1m";
+      };
+
       # Syncthing rejects any request whose Host header is neither localhost
       # nor a bare address — an anti-DNS-rebinding check, and the reason its
       # GUI answers 403 "Host check error" behind a proxy that forwards the
@@ -340,7 +413,7 @@ let
     }
   ];
 
-  anyRateLimit = lib.any (s: s ? rateLimit) sites;
+  anyRateLimit = lib.any (s: rateLimitOf s != null || s ? loginMatch) sites;
 
   tailnetSites = lib.filter (s: s.tailnet or false) sites;
 
@@ -356,11 +429,10 @@ let
         "\t# See the `tls` directive on each site below."
         "\tadmin off"
       ]
-      # rate_limit is an ordered HTTP handler from a plugin; caddy has no
-      # default position for it, so it must be told to run before basic_auth or
-      # the 429 would come only after the bcrypt it exists to save. Emitted only
-      # when a site actually uses it, so a build without the plugin still
-      # validates.
+      # rate_limit is an ordered HTTP handler from a plugin, and it must run
+      # before basic_auth or the 429 would come only after the bcrypt it exists
+      # to save. Emitted only when a site actually uses it, which with the
+      # opt-out default is whenever any site has not opted out.
       ++ lib.optionals anyRateLimit [
         "\torder rate_limit before basic_auth"
       ]
@@ -385,18 +457,35 @@ let
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
           "\theader ${hsts}"
         ]
-        # Zone keyed on {remote_host} — the client IP — so one address's flood
-        # cannot exhaust the budget for everyone. The zone name is the host, so
-        # two rate-limited sites keep separate counters.
-        ++ lib.optionals (site ? rateLimit) [
-          "\trate_limit {"
-          "\t\tzone ${site.host} {"
-          "\t\t\tkey {remote_host}"
-          "\t\t\tevents ${toString site.rateLimit.events}"
-          "\t\t\twindow ${site.rateLimit.window}"
-          "\t\t}"
-          "\t}"
-        ]
+        # Zones keyed on {remote_host} — the client IP — so one address's flood
+        # cannot exhaust the budget for everyone. Zone names start with the
+        # host, so every site keeps separate counters. See `defaultRateLimit`
+        # for what each zone is for and who is exempt.
+        ++ lib.optionals (rateLimitOf site != null || site ? loginMatch) (
+          [ "\trate_limit {" ]
+          ++ lib.optionals (rateLimitOf site != null) [
+            "\t\tzone ${site.host} {"
+            "\t\t\tmatch {"
+            "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+            "\t\t\t}"
+            "\t\t\tkey {remote_host}"
+            "\t\t\tevents ${toString (rateLimitOf site).events}"
+            "\t\t\twindow ${(rateLimitOf site).window}"
+            "\t\t}"
+          ]
+          ++ lib.optionals (site ? loginMatch) [
+            "\t\tzone ${site.host}-login {"
+            "\t\t\tmatch {"
+            "\t\t\t\tmethod POST"
+            "\t\t\t\t${site.loginMatch}"
+            "\t\t\t}"
+            "\t\t\tkey {remote_host}"
+            "\t\t\tevents ${toString loginRateLimit.events}"
+            "\t\t\twindow ${loginRateLimit.window}"
+            "\t\t}"
+          ]
+          ++ [ "\t}" ]
+        )
         # Response headers, each entry scoped to a path matcher. `header` is an
         # ordered handler with a default position, so unlike rate_limit it
         # needs no `order` line in the global block.
