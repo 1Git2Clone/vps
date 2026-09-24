@@ -140,6 +140,18 @@ variable "vps_is_tagged" {
   default     = true
 }
 
+variable "split_dns_subdomains" {
+  description = <<-EOT
+    HALF-PUBLIC names: caddy serves them publicly and again on its tailnet
+    listener with their admin paths open. The internet must keep the public
+    address, so tailnet devices get the tailnet one from Tailscale split DNS,
+    which asks the resolver on the vps. Must agree with splitDnsHosts in
+    modules/containers/caddy.nix, which computes the list from the caddy sites.
+  EOT
+  type        = set(string)
+  default     = ["git", "status"]
+}
+
 variable "tailnet_ipv4" {
   description = <<-EOT
     This box's tailscale address, from `tailscale status`. dozzle, grafana and

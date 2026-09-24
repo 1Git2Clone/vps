@@ -131,9 +131,11 @@ narrows the VPS to nine ports for the owner account — 6432 and 4317/4318 are
 no longer tailnet-reachable at all. See
 [The tailnet policy](tailnet.md).
 
-`--ssh` is on, so interactive administrative access is Tailscale SSH — with a
-`check` rule, so it wants a browser re-auth. Scripted access (`deploy .#vps`)
-goes to port 2222 with an ordinary key for exactly that reason.
+Tailscale SSH is **off** (`tailscale set --ssh=false`). With it on, tailscaled
+owned port 22 on the tailnet address, and once split DNS sent `git.` there on
+tailnet devices, git over ssh landed on Tailscale SSH instead of forgejo.
+Administration, deploys and the runner's jump hop all use sshd on 2222 with an
+ordinary key.
 
 Three of those services also answer by name — `dozzle.`, `grafana.` and
 `syncthing.` — and that is the same mechanism wearing a hat. Caddy runs a
@@ -141,13 +143,29 @@ Three of those services also answer by name — `dozzle.`, `grafana.` and
 vhosts and nothing else; like every other private port it is published on
 `0.0.0.0` and kept private by being in neither allow-list.
 
-What makes the URL portless is two lines in a `nat` prerouting chain:
+What makes the URL portless is a `nat` prerouting chain:
 
 ```text
 type nat hook prerouting priority -110; policy accept;
 iifname tailscale0 tcp dport 443 redirect to :8443
 iifname tailscale0 tcp dport 80  redirect to :8880
+iifname tailscale0 udp dport 443 redirect to :8443
 ```
+
+The udp line is HTTP/3. The tailnet listener speaks it too (8443/udp is
+published), and its sites advertise `h3=":443"` rather than caddy's default
+`h3=":8443"`: udp 8443 sent directly over the tailnet did not get through when
+measured, while udp 443 through this redirect did. A browser that learned the
+public listener's `h3=":443"` takes the same path once split DNS points `git.`
+or `status.` at the tailnet address. Without the redirect that traffic hung —
+Forgejo's webpack chunk loads failed on it — and with docker's rule it would
+reach the public listener, whose copies of those names close the admin paths.
+
+**Known quirk, unexplained:** udp 8443 sent directly over the tailnet does not
+reach caddy, while tcp 8443 direct and udp 443 through the redirect both do.
+Nothing uses it — the tailnet sites advertise `:443` — so it is recorded here
+rather than chased. `docker port caddy` and `nft list ruleset | grep 8443` on
+the box are where to start if it ever matters.
 
 Two details in those lines do all the work, and they are independent:
 

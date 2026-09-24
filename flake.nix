@@ -159,9 +159,8 @@
             user = "root";
             path = deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.vps-hetzner;
 
-            # Port 2222 reaches the host's own sshd. Going through the default
-            # port would hit forgejo, and going through Tailscale SSH would hit
-            # its interactive re-auth check — neither of which can be scripted.
+            # Port 2222 reaches the host's own sshd. The default port is
+            # forgejo's, and Tailscale SSH is off (modules/services.nix).
             sshOpts = [
               "-p"
               "2222"
@@ -239,9 +238,13 @@
             # Through the VPS: the runner's single ingress rule is tcp/22 from
             # 167.233.24.58/32 and nothing else. The jump host's output chain
             # has to permit it too — that is what infra.runnerIPv4s feeds.
+            #
+            # The hop goes to the VPS's own sshd on 2222, spelled out. A bare
+            # `vps` names no port and lands on 22, which on the tailnet was
+            # Tailscale SSH (now off) and is forgejo's otherwise.
             sshOpts = [
               "-o"
-              "ProxyJump=vps"
+              "ProxyJump=hutao@vps:2222"
             ];
 
             magicRollback = true;

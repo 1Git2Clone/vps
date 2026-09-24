@@ -1,8 +1,8 @@
 # Runbook
 
 Commands, in the order you are likely to want them. Everything here runs on the
-VPS over Tailscale SSH; the runner's equivalents are at the bottom, and they are
-reached differently.
+VPS over ssh on port 2222 (`ssh -p 2222 hutao@vps`); the runner's equivalents
+are at the bottom, and they are reached differently.
 
 ## Is anything broken
 

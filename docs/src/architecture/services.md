@@ -24,9 +24,9 @@ jail that reads the journal.
 | `cloudflared`    | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly                                                                                                                                                                                |
 | `mailserver`     | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host                                                                                                                                                                                                                                                                           |
 | `webmail`        | roundcube, proxied at `mail.`                                                                                                                                                                                                                                                                                                               |
-| `forgejo`        | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.`                                                                                                                                                                                                                                                                         |
+| `forgejo`        | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.`; site admin (`/admin`, `/api/v1/admin`) tailnet-only                                                                                                                                                                                                                    |
 | `navidrome`      | `127.0.0.1:4533`, reached only through caddy at `music.`                                                                                                                                                                                                                                                                                    |
-| `kuma`           | proxy network only, reached at `status.`                                                                                                                                                                                                                                                                                                    |
+| `kuma`           | proxy network only, reached at `status.`; the admin socket only on the tailnet copy of that name                                                                                                                                                                                                                                            |
 | `searxng`        | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt                                                                                                                                                                                                          |
 | `dozzle`         | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
 | `grafana`        | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
@@ -61,18 +61,18 @@ RSS is still not heap. Metaspace, the code cache, GC structures and direct
 buffers live outside `-Xmx`, so the ceiling is not a bound on what the container
 reports.
 
-Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is
-over Tailscale SSH. Keeping 22 is what lets git remotes stay portless: ssh has
-no service discovery — it reads no `SRV` record — so anything else has to be
-spelled out in every clone URL or every client's ssh config.
+Forgejo owns port 22, so **the host's sshd is on 2222**, and that is the way
+in — Tailscale SSH is off. Keeping 22 is what lets git remotes stay portless:
+ssh has no service discovery — it reads no `SRV` record — so anything else has
+to be spelled out in every clone URL or every client's ssh config.
 
 ## caddy is built here, not pulled
 
 caddy is the one container not pulled from a registry. It is built locally with
 the `caddy-ratelimit` module compiled in (`caddy.withPlugins`, wrapped in a
 minimal `dockerTools` image), because stock caddy has no rate limiting — and
-rate limiting is load-bearing for `search.`, see
-[Access control](access-control.md).
+rate limiting is load-bearing for every site, see
+[Access control](access-control.md#rate-limiting-every-site-by-default).
 
 It is still caddy 2.11.4 — the version tracks nixpkgs, which matches the tag
 the official image used — and keeps the full container hardening: non-root uid

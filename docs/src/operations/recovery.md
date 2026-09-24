@@ -23,9 +23,14 @@ A forward-chain fail2ban jail has a blast radius the size of the whole box. If
 it ever bans an internal source it rejects **all** forwarded traffic, not one
 attacker — every container goes dark at once.
 
-That is why `search.` is rate-limited **in caddy** rather than banned in
+That is why the sites are rate-limited **in caddy** rather than banned in
 nftables: an in-process limiter can only throttle, it cannot take the forward
-plane down. See [Access control](../architecture/access-control.md).
+plane down. See [Access control](../architecture/access-control.md#rate-limiting-every-site-by-default).
+
+The host's `ignoreIP` includes `172.16.0.0/12`, which holds every docker network
+here, so no jail can ban a bridge address at all — structurally, not because a
+regex happens not to match one. docker-mailserver's own fail2ban carries the
+same exemption, for the same reason inside its own namespace.
 
 Before adding any forward-chain jail, ask what happens when it bans
 `172.30.0.x`.
