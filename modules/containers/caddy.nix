@@ -184,7 +184,7 @@ let
   # every login on music, mail and git open to guessing at whatever speed the
   # service itself allowed. The default has to be the limit.
   #
-  # Two zones per site, both keyed on the client IP:
+  # Up to three zones per site, all keyed on the client IP:
   #
   #   * SITE-WIDE — a flood brake. `rateLimit` overrides the numbers. Exempt:
   #     private ranges (every docker bridge, so kuma's probes and anything
@@ -193,6 +193,10 @@ let
   #     runners (already confined to runnerApiPaths below, and a limit there
   #     only breaks CI). None of those is an attacker, and throttling them is
   #     a self-inflicted outage.
+  #
+  #   * BASIC AUTH — `basicAuthRateLimit`, for sites that take a password in
+  #     an Authorization header rather than a form (git over https, the API).
+  #     Exempt like the site-wide zone.
   #
   #   * LOGIN — `loginMatch`, a caddy matcher for the site's login request,
   #     always ANDed with `method POST`. Tight, and exempts NOBODY: nothing on
@@ -216,6 +220,73 @@ let
   ]
   ++ lib.attrValues runnerIPv4s;
   rateLimitOf = site: site.rateLimit or defaultRateLimit;
+
+  # git.<domain> is served twice — publicly, and on the tailnet listener
+  # with the admin paths open — so it is defined once, here.
+  gitSite = {
+    host = "git.${domain}";
+    upstream = "forgejo:4242";
+
+    # A repo page pulls a few dozen assets. Forgejo has no login throttle of
+    # its own, so the login zone is the only one there is.
+    rateLimit = {
+      events = 600;
+      window = "1m";
+    };
+    loginMatch = "path /user/login /user/two_factor* /user/forgot_password /user/sign_up";
+
+    # The logins that are NOT a form: `git clone https://user:pass@...` and
+    # /api/v1 with basic auth both send `Authorization: Basic` and never
+    # touch /user/login, so the login zone above cannot see them. A git
+    # operation is 2-4 requests, so 30 a minute is room for real use and
+    # nowhere near a guessing rate. Exempt like the site-wide zone: renovate
+    # pushes over https with its token as a basic-auth password, from this
+    # host's own address.
+    basicAuthRateLimit = {
+      events = 30;
+      window = "1m";
+    };
+
+    # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
+    # address-and-port control: the cloud firewall, the runner's own nftables,
+    # and this host's output chain can all say "that box may reach tcp/443
+    # here" and nothing finer. But the runner MUST reach 443 on this host —
+    # that is how it fetches jobs — so without something reading the request,
+    # a rooted CI job gets the entire Forgejo surface: every repo it can see,
+    # the whole web UI, the full /api/v1 with whatever its session carries.
+    #
+    # remote_ip is the TCP peer and never a header. Caddy consults
+    # X-Forwarded-For only when `trusted_proxies` is set, which it is not
+    # anywhere in this file, and every record in tofu/modules/cloudflare-dns
+    # is `proxied = false`, so nothing sits in front of caddy to launder an
+    # address. A root-compromised runner can forge any credential it holds; it
+    # cannot forge its source address, because Hetzner assigns it and filters
+    # spoofed egress upstream. That is why this is keyed on address rather
+    # than on a token.
+    #
+    # This GRANTS NOTHING. It is a pure restriction applied to a set of
+    # addresses, so the worst a mistake here can do is break CI — loudly, in a
+    # way a workflow run reports — rather than open something up.
+    restrictRunners = true;
+
+    # SITE ADMINISTRATION, closed to the internet and served only on the
+    # tailnet copy below. /admin is the web admin panel (users, orgs, every
+    # repo, instance config, cron, system webhooks); /api/v1/admin/* is its
+    # API, 34 endpoints on 16.0.5, every one site-admin only. Nothing here
+    # automates against them — the runner registers with a pre-shared token,
+    # and the pages system webhook is set once by hand. Personal settings
+    # (/user/settings, /api/v1/user/*) and org settings stay public.
+    #
+    # A stolen password or session can then still read and push what the
+    # account owns, but it cannot create users, mint runner tokens or rewrite
+    # instance config from outside the tailnet.
+    blockedPaths = [
+      "/admin"
+      "/admin/*"
+      "/api/v1/admin"
+      "/api/v1/admin/*"
+    ];
+  };
 
   sites = [
     {
@@ -241,44 +312,23 @@ let
       # account and only for accounts it has seen; this is per address.
       loginMatch = "query _task=login";
     }
-    {
-      host = "git.${domain}";
-      upstream = "forgejo:4242";
-
-      # A repo page pulls a few dozen assets. Forgejo has no login throttle of
-      # its own, so the login zone is the only one there is.
-      rateLimit = {
-        events = 600;
-        window = "1m";
-      };
-      loginMatch = "path /user/login /user/two_factor* /user/forgot_password /user/sign_up";
-
-      # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
-      # address-and-port control: the cloud firewall, the runner's own nftables,
-      # and this host's output chain can all say "that box may reach tcp/443
-      # here" and nothing finer. But the runner MUST reach 443 on this host —
-      # that is how it fetches jobs — so without something reading the request,
-      # a rooted CI job gets the entire Forgejo surface: every repo it can see,
-      # the whole web UI, the full /api/v1 with whatever its session carries.
-      #
-      # remote_ip is the TCP peer and never a header. Caddy consults
-      # X-Forwarded-For only when `trusted_proxies` is set, which it is not
-      # anywhere in this file, and every record in tofu/modules/cloudflare-dns
-      # is `proxied = false`, so nothing sits in front of caddy to launder an
-      # address. A root-compromised runner can forge any credential it holds; it
-      # cannot forge its source address, because Hetzner assigns it and filters
-      # spoofed egress upstream. That is why this is keyed on address rather
-      # than on a token.
-      #
-      # This GRANTS NOTHING. It is a pure restriction applied to a set of
-      # addresses, so the worst a mistake here can do is break CI — loudly, in a
-      # way a workflow run reports — rather than open something up.
-      restrictRunners = true;
-
-    }
+    gitSite
     {
       host = "status.${domain}";
       upstream = "kuma:3001";
+
+      # The public status page never opens socket.io — kuma 2.5.5 lists
+      # /status* and / in noSocketIOPages and loads everything over
+      # /api/status-page/* — so /socket.io/ is ONLY the admin login and
+      # dashboard. It is closed here, and open on the tailnet copy of this
+      # same name further down.
+      #
+      # A rate limit could not do this job: kuma's login is a message INSIDE
+      # an open websocket, so caddy sees one request however many passwords go
+      # through it. kuma's own limiter (20 a minute) is then the only layer,
+      # and one bad line there is a brute-force hole. Not exposing the socket
+      # at all is the layer that cannot be one line away from failing.
+      blockedPaths = [ "/socket.io/*" ];
     }
     {
       host = "pages.${domain}";
@@ -369,6 +419,28 @@ let
       tailnet = true;
     }
     {
+      # status.<domain> AGAIN, on the tailnet listener and with /socket.io/
+      # open: kuma's admin dashboard and login, for tailnet devices only. The
+      # public name resolves to the public address, so a tailnet device only
+      # lands here if its resolver hands it the tailnet address for this name.
+      host = "status.${domain}";
+      upstream = "kuma:3001";
+      tailnet = true;
+    }
+    # git.<domain> AGAIN, on the tailnet listener, with the site-admin paths
+    # open. Same limits. No runner restriction: the runner is deliberately off
+    # the tailnet (modules/runner/networking.nix), and the tailnet policy
+    # grants this host to the owner's account alone.
+    (
+      builtins.removeAttrs gitSite [
+        "blockedPaths"
+        "restrictRunners"
+      ]
+      // {
+        tailnet = true;
+      }
+    )
+    {
       host = "grafana.${domain}";
 
       # A dashboard is one request per panel per refresh.
@@ -417,6 +489,24 @@ let
 
   tailnetSites = lib.filter (s: s.tailnet or false) sites;
 
+  # status.<domain> is served on both listeners, and rate-limit zones are
+  # named per site, so the tailnet copy's zones carry a suffix.
+  zoneName = site: site.host + lib.optionalString (site.tailnet or false) "-tailnet";
+
+  # HALF-PUBLIC NAMES: served on both listeners, public and tailnet. The
+  # tailnet-only names (dozzle, grafana, syncthing) need nothing special —
+  # their public A record already points at the tailnet address, which only
+  # the tailnet can reach. These cannot: the internet must keep getting the
+  # public address. So tailnet devices are handed the tailnet address by
+  # Tailscale split DNS (tofu/tailscale.tf), which asks the resolver below.
+  #
+  # Computed, not listed: give a site a tailnet copy and its name joins.
+  # tofu's var.split_dns_subdomains must agree with this list.
+  splitDnsHosts = lib.intersectLists (map (s: s.host) tailnetSites) (
+    map (s: s.host) (lib.filter (s: !(s.tailnet or false)) sites)
+  );
+  inherit (config.infra) tailnetIPv4;
+
   # Tabs and this exact shape are what `caddy fmt` produces, so `caddy validate`
   # on the generated file is clean rather than warning about formatting every
   # time someone checks it.
@@ -436,16 +526,6 @@ let
       ++ lib.optionals anyRateLimit [
         "\torder rate_limit before basic_auth"
       ]
-      # Caddy enables HTTP/3 on every server it builds, and advertises it with
-      # the LISTENER's port — so the tailnet sites would hand the browser
-      # `Alt-Svc: h3=":${toString tailnetHttpsPort}"`. Nothing publishes that
-      # port over udp and the firewall rewrites tcp only, so every visit would
-      # open with a QUIC attempt into a black hole before falling back.
-      ++ lib.optionals (tailnetSites != [ ]) [
-        "\tservers :${toString tailnetHttpsPort} {"
-        "\t\tprotocols h1 h2"
-        "\t}"
-      ]
       ++ [
         "}"
       ]
@@ -457,6 +537,17 @@ let
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
           "\theader ${hsts}"
         ]
+        # HTTP/3 ON THE TAILNET, ADVERTISED ON 443. caddy fills Alt-Svc from
+        # the LISTENER's port, so the tailnet sites would say h3=":8443". udp
+        # 8443 sent directly over the tailnet does not get through — measured
+        # after the deploy that published it, while tcp 8443 direct and udp
+        # 443 redirected by the firewall both did — and a browser following
+        # that advertisement hung exactly as before. 443 is also the port
+        # every tailnet client already uses for these names, so the
+        # advertisement names the path that works.
+        ++ lib.optionals (site.tailnet or false) [
+          "\theader Alt-Svc \"h3=\\\":443\\\"; ma=2592000\""
+        ]
         # Zones keyed on {remote_host} — the client IP — so one address's flood
         # cannot exhaust the budget for everyone. Zone names start with the
         # host, so every site keeps separate counters. See `defaultRateLimit`
@@ -464,7 +555,7 @@ let
         ++ lib.optionals (rateLimitOf site != null || site ? loginMatch) (
           [ "\trate_limit {" ]
           ++ lib.optionals (rateLimitOf site != null) [
-            "\t\tzone ${site.host} {"
+            "\t\tzone ${zoneName site} {"
             "\t\t\tmatch {"
             "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
             "\t\t\t}"
@@ -473,8 +564,19 @@ let
             "\t\t\twindow ${(rateLimitOf site).window}"
             "\t\t}"
           ]
+          ++ lib.optionals (site ? basicAuthRateLimit) [
+            "\t\tzone ${zoneName site}-basic {"
+            "\t\t\tmatch {"
+            "\t\t\t\theader Authorization \"Basic *\""
+            "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+            "\t\t\t}"
+            "\t\t\tkey {remote_host}"
+            "\t\t\tevents ${toString site.basicAuthRateLimit.events}"
+            "\t\t\twindow ${site.basicAuthRateLimit.window}"
+            "\t\t}"
+          ]
           ++ lib.optionals (site ? loginMatch) [
-            "\t\tzone ${site.host}-login {"
+            "\t\tzone ${zoneName site}-login {"
             "\t\t\tmatch {"
             "\t\t\t\tmethod POST"
             "\t\t\t\t${site.loginMatch}"
@@ -495,6 +597,18 @@ let
           ++ lib.mapAttrsToList (name: value: "\t\t${name} \"${value}\"") h.values
           ++ [ "\t}" ]
         ) (site.headers or [ ])
+        # A `handle` of its own, NOT a bare `respond`: caddy orders `handle`
+        # before `respond`, so on git.<domain> — whose upstream sits inside
+        # handle blocks for restrictRunners — a bare respond would never run
+        # and block nothing. Emitted before those handles, and named-matcher
+        # handles keep their written order, so this one is tried first. 404
+        # rather than 403: nothing to see here.
+        ++ lib.optionals (site ? blockedPaths) [
+          "\t@blocked path ${lib.concatStringsSep " " site.blockedPaths}"
+          "\thandle @blocked {"
+          "\t\trespond 404"
+          "\t}"
+        ]
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
         ++ lib.optionals (site ? basicAuth) [
@@ -584,6 +698,12 @@ in
       # accept` reaches them.
       "${toString tailnetHttpPort}:${toString tailnetHttpPort}"
       "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}"
+      # HTTP/3 on the tailnet listener. The firewall redirects tailscale0's
+      # udp 443 here, and the tailnet sites advertise `h3=":443"` (see the
+      # Alt-Svc override above), so every tailnet client takes that path —
+      # including a browser still holding the public listener's `h3=":443"`.
+      # Kept private like its tcp twin: in neither allow-list.
+      "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}/udp"
     ];
 
     volumes = [
@@ -624,6 +744,51 @@ in
       "--tmpfs=/data:rw,nosuid,nodev,size=16m,uid=${id},gid=${id},mode=0700"
       "--tmpfs=/config:rw,nosuid,nodev,size=4m,uid=${id},gid=${id},mode=0700"
     ];
+  };
+
+  # THE SPLIT-DNS RESOLVER. Answers exactly the half-public names with the
+  # tailnet address and nothing else: any other name is outside its zone and
+  # gets REFUSED, and an AAAA for these names is an empty answer (neither has
+  # a public AAAA either). Bound to the tailnet address alone, so the internet
+  # cannot even reach it; the input chain would drop 53 anyway. The tailnet
+  # policy has to allow 53 to this host (tofu/tailscale-policy.hujson).
+  #
+  # IF IT IS DOWN, tailnet devices most likely cannot resolve these two names
+  # at all: split DNS sends them ONLY here, and Tailscale documents no
+  # fallback. The internet is unaffected, and both names are served by this
+  # same box anyway, so the case that matters is CoreDNS alone failing —
+  # Restart=on-failure (from the upstream module) covers it. Deploy this
+  # before `tofu apply` points the tailnet at it.
+  services.coredns = {
+    enable = true;
+    config = ''
+      ${lib.concatStringsSep " " splitDnsHosts} {
+        bind ${tailnetIPv4}
+        hosts {
+          ${tailnetIPv4} ${lib.concatStringsSep " " splitDnsHosts}
+          ttl 300
+        }
+      }
+    '';
+  };
+
+  # The address exists only once tailscaled has brought tailscale0 up, and a
+  # bind to an absent address fails. Wait for it rather than crash-looping
+  # through boot. 60 seconds, under systemd's default 90-second start timeout,
+  # which counts ExecStartPre. Matched as "inet <addr>/" so 100.109.115.120
+  # cannot satisfy a wait for 100.109.115.12.
+  systemd.services.coredns = {
+    after = [ "tailscaled.service" ];
+    wants = [ "tailscaled.service" ];
+    serviceConfig.ExecStartPre = "${pkgs.writeShellScript "wait-for-tailnet-address" ''
+      for _ in $(${pkgs.coreutils}/bin/seq 60); do
+        ${pkgs.iproute2}/bin/ip -4 addr show dev tailscale0 2>/dev/null \
+          | ${pkgs.gnugrep}/bin/grep -qF "inet ${tailnetIPv4}/" && exit 0
+        ${pkgs.coreutils}/bin/sleep 1
+      done
+      echo "tailscale0 never got ${tailnetIPv4}" >&2
+      exit 1
+    ''}";
   };
 
   # acme writes the certificate before anything can serve it. Without this a

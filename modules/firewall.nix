@@ -79,7 +79,7 @@ in
         # the URL stay `https://dozzle.<domain>` with nothing after it.
         #
         # PRIORITY IS THE LOAD-BEARING PART. Docker's own prerouting chain sits
-        # at dstnat (-100) and has a rule for the published 443, so anything
+        # at dstnat (-100) and has a rule for the published 443 (tcp and udp), so anything
         # later than that would find the packet already DNAT'd to caddy's PUBLIC
         # listener and rewrite nothing. -110 runs first, and docker's own rule
         # for the rewritten port then delivers the packet to the container
@@ -94,6 +94,14 @@ in
 
           iifname tailscale0 tcp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
           iifname tailscale0 tcp dport 80 redirect to :${toString config.infra.tailnetHttpPort}
+
+          # HTTP/3 takes the same turn. Without it, a browser holding the
+          # public listener's `Alt-Svc: h3=":443"` sends QUIC to udp 443 at
+          # the tailnet address; docker's dstnat would hand that to caddy's
+          # PUBLIC listener — the copy of git./status. with the admin paths
+          # closed — or, as measured before this line existed, nowhere at all,
+          # and the request hung (Forgejo's webpack chunks failed that way).
+          iifname tailscale0 udp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
         }
 
         chain input {
@@ -130,6 +138,14 @@ in
           #
           # This list therefore mirrors the forward chain exactly. Anything
           # published to the internet must appear in BOTH.
+          #
+          # WHAT THIS DOES NOT DO: mask client addresses. Measured 2026-09-24
+          # (#30): caddy's per-IP rate limit counted a public client's real
+          # address on 330 of 330 requests (exactly 300 through, then 429), and
+          # docker-mailserver's fail2ban logs and bans real public addresses —
+          # six banned by its postfix jail at the time. So services see the
+          # client IP whichever path a connection takes, and per-IP controls
+          # key on the right address.
           tcp dport {
             22,
             25,

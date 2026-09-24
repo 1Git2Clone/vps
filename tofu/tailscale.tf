@@ -31,7 +31,8 @@
 #      behaviour of the variable and shows up as `3 to add`.
 #
 #   1. Create the OAuth client: admin console -> Settings -> Trust-credentials
-#      -> Credential -> OAuth. One scope: Policy File (write). Read is implied,
+#      -> Credential -> OAuth. Two scopes: Policy File (write), and DNS
+#      (write) for the split-DNS entries at the bottom. Read is implied,
 #      and the console auto-selects a few adjacent read scopes — expected, and
 #      harmless. Put the id and secret in terraform.tfvars.
 #
@@ -127,4 +128,16 @@ resource "tailscale_acl" "main" {
   # removed. A `tofu destroy` or a dropped block would then silently re-open the
   # tailnet while looking like a clean teardown. Leaving it false means the last
   # applied policy stays in force, which is the safe direction to fail in.
+}
+
+# SPLIT DNS FOR THE HALF-PUBLIC NAMES. git.<domain> and status.<domain> are
+# served publicly and again on caddy's tailnet listener with their admin paths
+# open. Tailnet devices are sent to the resolver on the vps for exactly these
+# names, which answers with the tailnet address; everyone else keeps public DNS.
+# Needs the DNS (write) scope on the OAuth client, and port 53 to the vps in the
+# policy — both arrived together with this block.
+resource "tailscale_dns_split_nameservers" "half_public" {
+  for_each    = var.tailnet_ipv4 == "" ? toset([]) : var.split_dns_subdomains
+  domain      = "${each.key}.${var.domain}"
+  nameservers = [var.tailnet_ipv4]
 }

@@ -79,6 +79,17 @@
       '';
     };
 
+    tailnetIPv4 = lib.mkOption {
+      type = lib.types.str;
+      default = "100.109.115.12";
+      description = ''
+        This box's tailscale address. A COPY of tofu's var.tailnet_ipv4, the
+        same arrangement as publicIPv4: tofu owns it, this follows. Used by
+        the split-DNS resolver in modules/containers/caddy.nix, which answers
+        the half-public names with it for tailnet devices.
+      '';
+    };
+
     runnerIPv4s = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {
@@ -156,9 +167,10 @@
       default = 8443;
       description = ''
         Caddy's SECOND https listener, carrying the vhosts that are meant for
-        the tailnet alone — dozzle, grafana and syncthing. Two places must
-        agree on it: caddy publishes it, and the firewall's prerouting chain
-        rewrites tailscale0's port 443 onto it, which is what lets the URL be
+        the tailnet alone — dozzle, grafana, syncthing, and the admin side of
+        status. Two places must agree on it: caddy publishes it, and the
+        firewall's prerouting chain rewrites tailscale0's port 443 onto it,
+        which is what lets the URL be
         `https://dozzle.<domain>` with no port in it.
 
         It is published on 0.0.0.0 like every other container port and kept
