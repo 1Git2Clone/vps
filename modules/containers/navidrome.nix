@@ -33,7 +33,13 @@
   };
 
   virtualisation.oci-containers.containers.navidrome = {
-    # 0.64.0 re-encodes every internal ID to a canonical 128-bit base62 form.
+    # 0.64.1, a security release: failed Subsonic logins were never throttled,
+    # so passwords could be brute-forced at full speed (GHSA-p994-r776-mw52,
+    # high), plus an SSRF and a local file read through M3U playlist artwork,
+    # player takeover by any signed-in user, and a library filter missing on
+    # three endpoints. No migration of its own.
+    #
+    # 0.64.0 before it re-encodes every internal ID to a canonical 128-bit base62 form.
     # Upstream: "The migration touches every table, so back up your database
     # before upgrading." navidrome_data is that database, and the rewrite is
     # one-way — re-deploying the previous generation runs 0.63.2 against IDs it
@@ -44,7 +50,7 @@
     # rescan. Clients that cached item IDs — offline downloads — re-sync once.
     #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/deluan/navidrome/tags?page_size=20&ordering=last_updated'
-    image = "deluan/navidrome:0.64.0";
+    image = "deluan/navidrome:0.64.1";
 
     ports = [ "127.0.0.1:4533:4533" ];
 
