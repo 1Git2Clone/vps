@@ -361,7 +361,7 @@ in
       # /var/lib/docker/volumes that restic then carries forever.
       serenity-redis = {
         # Digest-pinned: 8-alpine is a rolling tag that upstream rebuilds.
-        image = "redis:8-alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576";
+        image = "redis:8-alpine@sha256:ba6e394f6acc2a695ef1b6944f161b9ca813711739be68319fa0db3470673f1d";
         networks = [ botNetwork ];
         extraOptions = [
           "--read-only"
