@@ -26,7 +26,7 @@ jail that reads the journal.
 | `webmail`        | roundcube, proxied at `mail.`                                                                                                                                                                                                                                                                                                               |
 | `forgejo`        | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.`                                                                                                                                                                                                                                                                         |
 | `navidrome`      | `127.0.0.1:4533`, reached only through caddy at `music.`                                                                                                                                                                                                                                                                                    |
-| `kuma`           | proxy network only, reached at `status.`                                                                                                                                                                                                                                                                                                    |
+| `kuma`           | proxy network only, reached at `status.`; the admin socket only on the tailnet copy of that name                                                                                                                                                                                                                                            |
 | `searxng`        | proxy network only, reached at `search.`; the only public site behind `basic_auth`, with caddy `rate_limit` in front of the bcrypt                                                                                                                                                                                                          |
 | `dozzle`         | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
 | `grafana`        | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
@@ -71,8 +71,8 @@ spelled out in every clone URL or every client's ssh config.
 caddy is the one container not pulled from a registry. It is built locally with
 the `caddy-ratelimit` module compiled in (`caddy.withPlugins`, wrapped in a
 minimal `dockerTools` image), because stock caddy has no rate limiting — and
-rate limiting is load-bearing for `search.`, see
-[Access control](access-control.md).
+rate limiting is load-bearing for every site, see
+[Access control](access-control.md#rate-limiting-every-site-by-default).
 
 It is still caddy 2.11.4 — the version tracks nixpkgs, which matches the tag
 the official image used — and keeps the full container hardening: non-root uid
