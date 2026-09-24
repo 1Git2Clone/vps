@@ -161,6 +161,12 @@ or `status.` at the tailnet address. Without the redirect that traffic hung —
 Forgejo's webpack chunk loads failed on it — and with docker's rule it would
 reach the public listener, whose copies of those names close the admin paths.
 
+**Known quirk, unexplained:** udp 8443 sent directly over the tailnet does not
+reach caddy, while tcp 8443 direct and udp 443 through the redirect both do.
+Nothing uses it — the tailnet sites advertise `:443` — so it is recorded here
+rather than chased. `docker port caddy` and `nft list ruleset | grep 8443` on
+the box are where to start if it ever matters.
+
 Two details in those lines do all the work, and they are independent:
 
 - **`iifname tailscale0`** is what keeps this off public traffic. A request
