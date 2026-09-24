@@ -44,7 +44,6 @@ nothing to remember to run.
 │   ├── postgres.nix      # host postgres + pgbouncer, pg_dumpall backups
 │   ├── backups.nix       # restic → B2, daily + weekly quiescent minecraft
 │   ├── image-archive.nix # docker save every image; restore one when a pull fails
-│   ├── vuln-scan.nix     # weekly CVE report, every image + the system closure
 │   ├── syncthing.nix     # tailnet-only, /home/hutao/syncthing
 │   ├── pages-pull.nix    # fetches published artifacts into the pages volume
 │   ├── boot.nix hardware.nix networking.nix nix.nix users.nix

@@ -30,21 +30,8 @@ out-of-band timer that probes the **public** status page every five minutes and
 pings healthchecks.io. Healthchecks alerts on the _absence_ of a ping, so
 silence becomes the alert rather than an all-clear.
 
-This is the same principle as the vuln scanner below, and it is worth naming
-once: **a monitor that reports nothing when it cannot run is not a monitor.**
-
-## Vulnerability scanning
-
-`vuln-scan.nix`, Saturdays 06:00 UTC. It scans every declared container image
-— running or not — plus the NixOS system closure, and posts to Discord.
-
-Findings are ranked by **EPSS + CISA KEV, not CVSS**. CVSS scores severity in
-the abstract; EPSS estimates the probability of exploitation in the wild and
-KEV lists what is already being exploited. A CVSS 9.8 nobody has ever weaponised
-outranks nothing.
-
-A scan that cannot run posts an **ABORTED** notice from an exit trap. Silence
-and "no findings" must never look the same.
+The principle is worth naming once: **a monitor that reports nothing when it
+cannot run is not a monitor.**
 
 ## Where to look when something is wrong
 

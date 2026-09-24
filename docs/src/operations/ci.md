@@ -126,8 +126,6 @@ Caching works normally — see
   been done, because the same file is `skavex`'s and the two are kept identical
   deliberately.
 - The `nix-node` image is rebuilt only when `flake.lock` moves, so a CVE in its
-  node or curl waits for a flake bump. `vuln-scan` does not see it: that scanner
-  reads `virtualisation.oci-containers` on the VPS, and this image is neither a
-  container nor on that host.
+  node or curl waits for a flake bump.
 - The artifact pull has no size cap (`--max-time` bounds time, not bytes).
 - Job containers do not yet use `--userns=auto`.
