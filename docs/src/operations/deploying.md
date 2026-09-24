@@ -109,14 +109,11 @@ change touches both — the runner's route in is defined by the VPS's outbound
 rules, so a VPS deploy that has not landed yet means a runner you cannot
 reach.
 
-**The jump hop hits Tailscale SSH.** `ProxyJump=vps` names no port, so it lands
-on port 22, which `tailscaled` intercepts — and the policy's `check` rule opens
-a browser for re-authentication before the jump is established. That is not a
-misconfiguration, it is the rule working; the answer is cached for about 12
-hours, so it fires once a day at most. The VPS's own deploy avoids it by going
-to 2222 with an ordinary key, which is why that port is listed in the policy
-and called deploy-critical there. See
-[The tailnet policy](../architecture/tailnet.md#what-check-actually-checks).
+**The jump hop goes to 2222.** `ProxyJump=hutao@vps:2222` names the port on
+purpose: a bare `vps` lands on 22, which on the tailnet used to be Tailscale SSH
+and is forgejo's now that Tailscale SSH is off. Both deploys use the VPS's own
+sshd with an ordinary key, which is why 2222 is listed in the policy and called
+deploy-critical there.
 
 ### Ports and names, so nothing surprises you
 
@@ -124,8 +121,7 @@ and called deploy-critical there. See
   a name and not an address. It survives the primary-IP handover during a
   migration, so the same command works before and after cutover.
 - ssh is on **2222**. Port 22 belongs to forgejo, so that git clone URLs need no
-  port. Going through Tailscale SSH instead would hit its interactive re-auth
-  check, which cannot be scripted — hence port 2222 and a normal key.
+  port. Tailscale SSH is off, so 2222 with a normal key is the only ssh in.
 
 ### If a deploy fails with "lacks a signature by a trusted key"
 

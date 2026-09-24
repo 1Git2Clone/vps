@@ -4,7 +4,7 @@
 # Publishes the host's port 22, so clone URLs need no port: ssh reads no SRV
 # record, so anything other than 22 has to be spelled out in every remote or
 # every client's ~/.ssh/config. The host's own sshd is therefore on 2222 (see
-# modules/services.nix) and administrative access is over Tailscale SSH.
+# modules/services.nix), and that is the administrative way in.
 #
 # The consequence is that forgejo's in-container OpenSSH absorbs the internet's
 # routine SSH scanning, which is what the fail2ban forgejo-ssh jail watches.

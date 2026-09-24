@@ -61,10 +61,10 @@ RSS is still not heap. Metaspace, the code cache, GC structures and direct
 buffers live outside `-Xmx`, so the ceiling is not a bound on what the container
 reports.
 
-Forgejo owns port 22, so **the host's sshd is on 2222** and normal access is
-over Tailscale SSH. Keeping 22 is what lets git remotes stay portless: ssh has
-no service discovery — it reads no `SRV` record — so anything else has to be
-spelled out in every clone URL or every client's ssh config.
+Forgejo owns port 22, so **the host's sshd is on 2222**, and that is the way
+in — Tailscale SSH is off. Keeping 22 is what lets git remotes stay portless:
+ssh has no service discovery — it reads no `SRV` record — so anything else has
+to be spelled out in every clone URL or every client's ssh config.
 
 ## caddy is built here, not pulled
 

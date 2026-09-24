@@ -77,7 +77,6 @@ acls: 1git2clone@github -> autogroup:self:*
       1git2clone@github -> tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880
       1git2clone@github -> tag:friends-ssh:22
 ssh:  check  -> autogroup:self   as nonroot, root
-      check  -> tag:vps          as nonroot
       accept -> tag:friends-ssh  as nonroot, root
 ```
 
@@ -152,9 +151,8 @@ to their Tailscale identity in a browser, and the answer is cached for about
 
 So ownership comes from `autogroup:self` and from naming the account in `src`.
 `check` is what makes a stolen but still-enrolled laptop not be enough on its
-own. It is also why `deploy` goes to port 2222 with an ordinary key rather than
-over Tailscale SSH — an interactive browser prompt cannot be scripted. See
-[Deploying](../operations/deploying.md).
+own. It covers your own devices only: Tailscale SSH is off on the VPS, which
+is administered over sshd on 2222 — see [Deploying](../operations/deploying.md).
 
 ## The tests are the part worth having
 
