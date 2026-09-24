@@ -12,12 +12,29 @@ supports.
 | **kuma**       | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy. |
 | **searxng**    | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file    |
 
-kuma's admin dashboard and login are tailnet-only. kuma's login is a message
-inside an open socket.io connection, so no HTTP rate limit can count attempts
-at it; the only real second layer is not exposing the socket. caddy therefore
-answers `/socket.io/` on the public `status.<domain>` with a 404 — the public
-status page never uses it, loading everything from `/api/status-page/*` — and
-serves the same name again on the tailnet listener with the socket open.
+## Site administration is tailnet-only
+
+Where an app's administration lives on paths its public side never uses, caddy
+answers those paths with a 404 on the public listener and serves the same name
+again on the tailnet listener with them open (`blockedPaths` in
+`modules/containers/caddy.nix`). A tailnet device reaches the admin side by
+resolving the name to the tailnet address.
+
+- **kuma** — `/socket.io/` is only the admin login and dashboard; the public
+  status page loads everything from `/api/status-page/*`. kuma's login is a
+  message inside that socket, so no HTTP rate limit can count attempts at it:
+  not exposing the socket is the only real second layer.
+- **Forgejo** — `/admin` (the site admin panel) and `/api/v1/admin/*` (its
+  API: users, orgs, runner tokens, cron, system webhooks). Personal and org
+  settings stay public. A stolen password or session can still use what the
+  account owns, but not administer the instance from outside the tailnet.
+  Forgejo also routes `//admin` and `/api//v1/admin/*` to the same handlers;
+  caddy's path matcher merges slashes, and a local replay confirmed those 404
+  too.
+
+The block is its own `handle`, not a bare `respond`: caddy orders `handle`
+before `respond`, and the git site's upstream sits inside handle blocks for
+the runner restriction, so a bare `respond` there would never run.
 
 ## Rate limiting, every site by default
 
