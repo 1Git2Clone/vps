@@ -221,6 +221,73 @@ let
   ++ lib.attrValues runnerIPv4s;
   rateLimitOf = site: site.rateLimit or defaultRateLimit;
 
+  # git.<domain> is served twice — publicly, and on the tailnet listener
+  # with the admin paths open — so it is defined once, here.
+  gitSite = {
+    host = "git.${domain}";
+    upstream = "forgejo:4242";
+
+    # A repo page pulls a few dozen assets. Forgejo has no login throttle of
+    # its own, so the login zone is the only one there is.
+    rateLimit = {
+      events = 600;
+      window = "1m";
+    };
+    loginMatch = "path /user/login /user/two_factor* /user/forgot_password /user/sign_up";
+
+    # The logins that are NOT a form: `git clone https://user:pass@...` and
+    # /api/v1 with basic auth both send `Authorization: Basic` and never
+    # touch /user/login, so the login zone above cannot see them. A git
+    # operation is 2-4 requests, so 30 a minute is room for real use and
+    # nowhere near a guessing rate. Exempt like the site-wide zone: renovate
+    # pushes over https with its token as a basic-auth password, from this
+    # host's own address.
+    basicAuthRateLimit = {
+      events = 30;
+      window = "1m";
+    };
+
+    # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
+    # address-and-port control: the cloud firewall, the runner's own nftables,
+    # and this host's output chain can all say "that box may reach tcp/443
+    # here" and nothing finer. But the runner MUST reach 443 on this host —
+    # that is how it fetches jobs — so without something reading the request,
+    # a rooted CI job gets the entire Forgejo surface: every repo it can see,
+    # the whole web UI, the full /api/v1 with whatever its session carries.
+    #
+    # remote_ip is the TCP peer and never a header. Caddy consults
+    # X-Forwarded-For only when `trusted_proxies` is set, which it is not
+    # anywhere in this file, and every record in tofu/modules/cloudflare-dns
+    # is `proxied = false`, so nothing sits in front of caddy to launder an
+    # address. A root-compromised runner can forge any credential it holds; it
+    # cannot forge its source address, because Hetzner assigns it and filters
+    # spoofed egress upstream. That is why this is keyed on address rather
+    # than on a token.
+    #
+    # This GRANTS NOTHING. It is a pure restriction applied to a set of
+    # addresses, so the worst a mistake here can do is break CI — loudly, in a
+    # way a workflow run reports — rather than open something up.
+    restrictRunners = true;
+
+    # SITE ADMINISTRATION, closed to the internet and served only on the
+    # tailnet copy below. /admin is the web admin panel (users, orgs, every
+    # repo, instance config, cron, system webhooks); /api/v1/admin/* is its
+    # API, 34 endpoints on 16.0.5, every one site-admin only. Nothing here
+    # automates against them — the runner registers with a pre-shared token,
+    # and the pages system webhook is set once by hand. Personal settings
+    # (/user/settings, /api/v1/user/*) and org settings stay public.
+    #
+    # A stolen password or session can then still read and push what the
+    # account owns, but it cannot create users, mint runner tokens or rewrite
+    # instance config from outside the tailnet.
+    blockedPaths = [
+      "/admin"
+      "/admin/*"
+      "/api/v1/admin"
+      "/api/v1/admin/*"
+    ];
+  };
+
   sites = [
     {
       host = "music.${domain}";
@@ -245,53 +312,7 @@ let
       # account and only for accounts it has seen; this is per address.
       loginMatch = "query _task=login";
     }
-    {
-      host = "git.${domain}";
-      upstream = "forgejo:4242";
-
-      # A repo page pulls a few dozen assets. Forgejo has no login throttle of
-      # its own, so the login zone is the only one there is.
-      rateLimit = {
-        events = 600;
-        window = "1m";
-      };
-      loginMatch = "path /user/login /user/two_factor* /user/forgot_password /user/sign_up";
-
-      # The logins that are NOT a form: `git clone https://user:pass@...` and
-      # /api/v1 with basic auth both send `Authorization: Basic` and never
-      # touch /user/login, so the login zone above cannot see them. A git
-      # operation is 2-4 requests, so 30 a minute is room for real use and
-      # nowhere near a guessing rate. Exempt like the site-wide zone: renovate
-      # pushes over https with its token as a basic-auth password, from this
-      # host's own address.
-      basicAuthRateLimit = {
-        events = 30;
-        window = "1m";
-      };
-
-      # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
-      # address-and-port control: the cloud firewall, the runner's own nftables,
-      # and this host's output chain can all say "that box may reach tcp/443
-      # here" and nothing finer. But the runner MUST reach 443 on this host —
-      # that is how it fetches jobs — so without something reading the request,
-      # a rooted CI job gets the entire Forgejo surface: every repo it can see,
-      # the whole web UI, the full /api/v1 with whatever its session carries.
-      #
-      # remote_ip is the TCP peer and never a header. Caddy consults
-      # X-Forwarded-For only when `trusted_proxies` is set, which it is not
-      # anywhere in this file, and every record in tofu/modules/cloudflare-dns
-      # is `proxied = false`, so nothing sits in front of caddy to launder an
-      # address. A root-compromised runner can forge any credential it holds; it
-      # cannot forge its source address, because Hetzner assigns it and filters
-      # spoofed egress upstream. That is why this is keyed on address rather
-      # than on a token.
-      #
-      # This GRANTS NOTHING. It is a pure restriction applied to a set of
-      # addresses, so the worst a mistake here can do is break CI — loudly, in a
-      # way a workflow run reports — rather than open something up.
-      restrictRunners = true;
-
-    }
+    gitSite
     {
       host = "status.${domain}";
       upstream = "kuma:3001";
@@ -406,6 +427,19 @@ let
       upstream = "kuma:3001";
       tailnet = true;
     }
+    # git.<domain> AGAIN, on the tailnet listener, with the site-admin paths
+    # open. Same limits. No runner restriction: the runner is deliberately off
+    # the tailnet (modules/runner/networking.nix), and the tailnet policy
+    # grants this host to the owner's account alone.
+    (
+      builtins.removeAttrs gitSite [
+        "blockedPaths"
+        "restrictRunners"
+      ]
+      // {
+        tailnet = true;
+      }
+    )
     {
       host = "grafana.${domain}";
 
@@ -548,11 +582,17 @@ let
           ++ lib.mapAttrsToList (name: value: "\t\t${name} \"${value}\"") h.values
           ++ [ "\t}" ]
         ) (site.headers or [ ])
-        # `respond` is ordered before reverse_proxy, so a blocked path never
-        # reaches the upstream. 404 rather than 403: nothing to see here.
+        # A `handle` of its own, NOT a bare `respond`: caddy orders `handle`
+        # before `respond`, so on git.<domain> — whose upstream sits inside
+        # handle blocks for restrictRunners — a bare respond would never run
+        # and block nothing. Emitted before those handles, and named-matcher
+        # handles keep their written order, so this one is tried first. 404
+        # rather than 403: nothing to see here.
         ++ lib.optionals (site ? blockedPaths) [
           "\t@blocked path ${lib.concatStringsSep " " site.blockedPaths}"
-          "\trespond @blocked 404"
+          "\thandle @blocked {"
+          "\t\trespond 404"
+          "\t}"
         ]
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
