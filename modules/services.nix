@@ -82,6 +82,15 @@
         "127.0.0.1/8"
         "::1"
         "100.64.0.0/10" # tailscale CGNAT
+
+        # Every docker network on this host (the default pool and botSubnet).
+        # forgejo-ssh bans into the FORWARD chain, so a banned bridge address
+        # cuts off every container at once — the 2026-09-05 outage, when a jail
+        # banned 172.18.0.1. And a banned bridge address is never the attacker:
+        # a connection that came through docker's userland proxy (see
+        # modules/firewall.nix, PUBLISHED CONTAINER PORTS) shows the gateway as
+        # its source. Structurally unbannable beats "the regex won't match it".
+        "172.16.0.0/12"
       ];
 
       jails = {
