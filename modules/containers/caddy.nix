@@ -184,7 +184,7 @@ let
   # every login on music, mail and git open to guessing at whatever speed the
   # service itself allowed. The default has to be the limit.
   #
-  # Two zones per site, both keyed on the client IP:
+  # Up to three zones per site, all keyed on the client IP:
   #
   #   * SITE-WIDE — a flood brake. `rateLimit` overrides the numbers. Exempt:
   #     private ranges (every docker bridge, so kuma's probes and anything
@@ -193,6 +193,10 @@ let
   #     runners (already confined to runnerApiPaths below, and a limit there
   #     only breaks CI). None of those is an attacker, and throttling them is
   #     a self-inflicted outage.
+  #
+  #   * BASIC AUTH — `basicAuthRateLimit`, for sites that take a password in
+  #     an Authorization header rather than a form (git over https, the API).
+  #     Exempt like the site-wide zone.
   #
   #   * LOGIN — `loginMatch`, a caddy matcher for the site's login request,
   #     always ANDed with `method POST`. Tight, and exempts NOBODY: nothing on
@@ -252,6 +256,18 @@ let
         window = "1m";
       };
       loginMatch = "path /user/login /user/two_factor* /user/forgot_password /user/sign_up";
+
+      # The logins that are NOT a form: `git clone https://user:pass@...` and
+      # /api/v1 with basic auth both send `Authorization: Basic` and never
+      # touch /user/login, so the login zone above cannot see them. A git
+      # operation is 2-4 requests, so 30 a minute is room for real use and
+      # nowhere near a guessing rate. Exempt like the site-wide zone: renovate
+      # pushes over https with its token as a basic-auth password, from this
+      # host's own address.
+      basicAuthRateLimit = {
+        events = 30;
+        window = "1m";
+      };
 
       # THE LAYER THAT CAN SEE A PATH. Everything else in this split is an
       # address-and-port control: the cloud firewall, the runner's own nftables,
@@ -471,6 +487,17 @@ let
             "\t\t\tkey {remote_host}"
             "\t\t\tevents ${toString (rateLimitOf site).events}"
             "\t\t\twindow ${(rateLimitOf site).window}"
+            "\t\t}"
+          ]
+          ++ lib.optionals (site ? basicAuthRateLimit) [
+            "\t\tzone ${site.host}-basic {"
+            "\t\t\tmatch {"
+            "\t\t\t\theader Authorization \"Basic *\""
+            "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+            "\t\t\t}"
+            "\t\t\tkey {remote_host}"
+            "\t\t\tevents ${toString site.basicAuthRateLimit.events}"
+            "\t\t\twindow ${site.basicAuthRateLimit.window}"
             "\t\t}"
           ]
           ++ lib.optionals (site ? loginMatch) [
