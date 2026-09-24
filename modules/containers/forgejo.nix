@@ -16,14 +16,17 @@ let
 in
 {
   virtualisation.oci-containers.containers.forgejo = {
-    # 16.0.4, a PATCH release within 16.0, and the reason to take it promptly is
-    # that it is a security release. Its notes carry a Critical fix: template
-    # expansion during "generate repository from template" could plant a `.git`
-    # folder that git then adopted, giving arbitrary file read and remote code
-    # execution ON THIS HOST. Alongside it, an API access-token scope bypass via
-    # the "allow maintainer edit" path, and draft-release attachments readable
-    # by anyone including anonymous callers on public repos — the same class
-    # Gitea fixed as CVE-2026-27660.
+    # 16.0.5, a PATCH release within 16.0, and the reason to take it promptly is
+    # that it is a security release. Its notes carry a Critical fix: a patch
+    # applied through the web UI, web cherry-pick or the `/diffpatch` API could
+    # make `git apply` rewrite the temporary bare repo's own config, giving
+    # remote code execution ON THIS HOST — a variant of the 15.0.6 fix that was
+    # missed at the time. Alongside it, a CSRF that could attach an attacker's
+    # OpenID identity to a logged-in account, and OpenID sign-in is on here.
+    #
+    # 16.0.4 before it fixed the same class through template expansion
+    # planting a `.git` folder, plus an access-token scope bypass and
+    # draft-release attachments readable anonymously on public repos.
     #
     # This repo is public and this instance runs Actions, so "wait and see" was
     # the more expensive option, not the safer one.
@@ -42,7 +45,7 @@ in
     # the move to 16.0.3 during the data migration.
     #
     # Bump with: curl -sS 'https://codeberg.org/api/v1/repos/forgejo/forgejo/releases?limit=5'
-    image = "codeberg.org/forgejo/forgejo:16.0.4";
+    image = "codeberg.org/forgejo/forgejo:16.0.5@sha256:cf5f5ae6acf2ababca0ee3d255705b83a47f35b25e07fc931d694d60664053fe";
 
     # journald, so the fail2ban jail can read the SSH auth failures at all. The
     # default json-file driver writes to a path containing the container ID and
