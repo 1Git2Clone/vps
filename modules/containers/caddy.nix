@@ -493,6 +493,20 @@ let
   # named per site, so the tailnet copy's zones carry a suffix.
   zoneName = site: site.host + lib.optionalString (site.tailnet or false) "-tailnet";
 
+  # HALF-PUBLIC NAMES: served on both listeners, public and tailnet. The
+  # tailnet-only names (dozzle, grafana, syncthing) need nothing special —
+  # their public A record already points at the tailnet address, which only
+  # the tailnet can reach. These cannot: the internet must keep getting the
+  # public address. So tailnet devices are handed the tailnet address by
+  # Tailscale split DNS (tofu/tailscale.tf), which asks the resolver below.
+  #
+  # Computed, not listed: give a site a tailnet copy and its name joins.
+  # tofu's var.split_dns_subdomains must agree with this list.
+  splitDnsHosts = lib.intersectLists (map (s: s.host) tailnetSites) (
+    map (s: s.host) (lib.filter (s: !(s.tailnet or false)) sites)
+  );
+  inherit (config.infra) tailnetIPv4;
+
   # Tabs and this exact shape are what `caddy fmt` produces, so `caddy validate`
   # on the generated file is clean rather than warning about formatting every
   # time someone checks it.
@@ -723,6 +737,51 @@ in
       "--tmpfs=/data:rw,nosuid,nodev,size=16m,uid=${id},gid=${id},mode=0700"
       "--tmpfs=/config:rw,nosuid,nodev,size=4m,uid=${id},gid=${id},mode=0700"
     ];
+  };
+
+  # THE SPLIT-DNS RESOLVER. Answers exactly the half-public names with the
+  # tailnet address and nothing else: any other name is outside its zone and
+  # gets REFUSED, and an AAAA for these names is an empty answer (neither has
+  # a public AAAA either). Bound to the tailnet address alone, so the internet
+  # cannot even reach it; the input chain would drop 53 anyway. The tailnet
+  # policy has to allow 53 to this host (tofu/tailscale-policy.hujson).
+  #
+  # IF IT IS DOWN, tailnet devices most likely cannot resolve these two names
+  # at all: split DNS sends them ONLY here, and Tailscale documents no
+  # fallback. The internet is unaffected, and both names are served by this
+  # same box anyway, so the case that matters is CoreDNS alone failing —
+  # Restart=on-failure (from the upstream module) covers it. Deploy this
+  # before `tofu apply` points the tailnet at it.
+  services.coredns = {
+    enable = true;
+    config = ''
+      ${lib.concatStringsSep " " splitDnsHosts} {
+        bind ${tailnetIPv4}
+        hosts {
+          ${tailnetIPv4} ${lib.concatStringsSep " " splitDnsHosts}
+          ttl 300
+        }
+      }
+    '';
+  };
+
+  # The address exists only once tailscaled has brought tailscale0 up, and a
+  # bind to an absent address fails. Wait for it rather than crash-looping
+  # through boot. 60 seconds, under systemd's default 90-second start timeout,
+  # which counts ExecStartPre. Matched as "inet <addr>/" so 100.109.115.120
+  # cannot satisfy a wait for 100.109.115.12.
+  systemd.services.coredns = {
+    after = [ "tailscaled.service" ];
+    wants = [ "tailscaled.service" ];
+    serviceConfig.ExecStartPre = "${pkgs.writeShellScript "wait-for-tailnet-address" ''
+      for _ in $(${pkgs.coreutils}/bin/seq 60); do
+        ${pkgs.iproute2}/bin/ip -4 addr show dev tailscale0 2>/dev/null \
+          | ${pkgs.gnugrep}/bin/grep -qF "inet ${tailnetIPv4}/" && exit 0
+        ${pkgs.coreutils}/bin/sleep 1
+      done
+      echo "tailscale0 never got ${tailnetIPv4}" >&2
+      exit 1
+    ''}";
   };
 
   # acme writes the certificate before anything can serve it. Without this a

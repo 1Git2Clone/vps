@@ -105,6 +105,9 @@
 		//         and Tailscale SSH cannot be scripted past its re-auth check).
 		//         Drop this port and deploys stop working.
 		//   22    forgejo's ssh, for git over the tailnet
+		//   53    the split-DNS resolver (udp and tcp), which answers the
+		//         half-public names git.<domain> and status.<domain> with
+		//         this box's tailnet address — see tofu/tailscale.tf
 		//   80    redirected to tailnetHttpPort by the firewall's prerouting
 		//   443   redirected to tailnetHttpsPort the same way — this is what
 		//         makes https://dozzle.<domain> work with no port in the URL.
@@ -126,7 +129,7 @@
 		{
 			"action": "accept",
 			"src": ["1git2clone@github"],
-			"dst": ["tag:vps:22,80,443,2222,3000,8080,8384,8443,8880"],
+			"dst": ["tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880"],
 		},
 
 		// tag:friends-ssh IS A DESTINATION ONLY. Those machines are here to be
@@ -265,6 +268,8 @@
 			"accept": [
 				// Deploys. The single most load-bearing line in the file.
 				"vps:2222",
+				// The split-DNS resolver, for the half-public names.
+				"vps:53",
 				// The tailnet vhosts, at the port the browser actually sends.
 				"vps:443",
 				// dozzle direct, for when caddy is what broke.

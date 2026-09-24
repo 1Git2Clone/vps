@@ -74,7 +74,7 @@ and go through review.
 
 ```text
 acls: 1git2clone@github -> autogroup:self:*
-      1git2clone@github -> tag:vps:22,80,443,2222,3000,8080,8384,8443,8880
+      1git2clone@github -> tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880
       1git2clone@github -> tag:friends-ssh:22
 ssh:  check  -> autogroup:self   as nonroot, root
       check  -> tag:vps          as nonroot
@@ -95,6 +95,7 @@ The port list on `tag:vps` is everything a tailnet client legitimately reaches:
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **2222**    | the host's own sshd — **deploy-critical**, `deploy .#vps` connects here. Drop it and deploys stop                                                                |
 | 22          | forgejo's ssh, for git over the tailnet                                                                                                                          |
+| 53          | the split-DNS resolver: answers `git.` and `status.` with this box's tailnet address, see [below](#split-dns-for-the-half-public-names)                          |
 | 80 / 443    | redirected to 8880 / 8443 by the firewall's prerouting. **The ACL sees the port the client sent**, before the rewrite, so these are the ones that must be listed |
 | 3000        | grafana, host networking                                                                                                                                         |
 | 8080        | dozzle direct — the path that still works when caddy is the broken part                                                                                          |
@@ -288,3 +289,30 @@ The client tofu uses for the policy itself is a different one, scoped to
   should not: it is the layer that cannot tell peers apart. The policy file is
   now the layer in front of it, and the two are the usual arrangement here —
   each is what survives a misconfiguration of the other.
+
+## Split DNS for the half-public names
+
+`git.<domain>` and `status.<domain>` are served twice: publicly, and on caddy's
+tailnet listener with their admin paths open (see
+[Access control](access-control.md#site-administration-is-tailnet-only)). The
+tailnet-only names need nothing like this — their public A record already
+points at the tailnet address, which only the tailnet can reach. These two must
+keep their public address for everyone else, so one public record cannot serve
+both audiences.
+
+Tailscale split DNS closes it: tofu's `tailscale_dns_split_nameservers` sends
+lookups for exactly those names, from tailnet devices only, to a CoreDNS on the
+vps bound to its tailnet address. It answers them with that address and refuses
+everything else. Nothing is configured per device, phones included.
+
+- The name list is **computed** in `modules/containers/caddy.nix` — every host
+  that has both a public and a tailnet copy — and tofu's
+  `var.split_dns_subdomains` must agree with it.
+- It needs port 53 in the grant above, and the **DNS (write)** scope on the
+  OAuth client alongside Policy File.
+- **If the resolver is down, your tailnet devices most likely cannot resolve
+  those two names at all.** Split DNS sends them only there and Tailscale
+  documents no fallback. Everyone else is unaffected, and both names live on
+  this same box anyway, so the case that matters is CoreDNS alone failing,
+  which systemd restarts. Order matters for the same reason: deploy the
+  resolver before `tofu apply` points the tailnet at it.
