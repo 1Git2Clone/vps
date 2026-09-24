@@ -79,6 +79,17 @@
       '';
     };
 
+    tailnetIPv4 = lib.mkOption {
+      type = lib.types.str;
+      default = "100.109.115.12";
+      description = ''
+        This box's tailscale address. A COPY of tofu's var.tailnet_ipv4, the
+        same arrangement as publicIPv4: tofu owns it, this follows. Used by
+        the split-DNS resolver in modules/containers/caddy.nix, which answers
+        the half-public names with it for tailnet devices.
+      '';
+    };
+
     runnerIPv4s = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {

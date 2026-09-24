@@ -17,8 +17,10 @@ supports.
 Where an app's administration lives on paths its public side never uses, caddy
 answers those paths with a 404 on the public listener and serves the same name
 again on the tailnet listener with them open (`blockedPaths` in
-`modules/containers/caddy.nix`). A tailnet device reaches the admin side by
-resolving the name to the tailnet address.
+`modules/containers/caddy.nix`). Tailnet devices resolve those names to the
+tailnet address through
+[split DNS](tailnet.md#split-dns-for-the-half-public-names), so the admin side
+works from any of them with nothing configured per device.
 
 - **kuma** — `/socket.io/` is only the admin login and dashboard; the public
   status page loads everything from `/api/status-page/*`. kuma's login is a
