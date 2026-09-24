@@ -308,6 +308,12 @@ everything else. Nothing is configured per device, phones included.
   `var.split_dns_subdomains` must agree with it.
 - It needs port 53 in the grant above, and the **DNS (write)** scope on the
   OAuth client alongside Policy File.
+- The public copies of these names send **no HTTP/3 advertisement**
+  (`header -Alt-Svc`). A browser that saw `Alt-Svc: h3=":443"` publicly keeps
+  it for 30 days, then tries HTTP/3 over UDP 443 at the tailnet address, where
+  only TCP 443 is redirected to caddy — Forgejo's webpack chunk loads failed
+  exactly that way. A browser that already cached it needs its cache for the
+  site cleared once.
 - **If the resolver is down, your tailnet devices most likely cannot resolve
   those two names at all.** Split DNS sends them only there and Tailscale
   documents no fallback. Everyone else is unaffected, and both names live on
