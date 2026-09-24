@@ -57,7 +57,7 @@ in
     # safe major for this deployment specifically.
     #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/amir20/dozzle/tags?page_size=20&ordering=last_updated'
-    image = "amir20/dozzle:v11.1.0";
+    image = "amir20/dozzle:v11.1.1";
 
     ports = [ "8080:8080" ];
 
