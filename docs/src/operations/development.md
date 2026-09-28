@@ -27,7 +27,7 @@ no place like `127.0.0.1`). Port 2222 on both ends, because sshd moved off 22 so
 forgejo could publish it.
 
 The VM disk is 32G (`virtualisation.vmVariantWithDisko`). The disko default of 2G
-leaves ~987M for `/` once the ESP takes its gigabyte, which cannot hold the eleven
+leaves ~987M for `/` once the ESP takes its gigabyte, which cannot hold the sixteen
 declared images — the VM fills up mid-boot and every service that needs disk fails
 in a way that reads like a bug in that service. This applies to `nix run .` only;
 the Hetzner disk is sized by the provider.
@@ -150,3 +150,14 @@ containing both an intraword underscore and an emphasis span.
 
 `docs/superpowers/` is not linted — those are agent-generated plan and spec
 records, kept as history.
+
+## Checking the Minecraft mod lists
+
+```sh
+nix run .#minecraft-mod-check
+```
+
+It checks every declared Modrinth slug against the exact Minecraft version and
+loader each world runs, read from the evaluated config rather than a copy of
+it. CI builds the same thing as `.#minecraft-mods`, which needs
+`--option sandbox false` because it uses the network.

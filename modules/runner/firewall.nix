@@ -10,7 +10,7 @@
 # direction means allow-everything, not deny. So the cloud level does the
 # structural half and nothing finer:
 #
-#   * no private NIC (removed in 5d0ae14), so there is no unfiltered path;
+#   * no private NIC (removed in c66f577), so there is no unfiltered path;
 #   * one ingress rule, tcp/22 from 167.233.24.58/32, so only the VPS knocks;
 #   * a named egress allow-list, because a runner with no egress cannot pull a
 #     job image or resolve crates.io.

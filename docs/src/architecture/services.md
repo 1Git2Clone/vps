@@ -68,7 +68,8 @@ to be spelled out in every clone URL or every client's ssh config.
 
 ## caddy is built here, not pulled
 
-caddy is the one container not pulled from a registry. It is built locally with
+caddy is one of three locally built images (with pages-hook and the serenity
+bot, below), and the only one built to add a module. It is built locally with
 the `caddy-ratelimit` module compiled in (`caddy.withPlugins`, wrapped in a
 minimal `dockerTools` image), because stock caddy has no rate limiting — and
 rate limiting is load-bearing for every site, see
@@ -83,7 +84,8 @@ from `ids.nix`, read-only rootfs, `--cap-drop=ALL`, and tmpfs for `/data`,
 
 Most images here are `repo:tag` on a release tag, which is both a version and a
 promise that the content behind it does not change. Three are not, and they
-carry a digest as well:
+carry a digest as well (forgejo carries one too, on a release tag; the table
+lists only the images whose tag itself moves):
 
 | Image                          | Why the tag alone says nothing                                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -111,7 +113,24 @@ referenced image, and never a volume. The runner's podman prune is the one that
 runs `--all`, and what that costs is covered in
 [CI runner isolation](runner.md#the-garbage-collector-eats-it).
 
-## Three things are deliberately not containers
+## The serenity bot is built during activation
+
+Upstream publishes no image, so `serenity-bot.nix` builds one from upstream's
+own Dockerfile off a full-SHA `fetchgit` pin. **The build runs in the
+activation script, not in its unit**: that is the only phase of a switch where
+the old container is still serving, so the ~3½-minute compile costs no outage.
+`stopIfChanged = false` on the containers and the builder keeps them up until
+then, and `serenity-bot-image.service` only does the build at boot, when docker
+is not up during activation. The tag embeds the rev plus a hash of the enabled
+features and rustflags, so a features-only change rebuilds too.
+
+Sharding is two numbers, `shards` and `instances`, both 1. The per-instance
+ranges are computed and checked exhaustively at eval time up to 16 shards.
+**Above one instance redis stops being optional**: the AI locks and rate limits
+are per-process without it. Until then `serenity-redis` is a cache with a
+Discord fallback: in-memory only, no volume, 256 MB LRU.
+
+## Deliberately not containers
 
 - **postgres + pgbouncer** (`postgres.nix`) — the first service whose data is
   _not_ a docker volume, so its backup (`pg_dumpall`) is not optional; it is
@@ -123,4 +142,9 @@ runs `--all`, and what that costs is covered in
   byte-identical to the old box because navidrome bind-mounts
   `~/syncthing/Music` and the node's device ID is derived from the TLS keypair
   in the config dir. Tailnet-only GUI on 8384.
+- **CoreDNS** (`caddy.nix`) — answers split DNS for the half-public names,
+  bound to the tailnet address on :53. See
+  [split DNS](tailnet.md#split-dns-for-the-half-public-names).
+- **Renovate** (`renovate.nix`) — a daily host timer, on the VPS rather than the
+  CI runner so its cross-org write token never reaches an untrusted machine.
 - **The Actions runner**, which is now a different machine entirely.

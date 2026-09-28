@@ -27,7 +27,7 @@ flowchart TB
 
     runner -- "HTTPS 443 only<br/>fetch jobs, clone, upload artifacts" --> vps
     vps -- "ssh 22, for deploys<br/>initiated here, never there" --> runner
-    vps -. "pulls published artifacts<br/>every 5 min" .-> pages_vol
+    vps -. "pulls published artifacts<br/>on each run, hourly as a safety net" .-> pages_vol
 
     classDef trusted fill:#1f6f43,stroke:#0d3a23,color:#fff
     classDef hostile fill:#8c2f2f,stroke:#4d1a1a,color:#fff

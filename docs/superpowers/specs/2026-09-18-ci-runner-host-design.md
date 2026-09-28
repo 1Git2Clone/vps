@@ -419,7 +419,7 @@ to destroy`. Without it, `for_each` reads as destroy-and-create, which on a
 
 3. Install, jumped through the VPS:
    `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps --extra-files "$stage" root@46.225.61.172`.
-   The private NIC was removed in 5d0ae14, so the target is the public address;
+   The private NIC was removed in c66f577, so the target is the public address;
    the jump is what makes the runner's single ingress rule — `tcp/22` from
    `167.233.24.58/32` — sufficient. The address does not change, because the box
    is not replaced.

@@ -33,6 +33,28 @@ silence becomes the alert rather than an all-clear.
 The principle is worth naming once: **a monitor that reports nothing when it
 cannot run is not a monitor.**
 
+## The bot's dashboards
+
+Four dashboards are seeded from `modules/containers/grafana-dashboards/` into a
+**Provisioned** folder: overview, guild, user and DMs, linked so a guild or user
+row drills into its own view with the time range carried across. Every panel is
+TraceQL against tempo. Any other dashboard lives only in `grafana_data`, which
+restic already covers.
+
+UI edits save (`allowUiUpdates`), but the directory is one store path, so
+**editing any file in it re-seeds all four** and discards UI edits across the
+folder. Export a dashboard back into git before touching its neighbours.
+
+Two query guards are bound to a date:
+
+- a second target on `span.guild_id =~ "Some.*"` keeps spans from before
+  2026-09-17, when `guild_id` was recorded in its Debug spelling;
+- `span.attachment_urls != nil` on the span tables, because `attachments` and
+  `links` changed from string to integer on 2026-09-18, and the tempo plugin
+  **panics** (HTTP 500, "No data") on a column whose type changes mid-result.
+
+Delete both once tempo's retention no longer reaches those dates.
+
 ## Where to look when something is wrong
 
 | Symptom                    | First place                                                                                        |
@@ -41,5 +63,5 @@ cannot run is not a monitor.**
 | a container will not start | `journalctl -u docker-<name>`                                                                      |
 | a deploy failed            | the deploy output itself; then `journalctl -u <unit>` for the unit it named                        |
 | mail is not delivered      | the issuer check in [TLS, DNS and mail](tls-dns-mail.md#the-cloudflare-tokens), then DMS's own log |
-| a CI job never starts      | `journalctl -u gitea-runner-forgejo` **on the runner**, reached with `ssh -J vps`                  |
+| a CI job never starts      | `journalctl -u forgejo-runner` **on the runner**, reached with `ssh -J hutao@vps:2222`             |
 | traces are missing         | tempo is on host networking; check the input chain admits the bot's bridge                         |

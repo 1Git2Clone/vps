@@ -13,8 +13,9 @@ Two kinds of consumer:
   left at the default `0400 root`, because `syncthing-init` reads it as
   `services.syncthing.user` and not as root.
 - **`sops.templates.*`** — a rendered file mixing secrets with literal text,
-  for things that want `KEY=value`: the acme, grafana, caddy, cloudflared and
-  searxng env files — and the tailnet auth key, which is the interesting one.
+  for things that want `KEY=value` or a whole config file: most env files here
+  (`grep -rn sops.templates modules` lists all sixteen), the pgbouncer userlist,
+  dozzle's `users.yml` — and the tailnet auth key, which is the interesting one.
 
 **Every key in `secrets.nix` must exist in `secrets.yaml`**, or
 `sops-install-secrets` fails during activation. This is validated at _build_

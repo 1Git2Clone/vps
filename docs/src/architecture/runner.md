@@ -27,7 +27,7 @@ flowchart TB
 
     job --> L4
     rd --> L4["④ runner nftables<br/>out: policy-drop, VPS on 443<br/>in: ssh from the VPS only"]
-    L4 --> L1["① runner cloud firewall<br/>out: 53 / 80 / 443"]
+    L4 --> L1["① runner cloud firewall<br/>out: 53 / 80 / 443 · udp 123"]
     L1 --> L2["② VPS cloud firewall<br/>in: tcp/443 from anywhere"]
     L2 --> L3["③ VPS nftables"]
     L3 --> L5["⑤ caddy L7 allow-list<br/>4 paths, everything else 403"]
@@ -42,15 +42,15 @@ flowchart TB
     class L1,L2,L3,L4,L5 ctl
 ```
 
-| # | Control                                                                                                                 | Where                           |
-| - | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| 1 | Runner cloud firewall: in = tcp/22 from the VPS /32 only; out = 53/80/443                                               | `tofu/runner-firewall.tf`       |
-| 2 | VPS cloud firewall: tcp/22 outbound to the runner /32                                                                   | `tofu/modules/hetzner-firewall` |
-| 3 | VPS nftables: output chain is policy-drop, one rule per runner address                                                  | `modules/firewall.nix`          |
-| 4 | Runner nftables: output policy-drop, the VPS reachable on 443 and nothing else; inbound ssh accepted from the VPS alone | `modules/runner/firewall.nix`   |
-| 5 | Caddy: runner addresses restricted to four Actions paths, everything else 403                                           | `modules/containers/caddy.nix`  |
-| 6 | Job: no engine socket by default; its container is created per job and destroyed after                                  | `modules/runner/default.nix`    |
-| 7 | `pages-pull`: a fetched artifact reduced to files and directories, modes normalised, before caddy serves it             | `modules/pages-pull.nix`        |
+| #   | Control                                                                                                                 | Where                           |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 1   | Runner cloud firewall: in = tcp/22 from the VPS /32 only; out = 53/80/443 + udp/123 (NTP)                               | `tofu/runner-firewall.tf`       |
+| 2   | VPS cloud firewall: tcp/22 outbound to the runner /32                                                                   | `tofu/modules/hetzner-firewall` |
+| 3   | VPS nftables: output chain is policy-drop, one rule per runner address                                                  | `modules/firewall.nix`          |
+| 4   | Runner nftables: output policy-drop, the VPS reachable on 443 and nothing else; inbound ssh accepted from the VPS alone | `modules/runner/firewall.nix`   |
+| 5   | Caddy: runner addresses restricted to four Actions paths, everything else 403                                           | `modules/containers/caddy.nix`  |
+| 6   | Job: no engine socket by default; its container is created per job and destroyed after                                  | `modules/runner/default.nix`    |
+| 7   | `pages-pull`: a fetched artifact reduced to files and directories, modes normalised, before caddy serves it             | `modules/pages-pull.nix`        |
 
 Every connection between the two hosts is either initiated **by the VPS**, or
 is HTTPS from the runner to `git.hu-tao.dev` like any other client on the
@@ -221,14 +221,12 @@ everywhere; a full workflow run produced no 403 at all.
 
 ## The job's engine socket
 
-`container.docker_host` is podman's socket — exactly the access the old
-in-container runner's `docker_host: "-"` and one-entry `valid_volumes`
-allow-list existed to **deny**.
-
-That is not a relaxation of the old position. It is the same position at a
-different blast radius: a workflow that escapes here gets root on a machine
-holding a nix store, a job cache and its own runner token — no mail, no git, no
-sops key — and the box is a snapshot away from replacement.
+`container.docker_host` is **`-`: no engine socket is mounted into the job.**
+Podman's socket is root on this box, so a job holding it could plant units or
+read the runner's identity pair, and that would outlive the job. Without it a
+compromise lasts one job. `services:` still work, because the runner creates
+service containers, not the job (`a9bf861`, and the comment above
+`docker_host` in `modules/runner/default.nix`).
 
 Podman rather than docker, and not as a preference: docker's nftables
 integration is what produced the half-working published ports and forward-chain

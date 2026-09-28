@@ -88,12 +88,12 @@ subtract first — it is the only one here whose input is arbitrary text from
 strangers that it then ships to a third-party model.
 
 What remains matched is **deliberate and worth knowing**: searxng, kuma,
-forgejo, navidrome and the two minecraft servers share the proxy bridge with
-caddy, so they are still admitted to those three ports. Both services behind
-them are credential-protected (grafana has a real admin login with sign-up off;
-syncthing's GUI password is declared by `modules/syncthing.nix` through
-`guiPasswordFile` and re-applied on every deploy), so this is defence in depth,
-not a hole being closed.
+forgejo, navidrome, dozzle, cloudflared, mailserver, webmail and pages-hook
+share the proxy bridge with caddy, so they are still admitted to those three
+ports. Both services behind them are credential-protected (grafana has a real
+admin login with sign-up off; syncthing's GUI password is declared by
+`modules/syncthing.nix` through `guiPasswordFile` and re-applied on every
+deploy), so this is defence in depth, not a hole being closed.
 
 That syncthing half used to be an **assertion about the live box** rather than
 something the deploy enforced. The config directory came across from the old
@@ -127,7 +127,7 @@ That is also why door 3 is a policy file and not an nftables rule. **nftables
 cannot tell tailnet peers apart**: every packet off `tailscale0` looks the same
 to it, so "which peers may reach what" is a question this layer is structurally
 unable to answer. `tofu/tailscale-policy.hujson` is the layer that can, and it
-narrows the VPS to nine ports for the owner account — 6432 and 4317/4318 are
+narrows the VPS to ten ports for the owner account — 6432 and 4317/4318 are
 no longer tailnet-reachable at all. See
 [The tailnet policy](tailnet.md).
 
@@ -140,8 +140,10 @@ ordinary key.
 Three of those services also answer by name — `dozzle.`, `grafana.` and
 `syncthing.` — and that is the same mechanism wearing a hat. Caddy runs a
 **second listener** on `infra.tailnetHttpsPort` (8443) carrying those three
-vhosts and nothing else; like every other private port it is published on
-`0.0.0.0` and kept private by being in neither allow-list.
+vhosts, **plus tailnet copies of `git.` and `status.`** with their admin paths
+open (see [split DNS](tailnet.md#split-dns-for-the-half-public-names)); like
+every other private port it is published on `0.0.0.0` and kept private by being
+in neither allow-list.
 
 What makes the URL portless is a `nat` prerouting chain:
 

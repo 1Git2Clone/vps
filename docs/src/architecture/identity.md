@@ -17,7 +17,8 @@ orphans every file the old name owned.
 Read `config.infra.serviceId.<name>`, never a literal — so `grep -rn serviceId`
 finds every use.
 
-Today only `caddy` has an id (offset 1). A group per id is created so
+Two services have ids: `caddy` (1) and `pages-hook` (2), which must own its
+bind-mounted `/run` directory without being root. A group per id is created so
 `security.acme` can chown the cert directory to `caddy` rather than to `acme`,
 which is what lets the container read its certificate by group membership
 instead of by a capability it drops.

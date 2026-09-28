@@ -146,6 +146,13 @@ SMTP/IMAP (25/465/587/993) are published **directly** — an MX must be reachabl
 at the host, so none of it can sit behind cloudflared. Only the webmail is
 proxied, at `mail.`.
 
+`postmaster@` and `abuse@` are aliases, declared in a read-only
+`postfix-virtual.cf` mounted over the DMS config volume (`mailserver.nix`).
+Before that, `postmaster@` answered `550 5.1.1`, which also swallowed the box's
+own root mail — and RFC 5321 requires it to be deliverable. **`setup alias add`
+now fails on purpose: aliases are a git change**, because an alias that exists
+only in the `dms_config` volume is state this repo does not describe.
+
 ## The Cloudflare tokens
 
 There are two, with different scopes, and confusing them produces a failure

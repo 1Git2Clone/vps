@@ -13,10 +13,10 @@ run on git.hu-tao.dev.
 | `.forgejo/workflows/pages.yml` | the dedicated runner box | one: `pages` — builds this book, `main` only |
 | `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                   |
 
-| Check    | What                                                                                                                                                              |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| lint     | `pre-commit run --all-files`, then gitleaks across the full history                                                                                               |
-| evaluate | evaluates all three `nixosConfigurations`, then `nix flake check --no-build`, then builds `deploy-schema`, `runner-firewall-ordering` and `runner-has-no-secrets` |
+| Check    | What                                                                                                                                                                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| lint     | `pre-commit run --all-files`, then gitleaks across the full history                                                                                                                                                                          |
+| evaluate | evaluates all three `nixosConfigurations`, then `nix flake check --no-build`, then builds `deploy-schema` and its guard, `runner-firewall-ordering`, `runner-has-no-secrets`, `pages-pull-strips-symlinks`, and the `minecraft-mods` package |
 
 **The mirror is push-only.** Commit here and let it flow across; anything
 edited on GitHub is overwritten by the next sync, and CI can lag a push until
@@ -70,13 +70,15 @@ the system closure, so a plain `nix flake check` builds the whole system, and
 since deploy-rs `follows` our nixpkgs its binary is a cache miss and is
 compiled from source.
 
-Three checks are built rather than evaluated, and each for a reason:
+Five checks and one package are built rather than evaluated, and each for a reason:
 
-| Check                      | Why it must build                                                                                                                                                                                                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deploy-schema`            | validates `deploy.json` against deploy-rs's schema — the config is otherwise only exercised by a real deploy. `deploy-schema-rejects-bad-input` is its guard: feed the validator a node with no `hostname` and fail if that is accepted, so a validator that silently reads nothing cannot pass forever |
-| `runner-firewall-ordering` | greps the evaluated nftables ruleset for rule order. A check that is only evaluated never runs its builder, so its failure branch would be inert                                                                                                                                                        |
-| `runner-has-no-secrets`    | same reason — it catches the runner growing a `sops-install-secrets` unit, which a copy-pasted module import would do                                                                                                                                                                                   |
+| Check                        | Why it must build                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy-schema`              | validates `deploy.json` against deploy-rs's schema — the config is otherwise only exercised by a real deploy. `deploy-schema-rejects-bad-input` is its guard: feed the validator a node with no `hostname` and fail if that is accepted, so a validator that silently reads nothing cannot pass forever |
+| `runner-firewall-ordering`   | greps the evaluated nftables ruleset for rule order. A check that is only evaluated never runs its builder, so its failure branch would be inert                                                                                                                                                        |
+| `runner-has-no-secrets`      | same reason — it catches the runner growing a `sops-install-secrets` unit, which a copy-pasted module import would do                                                                                                                                                                                   |
+| `pages-pull-strips-symlinks` | asserts the symlink strip and chmod sit between unzip and copy, then runs those exact lines against a hostile zip — evaluating it would never run the builder                                                                                                                                           |
+| `minecraft-mods`             | **a package, not a check**: it is `__noChroot` because it queries Modrinth, and in `checks` it would fail `nix flake check` on any sandboxed machine. The GitHub job passes `--option sandbox false`; the Forgejo image already has `sandbox = false`                                                   |
 
 `runner-firewall` — the real two-node VM test with real packets — is **not** in
 CI. It needs `/dev/kvm`, and these are shared-vCPU Hetzner instances with no

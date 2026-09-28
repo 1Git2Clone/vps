@@ -51,7 +51,7 @@ flowchart TB
     peer --> pol{"policy file"}
 
     pol -- "autogroup:self:*<br/>every port" --> own["your own devices<br/>laptop · desktop · phone"]
-    pol -- "tag:vps<br/>nine ports" --> vps["the VPS"]
+    pol -- "tag:vps<br/>ten ports" --> vps["the VPS"]
     pol -- "tag:friends-ssh:22" --> friends["a friend's machine"]
 
     vps --> nft["host nftables<br/>iifname tailscale0 accept"]
@@ -160,7 +160,7 @@ The policy above is a claim; the `tests` block is that claim being checked, by
 Tailscale, against the real tailnet:
 
 ```text
-accept  vps:2222 · vps:443 · vps:8080 · tag:friends-ssh:22
+accept  vps:2222 · vps:443 · vps:53 · vps:8080 · tag:friends-ssh:22
 deny    vps:6432 · vps:4317 · tag:friends-ssh:80
 ```
 
