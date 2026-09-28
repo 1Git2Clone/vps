@@ -70,10 +70,10 @@ this job exists.
 The runner is off the tailnet on purpose, so every command goes through the VPS:
 
 ```sh
-ssh -J vps root@46.225.61.172
+ssh -J hutao@vps:2222 root@46.225.61.172
 
-systemctl status gitea-runner-forgejo
-journalctl -u gitea-runner-forgejo -f     # a job that never starts shows here
+systemctl status forgejo-runner
+journalctl -u forgejo-runner -f     # a job that never starts shows here
 journalctl -u forgejo-runner-identity     # the uuid/secret compose step
 
 podman ps                                 # job containers, one per running job
@@ -91,6 +91,21 @@ The ingress pair answers the other direction — `ssh_from_vps` climbs every tim
 you open the jump above, and `ssh_blocked` is anyone else trying:
 
 ```sh
-ssh -J vps root@46.225.61.172 nft list counter inet nixos-fw ssh_from_vps
-ssh -J vps root@46.225.61.172 nft list counter inet nixos-fw ssh_blocked
+ssh -J hutao@vps:2222 root@46.225.61.172 nft list counter inet nixos-fw ssh_from_vps
+ssh -J hutao@vps:2222 root@46.225.61.172 nft list counter inet nixos-fw ssh_blocked
 ```
+
+## Renovate
+
+Renovate runs **on the VPS, not the CI runner**: its token can write across
+`hutao/*` and `skavex/*`, and a runner treated as hostile never holds it.
+
+```sh
+systemctl status renovate.timer           # daily 12:00 UTC, ±15 min
+systemctl start renovate                  # run now
+journalctl -u renovate -n 200
+```
+
+**Nothing opens until it is ticked on the Dependency Dashboard**
+(`dependencyDashboardApproval` in `renovate.json5`). With the CVE scanner
+dropped, reading that issue is the only path for security updates.

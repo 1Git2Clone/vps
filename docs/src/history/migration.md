@@ -1,5 +1,13 @@
 # CX33 → CX33 (→CX43) migration
 
+> **Status: completed.** This is the plan as it was run, kept as the record.
+> The old box (`137766340`) has since been **deleted**, so the rollback in step
+> 5 no longer exists and `legacy_server_ids` in `tofu/variables.tf` is empty.
+> The serenity bot, which this plan left on the old box, was ported afterwards
+> in `8bba9bb`. For a future move, reuse the method (the data mapping,
+> _populate volumes before first start_, the primary-IP handover), not the
+> numbers.
+
 Moving the stack from `ubuntu-4gb-fsn1-2` (server `137766340`, Ubuntu + Ansible)
 to `ubuntu-8gb-fsn1-1` (server `163906050`, NixOS from this flake). Both in
 **fsn1**, which is the fact the whole plan rests on: primary IPs are
@@ -7,8 +15,7 @@ location-bound, so `167.233.24.58` and its `smtp.hu-tao.dev` PTR can move
 between these two machines. Nothing in DNS changes, SPF keeps naming the same
 address, and sending reputation carries over intact.
 
-Rescale to CX43 comes **after** the migration, and should be a type-only
-upgrade — see `server_type` in `tofu/variables.tf` for why not to take the disk.
+Rescale to CX43 came **after** the migration. The box is CX43 today.
 
 ## Data mapping
 
@@ -75,11 +82,10 @@ old box:     ~/migration-dumps/serenity-<timestamp>.sql
 workstation: ~/migration-dumps/serenity-<timestamp>.sql
 ```
 
-The bot itself stays on the old box for now. When it is ported, the NixOS side
-needs `services.postgresql` (package 18 to match the source), the database
-created, the dump restored, and `DATABASE_URL` plus the other 17 values from its
-`.env` moved into sops. `--no-owner --no-privileges` is what lets the restore
-land under a different role than the Ubuntu one that owns it today.
+The bot stayed on the old box through the cutover and was ported afterwards in
+`8bba9bb`: host `services.postgresql` behind pgbouncer, the dump restored, and
+its credentials in sops. `--no-owner --no-privileges` is what let the restore
+land under a different role than the Ubuntu one that owned it.
 
 ## The two Cloudflare tokens
 
@@ -223,19 +229,21 @@ Steps 2–7 in reverse. The old box is untouched, still holds its data, and has
 `delete` and `rebuild` protection on. Rollback is ~5 minutes and costs nothing
 but the swap.
 
-## After it settles
+_(Historical: `137766340` has since been deleted, so this rollback no longer
+exists.)_
 
-- Attach firewall `11483636` to `163906050` (currently attached only to the
-  old box)
-- Enable `delete` + `rebuild` protection on `163906050`
-- Import into tofu: server, primary IPs, firewall, rDNS, and the 11 Cloudflare
-  records. **Read the plan** — abort if it shows `destroy and then create` on
-  `hcloud_server`
-- Empty `legacy_server_ids` in `tofu/variables.tf` only once the old box is retired;
-  it is what keeps the edge firewall attached to it
-- Port serenity-bot properly (Rust + sqlx, needs a Nix build, `services.postgresql`
-  with the dump restored, and its `.env` in sops)
-- From then on deploys are `deploy .#vps` — auto-rollback on lockout
+## After it settled
+
+All done. Kept as the checklist that was run:
+
+- ✅ Attach firewall `11483636` to `163906050`
+- ✅ Enable `delete` + `rebuild` protection on `163906050` (`tofu/server.tf`)
+- ✅ Import into tofu: server, primary IPs, firewall, rDNS, and the Cloudflare
+  records (`tofu/imports.tf`). **Read the plan**: abort if it shows
+  `destroy and then create` on `hcloud_server`
+- ✅ Empty `legacy_server_ids` in `tofu/variables.tf` once the old box is retired
+- ✅ Port serenity-bot (`8bba9bb`, `modules/containers/serenity-bot.nix`)
+- ✅ From then on deploys are `deploy .#vps`, with auto-rollback on lockout
 
 ## What changed in the port
 
@@ -295,6 +303,8 @@ Not a 1:1 translation. The deliberate departures:
   minor version without validating it, so `$2a$`, `$2b$` and `$2y$` are
   interchangeable.
 
-- **Not ported: `camofox` and `serenity-bot`.** They are host systemd units for
-  an npm project and a Rust binary checked out under `/home`, not container
-  services, and they depend on trees this image does not create.
+- **Not ported: `camofox`.** It is a host systemd unit for an npm project
+  checked out under `/home`, not a container service, and it depends on a tree
+  this image does not create. `serenity-bot` was in the same position and was
+  ported later as a container built from upstream's Dockerfile; see
+  `modules/containers/serenity-bot.nix`.

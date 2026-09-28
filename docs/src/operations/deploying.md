@@ -62,8 +62,8 @@ The last row is deliberate. deploy-rs confirms reachability, not service health.
 A crashlooping container is visible and you still have ssh, so:
 
 ```sh
-ssh -p 2222 hutao@hu-tao 'systemctl --failed; systemctl status docker-<name>'
-ssh -p 2222 hutao@hu-tao 'sudo nixos-rebuild switch --rollback'
+ssh -p 2222 hutao@vps 'systemctl --failed; systemctl status docker-<name>'
+ssh -p 2222 hutao@vps 'sudo nixos-rebuild switch --rollback'
 ```
 
 Rolling the whole system back because one container is unhappy is usually the
@@ -88,7 +88,8 @@ sequenceDiagram
 `confirmTimeout` is 120 s — long enough for every container to be recreated on
 a config change, short enough that a hung activation is not an outage. The
 activation timeout is 900 s, raised from 300 s for the serenity-bot image
-build, which runs **inside** activation as a `Type=oneshot` unit. Measured on
+build, which runs **in the activation script** while the old container is still
+serving; `serenity-bot-image.service` is only the boot-time fallback. Measured on
 this host on 2026-09-04, cold cache including the base image pulls: 3m28s.
 
 ### The runner is deployed through the VPS
@@ -98,8 +99,8 @@ VPS `/32` at **both** layers — its cloud firewall and its own nftables — so 
 only route in is a jump:
 
 ```sh
-deploy .#runner-forgejo-runner    # sshOpts carry -J vps
-ssh -J vps root@46.225.61.172     # by hand
+deploy .#runner-forgejo-runner    # sshOpts carry ProxyJump=hutao@vps:2222
+ssh -J hutao@vps:2222 root@46.225.61.172     # by hand
 ```
 
 Magic rollback matters more here than anywhere: a mistake in
@@ -117,9 +118,11 @@ deploy-critical there.
 
 ### Ports and names, so nothing surprises you
 
-- `hu-tao` is the **MagicDNS name**, which is why `deploy.nodes.vps.hostname` is
-  a name and not an address. It survives the primary-IP handover during a
-  migration, so the same command works before and after cutover.
+- `vps` is the **tailnet node name**, which is why `deploy.nodes.vps.hostname` is
+  a name and not an address. It is not `networking.hostName` (`hu-tao`):
+  renaming the node in the Tailscale console breaks deploys. It survives the
+  primary-IP handover during a migration, so the same command works before and
+  after cutover.
 - ssh is on **2222**. Port 22 belongs to forgejo, so that git clone URLs need no
   port. Tailscale SSH is off, so 2222 with a normal key is the only ssh in.
 
@@ -130,8 +133,8 @@ deploy-critical there.
 you cannot push to it — build on the box instead:
 
 ```sh
-rsync -a --delete --exclude .git -e 'ssh -p 2222' ./ hutao@hu-tao:nixos-image/
-ssh -p 2222 hutao@hu-tao 'cd nixos-image && sudo nixos-rebuild switch --flake .#vps-hetzner'
+rsync -a --delete --exclude .git -e 'ssh -p 2222' ./ hutao@vps:nixos-image/
+ssh -p 2222 hutao@vps 'cd nixos-image && sudo nixos-rebuild switch --flake .#vps-hetzner'
 ```
 
 That is also the bootstrap for the very first deploy after an install.
@@ -148,7 +151,15 @@ Same as a redeploy, with two one-time steps:
 ssh-keyscan -p 2222 -H hu-tao >> ~/.ssh/known_hosts
 
 # 2. Confirm the box can decrypt its own secrets before relying on it.
-ssh -p 2222 hutao@hu-tao 'sudo ls /run/secrets/ | wc -l'   # expect 20
+ssh -p 2222 hutao@vps 'sudo ls /run/secrets/ | wc -l'   # expect 31
+```
+
+31 is 30 secrets plus the `rendered/` directory; the root and user password
+hashes live in `/run/secrets-for-users`. Recompute it when a module adds a key:
+
+```sh
+nix eval --json .#nixosConfigurations.vps-hetzner.config.sops.secrets \
+  --apply 's: builtins.length (builtins.filter (v: !v.neededForUsers) (builtins.attrValues s)) + 1'
 ```
 
 Then `deploy .#vps`.
@@ -184,13 +195,13 @@ bootloader are sane", never as "this will boot on the server".
 Not "the deploy said success" — these:
 
 ```sh
-ssh -p 2222 hutao@hu-tao '
+ssh -p 2222 hutao@vps '
   systemctl is-system-running          # want: running
   systemctl --failed                   # want: empty
-  sudo ls /run/secrets | wc -l         # want: 21
+  sudo ls /run/secrets | wc -l         # want: 31
   sudo docker ps --format "{{.Names}} {{.Status}}"
-  for u in caddy forgejo mailserver webmail kuma navidrome minecraft minecraft2 grafana tempo dozzle \
-           cloudflared serenity-bot-0 serenity-redis; do
+  for u in caddy forgejo mailserver webmail kuma navidrome searxng pages-hook minecraft minecraft2 \
+           grafana tempo dozzle cloudflared serenity-bot-0 serenity-redis; do
     echo "$u restarts=$(systemctl show -p NRestarts --value docker-$u)"
   done
   systemctl is-active postgresql pgbouncer serenity-bot-image'
@@ -204,7 +215,7 @@ And confirm the certificate is real rather than the self-signed placeholder that
 nothing looks wrong until you check the issuer:
 
 ```sh
-ssh -p 2222 hutao@hu-tao 'sudo cat /var/lib/acme/hu-tao.dev/cert.pem' \
+ssh -p 2222 hutao@vps 'sudo cat /var/lib/acme/hu-tao.dev/cert.pem' \
   | openssl x509 -noout -issuer -enddate
 # want: issuer=C=US, O=Let's Encrypt, ...
 # bad:  issuer=CN=minica root ca ...   <- placeholder, DNS-01 failed
@@ -214,7 +225,7 @@ Before triggering ACME, test the Cloudflare token directly — Let's Encrypt cap
 failed validations at 5 per hour and lego spends one per attempt:
 
 ```sh
-ssh -p 2222 hutao@hu-tao 'sudo bash -c "
+ssh -p 2222 hutao@vps 'sudo bash -c "
   T=\$(cat /run/secrets/cloudflare_api_token)
   curl -sS -H \"Authorization: Bearer \$T\" \
     https://api.cloudflare.com/client/v4/zones?name=hu-tao.dev"'

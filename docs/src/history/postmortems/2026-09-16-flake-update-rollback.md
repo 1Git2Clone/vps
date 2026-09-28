@@ -36,7 +36,7 @@ All times EEST. The box logs UTC; subtract three hours.
 | 22:19:58 | The runner's own `Restart=always` brings it up successfully — **3 seconds after the abort decision.**                                          |
 | 22:20:08 | `kuma-check` fails: `Failed to connect to status.hu-tao.dev:443`.                                                                              |
 | 22:25:01 | `kuma-check` fails again.                                                                                                                      |
-| 22:25:03 | `systemctl restart docker` (§12's documented recovery).                                                                                        |
+| 22:25:03 | `systemctl restart docker` ([the documented recovery](../../operations/recovery.md#the-abort-that-was-worse-than-the-failure)).                |
 | 22:25:09 | `switch-to-configuration switch` → `Could not acquire lock`. Fell back to starting units directly.                                             |
 | 22:25:39 | Mail answering. **Outage ends.**                                                                                                               |
 | 22:30:27 | `kuma-check` green again.                                                                                                                      |
@@ -55,7 +55,8 @@ All times EEST. The box logs UTC; subtract three hours.
 - **Everything behind caddy** — forgejo, webmail, kuma, navidrome, searxng,
   pages — refused connections for the same period.
 - **Observability** (grafana, tempo, dozzle) down, and **kuma down**, so the
-  public status page could not report its own outage. This is the paradox §10
+  public status page could not report its own outage. This is the paradox
+  [Observability](../../architecture/observability.md#the-self-hosted-status-page-paradox)
   anticipates, and the mitigation worked: see §6.
 - **minecraft / minecraft2** restarted and came back on their own. The other
   fourteen containers did not.
@@ -75,7 +76,7 @@ the runner **exits 1** rather than retrying in-process.
 Because the runner declares no `networks`, `modules/containers/default.nix`
 gives it no `after`/`requires` at all. Nothing has ever ordered it behind caddy.
 
-This was known. Commit `ddf6f98`, 2026-09-13, closes with:
+This was known. Commit `9326a8c`, 2026-09-13, closes with:
 
 > Separately, and NOT fixed here: the runner declares no `networks`, so
 > modules/containers/default.nix gives it no after/requires at all. Any future
@@ -99,7 +100,8 @@ What actually mattered is a property of the system update **on its own**: a new
 nixpkgs changes the store path of every systemd unit, so `switch-to-configuration`
 restarts _every container simultaneously_. That is the condition the runner
 cannot survive, and it needs no container bump to arrive. The same thing
-happened in September for an unrelated reason — commit `4caf61b` pinned the
+happened three days earlier for an unrelated reason — commit `523cbe1`, enabling
+the Actions cache, pinned the
 docker daemon's `bip`, which restarted `docker.service`, which stopped every
 container — and produced the identical error string.
 
@@ -123,8 +125,10 @@ last."**
 
 - **`kuma-check` caught it.** The out-of-band timer failed at 22:20:08 and
   22:25:01 and was green either side. The self-hosted-status-page paradox
-  described in §10 was closed exactly as designed: kuma could not report its
-  own outage, and the thing that noticed was the probe that lives outside it.
+  described in
+  [Observability](../../architecture/observability.md#the-self-hosted-status-page-paradox)
+  was closed exactly as designed: kuma could not report its own outage, and the
+  thing that noticed was the probe that lives outside it.
 - **deploy-rs did its job on deploys 1, 2 and 4** — three clean activations
   with magic rollback confirmed, ~40s each.
 - **Backups were taken cold and verified before every migrating change.** Two
@@ -133,12 +137,13 @@ last."**
 - **The pre-flight on the mailserver major caught a real break** before any
   downtime: opendkim's gid moves 104 → 102 in v16, which would have made the
   box receive mail and silently refuse to send it.
-- **§12's documented recovery was correct.** `systemctl restart docker` was the
-  right first move and it worked.
+- **The documented recovery was correct.** `systemctl restart docker` was the
+  right first move and it worked. See
+  [Failure modes](../../operations/recovery.md#the-abort-that-was-worse-than-the-failure).
 
 ## 7. What went badly
 
-- **A known landmine was left armed for three days.** `ddf6f98` diagnosed the
+- **A known landmine was left armed for three days.** `9326a8c` diagnosed the
   exact failure, wrote down that it would recur, and deferred the fix. The
   deferral was reasonable in isolation and wrong in aggregate: the cost of the
   fix was a 59-line module addition, and the cost of not doing it was a
@@ -160,9 +165,9 @@ last."**
 
 ## 8. What changed
 
-- `fix(forgejo-runner)`: a `forgejo-runner-ready.service` oneshot, in the same
-  shape as `forgejo-runner-token`, that probes `/api/v1/version` and waits
-  before the runner starts. Ordering alone would not have been enough — a
+- `b380c8a` fix(forgejo-runner): a `forgejo-runner-ready.service` oneshot, in
+  the same shape as `forgejo-runner-token`, that probes `/api/v1/version` and
+  waits before the runner starts. Ordering alone would not have been enough — a
   `docker-*` unit counts as started when the container is _created_, not when
   the service inside it answers. It exits 0 on timeout deliberately: its job is
   to close the race, not to become a new way for a deploy to fail.
@@ -182,10 +187,10 @@ last."**
 
 ## 9. Action items
 
-| #   | Action                                                                                                                                                                                                                                                   | Why                              |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| 1   | Audit every container unit for an unexpressed runtime dependency on another container. The runner was found the hard way; it is unlikely to be the only one.                                                                                             | Same class of bug, same trigger. |
-| 2   | Deploy `lockFileMaintenance` **alone**, first in a window, never last.                                                                                                                                                                                   | §5.                              |
-| 3   | Decide whether a failed activation should de-activate at all. `magicRollback` protects against losing SSH; it is not obviously the right tool for one crashlooping non-critical unit, and its abort is more destructive than the failure it responds to. | §7.                              |
-| 4   | Confirm the healthchecks.io grace period is short enough that two missed pings actually page. The probe failed correctly; whether that produced an alert is configured outside this repo.                                                                | §6 is only half-verified.        |
-| 5   | Create `postmaster@hu-tao.dev`. See §10.                                                                                                                                                                                                                 | RFC 5321 §4.5.1.                 |
+| #   | Action                                                                                                                                                                                                                                                   | Why                              | Status                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| 1   | Audit every container unit for an unexpressed runtime dependency on another container. The runner was found the hard way; it is unlikely to be the only one.                                                                                             | Same class of bug, same trigger. | Open. The runner was fixed in `b380c8a`; no other unit has been audited. |
+| 2   | Deploy `lockFileMaintenance` **alone**, first in a window, never last.                                                                                                                                                                                   | §5.                              | Standing practice.                                                       |
+| 3   | Decide whether a failed activation should de-activate at all. `magicRollback` protects against losing SSH; it is not obviously the right tool for one crashlooping non-critical unit, and its abort is more destructive than the failure it responds to. | §7.                              | Open. `magicRollback` and `autoRollback` are unchanged in `flake.nix`.   |
+| 4   | Confirm the healthchecks.io grace period is short enough that two missed pings actually page. The probe failed correctly; whether that produced an alert is configured outside this repo.                                                                | §6 is only half-verified.        | Unverified; configured outside this repo.                                |
+| 5   | Create `postmaster@hu-tao.dev`.                                                                                                                                                                                                                          | RFC 5321 §4.5.1.                 | Done in `0944f97`, with `abuse@` alongside.                              |

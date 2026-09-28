@@ -80,7 +80,7 @@ See Task 10.
 
 **7. The runner-firewall comment is stale.** It still says the install runs as
 `nixos-anywhere --ssh-option ProxyJump=vps root@10.0.1.3`. The private NIC was
-removed in `5d0ae14`; `10.0.1.3` does not exist. The target is the public
+removed in `c66f577`; `10.0.1.3` does not exist. The target is the public
 `46.225.61.172`.
 
 ## Global Constraints
@@ -201,7 +201,7 @@ In `## Snapshot and replication`, replace step 1's parenthetical so it reads:
 ```markdown
 1. Install with nixos-anywhere, jumped through the VPS:
    `nixos-anywhere --flake .#runner-hetzner --ssh-option ProxyJump=vps root@46.225.61.172`.
-   The private NIC was removed in 5d0ae14, so the target is the public address;
+   The private NIC was removed in c66f577, so the target is the public address;
    the jump is what makes the runner's single ingress rule — `tcp/22` from
    `167.233.24.58/32` — sufficient. It needs `tcp/22` egress on main-firewall
    AND in the VPS's own `modules/firewall.nix` output chain, which is
@@ -238,7 +238,7 @@ Also: tokenFile is an EnvironmentFile and needs TOKEN=<token>; the VPS's own
 output chain is policy-drop with no port 22, so the cloud egress rule alone
 does not make the jump work; the VPS holds an IPv6 /64 that an ip daddr rule
 does not match; and the install target is 46.225.61.172, not the 10.0.1.3 that
-went away with the private NIC in 5d0ae14.
+went away with the private NIC in c66f577.
 
 Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -549,7 +549,7 @@ Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Task 2: podman and the Actions daemon
 
-> **SUPERSEDED IN PART (9807149).** This task's identity design — a registration
+> **SUPERSEDED IN PART (a748fa1).** This task's identity design — a registration
 > token, later a `--extra-files` staged fallback with an `instance-id` stamp and
 > a reuse branch — is gone. `forgejo-runner register` is deprecated upstream,
 > and the metadata path this text uses
@@ -1170,7 +1170,7 @@ not enabled yet on the runner.
 # direction means allow-everything, not deny. So the cloud level does the
 # structural half and nothing finer:
 #
-#   * no private NIC (removed in 5d0ae14), so there is no unfiltered path;
+#   * no private NIC (removed in c66f577), so there is no unfiltered path;
 #   * one ingress rule, tcp/22 from 167.233.24.58/32, so only the VPS knocks;
 #   * a named egress allow-list, because a runner with no egress cannot pull a
 #     job image or resolve crates.io.
@@ -2045,7 +2045,7 @@ Two edits. First, the ingress rule's comment block — replace everything from
   #       --ssh-option ProxyJump=vps root@46.225.61.172
   #
   # The public address, NOT the 10.0.1.3 an earlier revision named here — the
-  # private NIC was removed in 5d0ae14 and that address does not exist.
+  # private NIC was removed in c66f577 and that address does not exist.
   #
   # It needs tcp/22 outbound on main-firewall, which tofu/modules/
   # hetzner-firewall grants to this /32 — AND a matching rule in the VPS's own
@@ -2118,7 +2118,7 @@ source qualification — so it does not join, and the scoped tcp/22 ingress is
 the permanent admin path rather than something to delete after the install.
 
 Also corrects the install target: 10.0.1.3 went away with the private NIC in
-5d0ae14.
+c66f577.
 
 Co-authored-by: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -2529,7 +2529,7 @@ acceptance test that matters, because it is the workload.
 
 ### Task 8b: An L7 allowlist in front of Forgejo
 
-> **TASK 8b DONE, 2026-09-19** (79d5db6, c8c2ba6). Path set measured through
+> **TASK 8b DONE, 2026-09-19** (2c20a09, 23ef0de). Path set measured through
 > temporary access logging on the git vhost, driven by a real run:
 > `FetchTask`, `UpdateLog`, `UpdateTask` under
 > `/api/actions/runner.v1.RunnerService/`, plus `info/refs` and
@@ -3236,7 +3236,7 @@ to:
           # iifname enp1s0, added 2026-09-19. Without it these nine ports accept
           # new connections from ANY interface — including a private NIC, the
           # moment one is attached. The CI runner was attached to
-          # hcloud_network.main on 2026-09-18 and detached in 5d0ae14 precisely
+          # hcloud_network.main on 2026-09-18 and detached in c66f577 precisely
           # because "one edit away from silently reopening nine ports on the
           # mail server" is not a property to build a trust boundary on.
           #
@@ -3380,7 +3380,7 @@ Commit as `docs: describe the runner as its own host`.
 
 - Task 8's `docker-in-job`; "Identity is registered" → Task 3; "may not initiate
   anything toward the VPS" → Tasks 4, 5, 6, 8; Topology → Task 0; private NIC →
-  already done in `5d0ae14`; "What no firewall closes" → unchanged, accepted;
+  already done in `c66f577`; "What no firewall closes" → unchanged, accepted;
   podman + DNS trap → Task 2 + Task 8's `service-dns`; runner settings table →
   Task 2 Step 5; one-way enforcement → Tasks 4-5; disk and GC → Task 2's `nix.gc`
   override and `autoPrune`; snapshot and replication → Task 9; VPS-side changes →

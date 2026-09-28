@@ -50,7 +50,7 @@ resource "hcloud_firewall" "runner" {
   #       --ssh-option ProxyJump=vps root@46.225.61.172
   #
   # The public address, NOT the 10.0.1.3 an earlier revision named here — the
-  # private NIC was removed in 5d0ae14, and the network itself is gone too, so
+  # private NIC was removed in c66f577, and the network itself is gone too, so
   # no address in that range exists on either host.
   #
   # It needs tcp/22 outbound on main-firewall, which tofu/modules/

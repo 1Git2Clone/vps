@@ -34,9 +34,11 @@ nothing to remember to run.
 ├── .github/workflows/    # CI, run on the GitHub mirror
 ├── docs/                 # the handbook — mdBook source in docs/src/
 ├── runner/               # the CI runner's own configuration.nix
+├── tests/                # VM and network tests behind checks.* and packages.minecraft-mods
+├── renovate.json5        # this repo's Renovate config
 ├── modules/
 │   ├── options.nix       # infra.* — domain, tailnet IP, proxy network
-│   ├── secrets.nix       # every sops key, declared
+│   ├── secrets.nix       # the sops keys (serenity's live with their modules)
 │   ├── acme.nix          # one certificate, DNS-01 via Cloudflare
 │   ├── firewall.nix      # nftables, including the container forward path
 │   ├── services.nix      # sshd, tailscale, fail2ban, docker
@@ -46,7 +48,9 @@ nothing to remember to run.
 │   ├── image-archive.nix # docker save every image; restore one when a pull fails
 │   ├── syncthing.nix     # tailnet-only, /home/hutao/syncthing
 │   ├── pages-pull.nix    # fetches published artifacts into the pages volume
-│   ├── boot.nix hardware.nix networking.nix nix.nix users.nix
+│   ├── pages-hook.nix    # webhook receiver that triggers pages-pull
+│   ├── renovate.nix      # daily Renovate run, on the host
+│   ├── boot.nix hardware.nix ids.nix networking.nix nix.nix users.nix
 │   ├── runner/           # everything only the CI runner has
 │   └── containers/       # one module per service
 └── tofu/                 # hcloud server + edge firewall, Cloudflare DNS
@@ -60,7 +64,7 @@ aborts — is in `docs/`, published at
 **<https://pages.hu-tao.dev/hutao/vps/docs/>**.
 
 ```sh
-nix develop -c mdbook serve docs --open
+nix run .#docs -- --open   # writes the mermaid assets first, then serves
 ```
 
 | Chapter                                                          | For                                                                |
@@ -128,7 +132,7 @@ unit to restart. The container keeps the old value in its environment until
 something unrelated recreates it, which can be weeks. `restartUnits` on the
 template is the fix: sops-nix diffs the rendered file and restarts only on a
 real change, so no-op deploys still don't bounce the service. `navidrome.env`
-does this; the older env templates predate it.
+and `pages-hook.env` do this; the older env templates predate it.
 
 **The two firewalls must both allow a port.** `tofu/modules/hetzner-firewall` is
 the edge and `modules/firewall.nix` is the host. Each is what survives a
@@ -150,16 +154,13 @@ Then edit them:
 SOPS_AGE_KEY_FILE=~/.sops-nix/key.txt nix develop -c sops secrets.yaml
 ```
 
-`secrets.example.yaml` is the template. **Every key declared in
-`modules/secrets.nix` must exist**, or `sops-install-secrets` fails during
-activation — which on a fresh install means the machine boots with no
-credentials at all, its own login included.
+`secrets.example.yaml` is the template. **Every declared sops key must exist** —
+most are in `modules/secrets.nix`, and the serenity keys sit next to their
+consumers in `postgres.nix` and `containers/serenity-bot.nix`. A missing one
+makes `sops-install-secrets` fail during activation — which on a fresh install
+means the machine boots with no credentials at all, its own login included.
 
 Beyond what the Ansible vault held, this port needs:
-
-The Actions runner's credential is **not** in this set. It lives on the runner
-box, delivered through Hetzner user-data, and that host holds no age key at all
-— see [Secrets](docs/src/architecture/secrets.md).
 
 | Key                                                   | Why                                                                                                                                                                                                      |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -172,6 +173,13 @@ box, delivered through Hetzner user-data, and that host holds no age key at all
 | `searxng/admin_user`, `searxng/admin_password_hash`   | searxng has no accounts, so caddy's `basic_auth` is the whole access control. bcrypt, same shape as dozzle's                                                                                             |
 | `serenity/db_password`                                | one password, two consumers: `ALTER ROLE` in postgres and the pgbouncer userlist, both rendered from this key                                                                                            |
 | `navidrome/lastfm/api_key`, `navidrome/lastfm/secret` | one Last.fm application registration, reaching the container as `ND_LASTFM_APIKEY` / `ND_LASTFM_SECRET`. Enables scrobbling server-side; each user still links their own account under Personal Settings |
+| `renovate/token`, `renovate/github_com_token`         | Renovate's bot account and its github.com rate-limit token. Host-side on purpose, so the CI runner never holds a token that can write across every repo                                                  |
+| `forgejo/system_webhooks/pages_pull/secret`           | the HMAC the pages-hook receiver verifies. Must match the system webhook's Secret field, which is set by hand in Forgejo                                                                                 |
+| `syncthing/gui_password`                              | the syncthing GUI login, declared rather than inherited from the old box's config                                                                                                                        |
+
+The Actions runner's credential is **not** in this set. It lives on the runner
+box, delivered through Hetzner user-data, and that host holds no age key at all
+— see [Secrets](docs/src/architecture/secrets.md).
 
 `acme_email` is **gone** from the secret set: `security.acme` needs it at
 evaluation time and a registration contact is not a credential. It is
