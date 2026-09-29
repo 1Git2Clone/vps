@@ -17,7 +17,7 @@ flowchart TB
     nft --> fwd["prerouting DNAT → forward"]
     ts --> inp
 
-    inp --> hostsvc["host namespace<br/>sshd :2222 · grafana :3000<br/>tempo :4317/4318 · pgbouncer :6432<br/>syncthing GUI :8384"]
+    inp --> hostsvc["host namespace<br/>sshd :2222 · grafana :3000<br/>tempo :4317/4318 · pgbouncer :6432<br/>syncthing GUI :8384<br/>tarpit :222/2022/22222"]
     fwd --> dock["docker networks<br/><code>proxy</code> · <code>botnet</code>"]
     dock --> caddy["caddy"]
     caddy --> pub["public vhosts :443"]
@@ -45,7 +45,7 @@ docker's table cannot rescue a packet that `table inet nixos-fw` drops. So:
   Getting it backwards yields a port the internet can reach that the firewall
   never authorised.
 - **Host-namespace services** (sshd on 2222, grafana, tempo, pgbouncer,
-  syncthing) are on the **input** hook.
+  syncthing, the SSH tarpit, prometheus) are on the **input** hook.
 - `networking.nftables.flushRuleset` **must stay false**. The default flushes
   the entire ruleset — including the tables docker owns — on every reload, and
   docker only rebuilds them when `dockerd` starts. The symptom is latent:

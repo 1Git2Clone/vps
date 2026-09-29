@@ -9,6 +9,9 @@ flowchart TB
     cont["every container"] -- journald --> doz["dozzle :8080<br/>tailnet"]
     cont -- journald --> jctl["journalctl"]
 
+    tarpit["endlessh-go<br/>:222 · :2022 · :22222"] -- "metrics :2112" --> prom["prometheus :9090<br/>loopback"]
+    prom --> graf
+
     doz ~~~ kuma
     kuma["kuma<br/>proxy net"] --> cad["caddy"] --> status["status.hu-tao.dev"]
     check["kuma-check<br/>every 5 min"] -- "probes the PUBLIC page" --> status
@@ -18,7 +21,8 @@ flowchart TB
     class check,hc alert
 ```
 
-tempo and grafana use host networking and are kept private by the input chain
+tempo, grafana and prometheus use host networking and are kept private by the
+input chain
 ([Network](network.md#input-vs-forward--the-single-most-load-bearing-fact)),
 not by their bind address. kuma publishes no port and is reached only through
 caddy.
@@ -35,14 +39,15 @@ cannot run is not a monitor.**
 
 ## The bot's dashboards
 
-Four dashboards are seeded from `modules/containers/grafana-dashboards/` into a
-**Provisioned** folder: overview, guild, user and DMs, linked so a guild or user
-row drills into its own view with the time range carried across. Every panel is
-TraceQL against tempo. Any other dashboard lives only in `grafana_data`, which
+Four of the dashboards seeded from `modules/containers/grafana-dashboards/`
+into the **Provisioned** folder are the bot's: overview, guild, user and DMs,
+linked so a guild or user row drills into its own view with the time range
+carried across. Every panel on them is TraceQL against tempo. The fifth is the
+[tarpit's](#the-ssh-tarpit). Any other dashboard lives only in `grafana_data`, which
 restic already covers.
 
 UI edits save (`allowUiUpdates`), but the directory is one store path, so
-**editing any file in it re-seeds all four** and discards UI edits across the
+**editing any file in it re-seeds all five** and discards UI edits across the
 folder. Export a dashboard back into git before touching its neighbours.
 
 Two query guards are bound to a date:
@@ -54,6 +59,29 @@ Two query guards are bound to a date:
   **panics** (HTTP 500, "No data") on a column whose type changes mid-result.
 
 Delete both once tempo's retention no longer reaches those dates.
+
+## The SSH tarpit
+
+`modules/tarpit.nix` runs endlessh-go on **222, 2022 and 22222**, three common
+alternative SSH ports; the dashboard splits by port. It accepts the connection
+and sends a random line a second, forever, so a client waiting for the SSH
+version string waits for hours. It guards nothing (sshd on 2222 is key-only
+either way); it is there to waste bots' time and to count them.
+
+Its **Endlessh** dashboard, in the Provisioned folder, shows connections,
+time trapped, and a map of where they came from. The map comes from
+`-geoip_supplier=ip-api`: each new client address is looked up at ip-api.com
+over plain http, so bot addresses go to that third party. Its free tier allows
+45 lookups a minute; a client beyond that is still trapped, just without a
+point on the map.
+
+prometheus exists for this dashboard alone, on loopback :9090, with grafana's
+second datasource pointed at it. Its data is a 15-day window of bot statistics
+and is not backed up.
+
+A tarpit port is open in three places: `modules/tarpit.nix`, the input chain in
+`modules/firewall.nix`, and `tofu/modules/hetzner-firewall`. The last one only
+takes effect on `tofu apply`.
 
 ## Where to look when something is wrong
 

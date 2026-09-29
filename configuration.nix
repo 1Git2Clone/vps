@@ -19,6 +19,7 @@
     ./modules/pages-pull.nix
     ./modules/pages-hook.nix
     ./modules/syncthing.nix
+    ./modules/tarpit.nix
     ./modules/containers
   ];
 }

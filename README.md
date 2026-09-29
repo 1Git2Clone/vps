@@ -47,6 +47,7 @@ nothing to remember to run.
 │   ├── backups.nix       # restic → B2, daily + weekly quiescent minecraft
 │   ├── image-archive.nix # docker save every image; restore one when a pull fails
 │   ├── syncthing.nix     # tailnet-only, /home/hutao/syncthing
+│   ├── tarpit.nix        # endlessh-go on 222/2022/22222, and its prometheus
 │   ├── pages-pull.nix    # fetches published artifacts into the pages volume
 │   ├── pages-hook.nix    # webhook receiver that triggers pages-pull
 │   ├── renovate.nix      # daily Renovate run, on the host

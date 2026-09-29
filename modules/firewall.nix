@@ -114,6 +114,9 @@ in
           # The host's own sshd. On 2222 because forgejo owns 22.
           tcp dport { 2222 } ct state new accept
 
+          # The SSH tarpit (modules/tarpit.nix): endlessh-go, not an sshd.
+          tcp dport { 222, 2022, 22222 } ct state new accept
+
           # Tailscale's own transport, so peers can find a direct path instead
           # of falling back to a DERP relay over 443.
           udp dport 41641 ct state new accept

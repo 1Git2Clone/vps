@@ -29,6 +29,18 @@ let
           httpMethod: GET
   '';
 
+  # modules/tarpit.nix's, for the SSH tarpit's dashboard. Loopback only, so it
+  # is localhost here for the same reason tempo is.
+  prometheus = pkgs.writeText "prometheus.yaml" ''
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        access: proxy
+        url: http://localhost:9090
+  '';
+
   # Dashboards are not provisioned wholesale — grafana_data is in the restic set
   # (modules/backups.nix takes /var/lib/docker/volumes), so a hand-built
   # dashboard is already durable and does not need to be in the repo to survive.
@@ -105,6 +117,7 @@ in
       # The single file rather than the whole provisioning directory: grafana
       # ships the rest of that tree, and mounting over it would hide it.
       "${datasource}:/etc/grafana/provisioning/datasources/tempo.yaml:ro"
+      "${prometheus}:/etc/grafana/provisioning/datasources/prometheus.yaml:ro"
       "${dashboardProvider}:/etc/grafana/provisioning/dashboards/iac.yaml:ro"
       # A whole directory rather than a file each: grafana ships nothing under
       # this path, so there is nothing to hide, and adding a dashboard is then
@@ -118,5 +131,8 @@ in
     extraOptions = [ "--network=host" ];
   };
 
-  systemd.services.docker-grafana.after = [ "docker-tempo.service" ];
+  systemd.services.docker-grafana.after = [
+    "docker-tempo.service"
+    "prometheus.service"
+  ];
 }
