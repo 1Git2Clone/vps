@@ -50,7 +50,7 @@
     # rescan. Clients that cached item IDs — offline downloads — re-sync once.
     #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/deluan/navidrome/tags?page_size=20&ordering=last_updated'
-    image = "deluan/navidrome:0.64.1";
+    image = "deluan/navidrome:0.64.2@sha256:38dc2727bfcfd5ede290f8ada114fc90368146f265ae4701ddddbcbe2a44ee52";
 
     ports = [ "127.0.0.1:4533:4533" ];
 
