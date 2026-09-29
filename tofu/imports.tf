@@ -14,7 +14,7 @@
 #
 # WHAT A RECOVERY PLAN LOOKS LIKE, so a wrong one is recognisable:
 #
-#   Plan: 32 to import, 0 to add, 1 to change, 0 to destroy.
+#   Plan: 37 to import, 0 to add, 1 to change, 0 to destroy.
 #
 # The one change is hcloud_server.vps gaining three provider-side booleans
 # (ignore_remote_firewall_ids, keep_disk, shutdown_before_deletion) that the
@@ -67,6 +67,16 @@ locals {
     dozzle    = "3ab68becc67f0b5cfa1270091b18b720"
     grafana   = "007693e357dd0d4a75056a3e42882ad8"
     syncthing = "de30585a21727101a2e0c3480f0eca43"
+  }
+
+  # The CAA records, keyed by CA as module.dns keys them. Read from the API on
+  # 2026-09-29: the zone holds exactly these three. The comodoca, digicert and
+  # ssl.com entries a DNS query also returns are added by Cloudflare at answer
+  # time and are not records in the zone.
+  dns_caa_records = {
+    google      = "16f5b55dc80b38330bd408061ef51efe"
+    iodef       = "0f57c8c1ae0305f5ea5b11cbbecf385e"
+    letsencrypt = "45c6fdef8ef0b2b11449b5aeb3d88040"
   }
 }
 
@@ -175,6 +185,12 @@ import {
   id       = "${var.cloudflare_zone_id}/${each.value}"
 }
 
+import {
+  for_each = local.dns_caa_records
+  to       = module.dns.cloudflare_dns_record.caa[each.key]
+  id       = "${var.cloudflare_zone_id}/${each.value}"
+}
+
 # The tailnet policy file, adopted rather than written over. `tailscale_acl`
 # leaves `overwrite_existing_content` at false precisely so this import is
 # mandatory: without it the provider refuses to touch a policy tofu has never
@@ -188,6 +204,15 @@ import {
 import {
   to = tailscale_acl.main
   id = "acl"
+}
+
+# The split-DNS entries, keyed like the resource. The provider imports them by
+# domain name, so there is no id to write down. Gated on tailnet_ipv4 the same
+# way the resource is.
+import {
+  for_each = var.tailnet_ipv4 == "" ? toset([]) : var.split_dns_subdomains
+  to       = tailscale_dns_split_nameservers.half_public[each.key]
+  id       = "${each.key}.${var.domain}"
 }
 
 # DNSSEC was switched on in the dashboard before tofu knew about it, so this is
