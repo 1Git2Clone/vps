@@ -177,6 +177,13 @@ let
     "/twirp/github.actions.results.api.v1.ArtifactService/*"
     "/*/*/info/refs"
     "/*/*/git-upload-pack"
+
+    # RELEASES: caelestia-tab's release workflow creates a release (POST
+    # .../releases), uploads its zips (POST .../releases/<id>/assets), and its
+    # dry run reads the first. The job token, not this list, limits a job to
+    # its own repo's releases.
+    "/api/v1/repos/*/*/releases"
+    "/api/v1/repos/*/*/releases/*/assets"
   ];
 
   # EVERY SITE IS RATE-LIMITED unless it opts out with `rateLimit = null`.

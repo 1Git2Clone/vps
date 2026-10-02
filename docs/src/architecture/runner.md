@@ -189,17 +189,24 @@ that is how it fetches jobs. Without something reading the request, a rooted
 job gets the whole Forgejo surface: every repo it can see, the web UI, all of
 `/api/v1`.
 
-Caddy narrows that to four paths:
+Caddy narrows that to six paths:
 
 ```text
 /api/actions/*
 /twirp/github.actions.results.api.v1.ArtifactService/*
 /*/*/info/refs
 /*/*/git-upload-pack
+/api/v1/repos/*/*/releases
+/api/v1/repos/*/*/releases/*/assets
 ```
 
-That set was **measured** from a real run's access log, not guessed. No
-`/api/v1`, no web UI, and — the one worth saying out loud — no
+The first four were **measured** from a real run's access log, not guessed.
+The two release routes came later (2026-10-02), for hutao/caelestia-tab's
+release workflow: it creates a tag's release and uploads its zips with the
+job's own token, which, not this list, keeps a job to its own repo's
+releases. Without them its v0.1.2 publish got this layer's 403. They are the
+only `/api/v1` a runner reaches: no other `/api/v1`, no web UI, and — the one
+worth saying out loud — no
 `git-receive-pack`: **the runner can clone and cannot push.** That converts the
 open-ended risk "a compromised runner can push to repos it built" into
 something a packet filter could never express, because push and fetch share a

@@ -92,7 +92,7 @@ nix build .#checks.x86_64-linux.runner-firewall -L
 ## Writing a workflow that runs here
 
 The runner is a different machine from the VPS, with no access to its volumes
-and a four-path allow-list to its Forgejo instance. Four consequences:
+and a six-path allow-list to its Forgejo instance. Five consequences:
 
 1. **The label decides whether `uses:` works at all.** `nix` has no node, so a
    JavaScript action cannot execute on it — the failure is
@@ -115,6 +115,11 @@ and a four-path allow-list to its Forgejo instance. Four consequences:
    `remote: Not found`. Pointing `DEFAULT_ACTIONS_URL` at github.com would fix
    it instance-wide, at the cost of making every bare `uses:` resolve to
    whoever holds that name on an open-registration forge.
+5. **Of `/api/v1`, only releases.** A job can create a release and upload its
+   assets (`/api/v1/repos/*/*/releases`, `…/releases/*/assets`) with its own
+   token; any other API call gets `403 not permitted from a CI runner`, from
+   Caddy, with no hint in Forgejo's logs. See
+   [runner isolation](../architecture/runner.md#why-layer-5-exists).
 
 Caching works normally — see
 [why the cache works when artifacts did not](../architecture/runner.md#why-the-cache-works-when-artifacts-did-not).
