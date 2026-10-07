@@ -645,7 +645,12 @@ let
             [
               "\t@runner remote_ip ${lib.concatStringsSep " " (lib.attrValues runnerIPv4s)}"
               "\thandle @runner {"
-              "\t\t@runner_api path ${lib.concatStringsSep " " runnerApiPaths}"
+              "\t\t@runner_api {"
+              "\t\t\tpath ${lib.concatStringsSep " " runnerApiPaths}"
+              # Nothing a runner needs is a DELETE, PATCH or PUT, so none of
+              # them get through even if a path entry matches more than meant.
+              "\t\t\tmethod GET POST"
+              "\t\t}"
               "\t\thandle @runner_api {"
               "\t\t\treverse_proxy ${site.upstream}"
               "\t\t}"
