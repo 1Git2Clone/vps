@@ -31,6 +31,9 @@
         "status"
         "search"
         "pages"
+        "photocraft"
+        "compress"
+        "docs"
         # Tailnet-only vhosts. They belong on the same certificate as the rest
         # because DNS-01 never needs a name to resolve publicly or a port to be
         # reachable — see modules/containers/caddy.nix.

@@ -7,7 +7,7 @@
 [Pages Icon]: https://git.hu-tao.dev/hutao/vps/badges/workflows/pages.yml/badge.svg
 [Pages Status]: https://git.hu-tao.dev/hutao/vps/actions
 [Handbook Icon]: https://img.shields.io/badge/docs-handbook-7aa2f7
-[Handbook]: https://pages.hu-tao.dev/hutao/vps/docs/
+[Handbook]: https://docs.hu-tao.dev/
 [Status Icon]: https://img.shields.io/badge/uptime-status%20page-7aa2f7
 [Status]: https://status.hu-tao.dev/status/all
 [NixOS Icon]: https://img.shields.io/badge/NixOS-26.05-7aa2f7
@@ -62,7 +62,7 @@ nothing to remember to run.
 Everything below is the short version. The long version — how a packet reaches
 a service, why the CI runner is a separate machine, what to do when a deploy
 aborts — is in `docs/`, published at
-**<https://pages.hu-tao.dev/hutao/vps/docs/>**.
+**<https://docs.hu-tao.dev/>**.
 
 ```sh
 nix run .#docs -- --open   # writes the mermaid assets first, then serves

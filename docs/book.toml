@@ -55,11 +55,10 @@ additional-js = ["mermaid.min.js", "mermaid-init.js"]
 additional-css = ["diagrams.css"]
 git-repository-url = "https://git.hu-tao.dev/hutao/vps"
 edit-url-template = "https://git.hu-tao.dev/hutao/vps/_edit/main/docs/{path}"
-# The published site lives under /hutao/vps/docs/ on pages.hu-tao.dev, never at
-# a domain root, so every asset reference has to be relative. mdBook does that
-# by default; this is here to state that the prefix is not configurable from
-# inside the book and must not be hard-coded into a link.
-site-url = "/hutao/vps/docs/"
+# The published site is the root of docs.hu-tao.dev. It also still answers at
+# /hutao/vps/docs/ on pages.hu-tao.dev, as a redirect to the root, so keep
+# every asset reference relative rather than hard-coding either form.
+site-url = "/"
 
 [output.html.search]
 enable = true

@@ -7,8 +7,28 @@
 <pages_data>/<owner>/<repo>/index.html   →   https://pages.hu-tao.dev/<owner>/<repo>/
 ```
 
-This book is published that way, at
-`https://pages.hu-tao.dev/hutao/vps/docs/`.
+Three of the sites also have a name of their own. Caddy serves the same
+directory from the root of a host, and the old path under `pages.hu-tao.dev`
+redirects there (308, query string kept):
+
+| Directory                      | Host                    | Old path, now a redirect |
+| ------------------------------ | ----------------------- | ------------------------ |
+| `hutao/photocraft`             | `photocraft.hu-tao.dev` | `/hutao/photocraft/`     |
+| `hutao/compress`               | `compress.hu-tao.dev`   | `/hutao/compress/`       |
+| `hutao/vps/docs` (this book)   | `docs.hu-tao.dev`       | `/hutao/vps/docs/`       |
+
+A new name is three edits: the host in `modules/containers/caddy.nix` (with a
+`redirects` entry on the pages site if the old path should keep working), the
+name in `infra.certSubdomains` (`modules/options.nix`) and the name in
+`subdomains` in `tofu/modules/cloudflare-dns/variables.tf`, then
+`tofu apply` and a deploy.
+
+A site served from a host root must be built for `/`, not for its old prefix:
+a SvelteKit `paths.base` or an mdBook `site-url` of `/<owner>/<repo>/` makes
+every link 404 there. compress's pages workflow sets no `BASE_PATH` for that
+reason. A host that serves one site can also carry that site's response
+headers host-wide; compress's `COOP`/`COEP` pair, which its multithreaded
+ffmpeg needs, does.
 
 ## The direction reversed
 
@@ -291,5 +311,5 @@ systemctl list-timers pages-pull
 ## Checking it worked
 
 ```sh
-curl -sSI https://pages.hu-tao.dev/hutao/vps/docs/ | head -1
+curl -sSI https://docs.hu-tao.dev/ | head -1
 ```

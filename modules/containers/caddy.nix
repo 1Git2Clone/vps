@@ -356,24 +356,58 @@ let
       # that 404s is a directory that was never written.
       root = pagesRoot;
 
+      # Three of the sites here have a name of their own, below. Their old
+      # paths here redirect to it, query string and all, so a link to either
+      # form lands on the same page.
+      redirects = [
+        {
+          from = "/hutao/photocraft";
+          to = "photocraft.${domain}";
+        }
+        {
+          from = "/hutao/compress";
+          to = "compress.${domain}";
+        }
+        {
+          from = "/hutao/vps/docs";
+          to = "docs.${domain}";
+        }
+      ];
+    }
+    # The sites above, each on its own name: the same directory of the same
+    # volume, served from the root of a host instead of under /<owner>/<repo>/.
+    # Anything built for a prefix (a SvelteKit `paths.base`, an mdBook
+    # `site-url`) has to be built for "/" instead, or its links 404 here.
+    {
+      host = "photocraft.${domain}";
+      root = "${pagesRoot}/hutao/photocraft";
+    }
+    {
+      host = "compress.${domain}";
+      root = "${pagesRoot}/hutao/compress";
+
       # compress does its work in the browser with a MULTITHREADED ffmpeg
       # build, and a browser hands out SharedArrayBuffer only to a
       # cross-origin-isolated document. Without these two the page loads and
       # then fails on `SharedArrayBuffer is not defined`.
       #
-      # Path-scoped, not host-wide, on purpose: require-corp makes every
-      # cross-origin subresource opt in with its own CORP header, so a future
-      # page here that hotlinks an image or a CDN script would silently stop
-      # rendering it. One repo asks for isolation, one repo gets it.
+      # Host-wide now that the host IS the one site: require-corp makes every
+      # cross-origin subresource opt in with its own CORP header, which is why
+      # this was scoped to a path while compress shared pages.<domain> with
+      # other repos. A page added here later has to live with that.
       headers = [
         {
-          path = "/hutao/compress/*";
+          path = "/*";
           values = {
             "Cross-Origin-Embedder-Policy" = "require-corp";
             "Cross-Origin-Opener-Policy" = "same-origin";
           };
         }
       ];
+    }
+    {
+      host = "docs.${domain}";
+      root = "${pagesRoot}/hutao/vps/docs";
     }
     {
       host = "search.${domain}";
@@ -617,6 +651,17 @@ let
           "\t\trespond 404"
           "\t}"
         ]
+        # A prefix that moved to a host of its own. `handle_path` strips the
+        # prefix, so `{uri}` inside it is the rest of the path plus the query;
+        # the bare prefix, which that does not match, is its own `redir`.
+        # 308 rather than 301 so a POST would survive, and neither is a
+        # reason to keep the old site around.
+        ++ lib.concatMap (r: [
+          "\tredir ${r.from} https://${r.to}/ 308"
+          "\thandle_path ${r.from}/* {"
+          "\t\tredir * https://${r.to}{uri} 308"
+          "\t}"
+        ]) (site.redirects or [ ])
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
         ++ lib.optionals (site ? basicAuth) [
