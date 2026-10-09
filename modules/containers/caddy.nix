@@ -155,6 +155,7 @@ let
   # repos that publish today: `actions/checkout` runs in every workflow on every
   # repo this runner serves, and pinning them would turn "someone added a repo"
   # into a checkout failure.
+  runnerArtifactPath = "/twirp/github.actions.results.api.v1.ArtifactService/*";
   runnerApiPaths = [
     "/api/actions/*"
     # ARTIFACT TRANSFER, AND IT DOES NOT LIVE UNDER /api/. upload-artifact posts to
@@ -174,7 +175,7 @@ let
     # They do not: a full run's capture never touched it, and the upload that now
     # works goes to the twirp service instead. An allow-list entry nothing uses is
     # surface, and this is the layer whose whole job is to have less of it.
-    "/twirp/github.actions.results.api.v1.ArtifactService/*"
+    runnerArtifactPath
     "/*/*/info/refs"
     "/*/*/git-upload-pack"
 
@@ -647,11 +648,22 @@ let
               "\thandle @runner {"
               "\t\t@runner_api {"
               "\t\t\tpath ${lib.concatStringsSep " " runnerApiPaths}"
-              # Nothing a runner needs is a DELETE, PATCH or PUT, so none of
-              # them get through even if a path entry matches more than meant.
+              # Nothing else a runner needs is a DELETE, PATCH or PUT, so none
+              # of them get through even if a path entry matches more than meant.
               "\t\t\tmethod GET POST"
               "\t\t}"
               "\t\thandle @runner_api {"
+              "\t\t\treverse_proxy ${site.upstream}"
+              "\t\t}"
+              # The one PUT: upload-artifact sends the file itself to the signed
+              # URL CreateArtifact returns, a PUT under the same twirp service.
+              # The GET/POST-only matcher above 403'd it (photocraft's pages
+              # run, 2026-10-09), after the CreateArtifact POST had passed.
+              "\t\t@runner_upload {"
+              "\t\t\tpath ${runnerArtifactPath}"
+              "\t\t\tmethod PUT"
+              "\t\t}"
+              "\t\thandle @runner_upload {"
               "\t\t\treverse_proxy ${site.upstream}"
               "\t\t}"
               "\t\trespond \"not permitted from a CI runner\" 403"

@@ -212,6 +212,12 @@ open-ended risk "a compromised runner can push to repos it built" into
 something a packet filter could never express, because push and fetch share a
 port and a TLS session.
 
+Those paths take `GET` and `POST` only, with one exception: `PUT` on the
+`ArtifactService` path, because `upload-artifact` sends the file itself as a
+`PUT` after the `CreateArtifact` POST. The method filter added on 2026-10-07
+had no exception for it, and hutao/photocraft's first pages run got this
+layer's 403 right after `CreateArtifact` passed (2026-10-09).
+
 `/api/actions_pipeline/*` was in this list and was deliberately removed. It is
 the v3 artifact API, added defensively on a guess that uploads rode it; a full
 run's capture never touched it. An allow-list entry nothing uses is surface,
