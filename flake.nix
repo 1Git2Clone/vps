@@ -551,6 +551,57 @@
               # `script` is a plain Nix string — it interpolates only `fqdn` and
               # `pagesRoot`, both ordinary strings — so writing it out drags in
               # no closure, per the deploy-schema lesson above.
+              # modules/mirror-sync.nix's one promise: upstream main and tags
+              # reach the mirror, and a REWRITTEN upstream main does not. The
+              # script is lifted from the evaluated unit and run against local
+              # repos standing in for GitHub and Forgejo, so loosening the
+              # production push (a `+` or `--force`) fails here.
+              mirror-sync-refuses-rewrites =
+                let
+                  script = self.nixosConfigurations.vps-hetzner.config.systemd.services.mirror-sync.script;
+                  scriptFile = pkgs.writeText "mirror-sync-script.sh" script;
+                in
+                pkgs.runCommand "mirror-sync-refuses-rewrites" { nativeBuildInputs = [ pkgs.git ]; } ''
+                  set -euo pipefail
+                  export HOME=$PWD GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+                  git config --global init.defaultBranch main
+
+                  git init -q work && cd work
+                  git commit -q --allow-empty -m one && git tag v1
+                  git init -q --bare ../up/owner/app.git
+                  git push -q ../up/owner/app.git main --tags
+                  # The mirror already has upstream's first commit and a branch
+                  # of its own, like a Forgejo repo with `pages`.
+                  git init -q --bare ../dst/app.git
+                  git push -q ../dst/app.git main main:pages
+                  git commit -q --allow-empty -m two && git tag v2
+                  git push -q ../up/owner/app.git main --tags
+                  cd ..
+
+                  mkdir creds state && echo token > creds/token
+                  run() {
+                    MIRRORS=owner/app SRC_BASE=file://$PWD/up DST_BASE=file://$PWD/dst \
+                      CREDENTIALS_DIRECTORY=$PWD/creds STATE_DIRECTORY=$PWD/state \
+                      bash ${scriptFile}
+                  }
+
+                  run
+                  [ "$(git -C dst/app.git rev-parse main)" = "$(git -C up/owner/app.git rev-parse main)" ]
+                  git -C dst/app.git rev-parse -q --verify refs/tags/v2 >/dev/null
+                  [ "$(git -C dst/app.git log -1 --format=%s pages)" = one ]
+
+                  # Upstream throws its history away.
+                  before=$(git -C dst/app.git rev-parse main)
+                  cd work && git checkout -q --orphan wiped && git commit -q --allow-empty -m wiped
+                  git push -q -f ../up/owner/app.git wiped:main && cd ..
+                  if run; then
+                    echo "mirror-sync-refuses-rewrites: a rewritten upstream main was pushed" >&2
+                    exit 1
+                  fi
+                  [ "$(git -C dst/app.git rev-parse main)" = "$before" ]
+                  touch $out
+                '';
+
               pages-pull-strips-symlinks =
                 let
                   script = self.nixosConfigurations.vps-hetzner.config.systemd.services.pages-pull.script;

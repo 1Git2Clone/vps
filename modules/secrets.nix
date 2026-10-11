@@ -117,6 +117,12 @@
         key = "renovate/github_com_token";
       };
 
+      # === Mirror sync ===
+      # Pushes upstream main and tags into hutao/<repo>; modules/mirror-sync.nix.
+      mirror_sync_token = {
+        key = "mirror_sync/token";
+      };
+
       # === Grafana ===
       grafana_admin_user = {
         key = "grafana/admin_user";
