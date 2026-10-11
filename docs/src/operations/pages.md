@@ -7,21 +7,26 @@
 <pages_data>/<owner>/<repo>/index.html   →   https://pages.hu-tao.dev/<owner>/<repo>/
 ```
 
-Three of the sites also have a name of their own. Caddy serves the same
+Some of the sites also have a name of their own. Caddy serves the same
 directory from the root of a host, and the old path under `pages.hu-tao.dev`
 redirects there (308, query string kept):
 
-| Directory                      | Host                    | Old path, now a redirect |
-| ------------------------------ | ----------------------- | ------------------------ |
-| `hutao/photocraft`             | `photocraft.hu-tao.dev` | `/hutao/photocraft/`     |
-| `hutao/compress`               | `compress.hu-tao.dev`   | `/hutao/compress/`       |
-| `hutao/vps/docs` (this book)   | `docs.hu-tao.dev`       | `/hutao/vps/docs/`       |
+| Directory                    | Host                     | Old path, now a redirect |
+| ---------------------------- | ------------------------ | ------------------------ |
+| `hutao/photocraft`           | `photocraft.hu-tao.dev`  | `/hutao/photocraft/`     |
+| `hutao/cadcraft`             | `cadcraft.hu-tao.dev`    | `/hutao/cadcraft/`       |
+| `hutao/effectcraft`          | `effectcraft.hu-tao.dev` | `/hutao/effectcraft/`    |
+| `hutao/filmcraft`            | `filmcraft.hu-tao.dev`   | `/hutao/filmcraft/`      |
+| `hutao/compress`             | `compress.hu-tao.dev`    | `/hutao/compress/`       |
+| `hutao/vps/docs` (this book) | `docs.hu-tao.dev`        | `/hutao/vps/docs/`       |
 
 A new name is three edits: the host in `modules/containers/caddy.nix` (with a
 `redirects` entry on the pages site if the old path should keep working), the
 name in `infra.certSubdomains` (`modules/options.nix`) and the name in
 `subdomains` in `tofu/modules/cloudflare-dns/variables.tf`, then
-`tofu apply` and a deploy.
+`tofu apply` and a deploy. After the apply, write the new record's id into
+`dns_a_records` in `tofu/imports.tf`, so a fresh checkout's state can be
+rebuilt without proposing a duplicate record.
 
 A site served from a host root must be built for `/`, not for its old prefix:
 a SvelteKit `paths.base` or an mdBook `site-url` of `/<owner>/<repo>/` makes
@@ -149,7 +154,7 @@ that follows preserves it. That is enough on its own, because caddy's
 group-owns the certificate directory _by caddy_ so that caddy can read
 `key.pem`. One `ln -s /etc/caddy/certs/key.pem x` in a published artifact would
 otherwise serve the apex certificate's private key — and every one of its
-eleven SANs — at `https://pages.<domain>/<owner>/<repo>/x`.
+SANs — at `https://pages.<domain>/<owner>/<repo>/x`.
 
 A published site is files and directories; a symlink in one has no legitimate
 use here. They are **deleted rather than rejected** so that one malformed

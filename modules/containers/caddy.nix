@@ -356,7 +356,7 @@ let
       # that 404s is a directory that was never written.
       root = pagesRoot;
 
-      # Three of the sites here have a name of their own, below. Their old
+      # Some of the sites here have a name of their own, below. Their old
       # paths here redirect to it, query string and all, so a link to either
       # form lands on the same page.
       redirects = [
@@ -372,6 +372,18 @@ let
           from = "/hutao/vps/docs";
           to = "docs.${domain}";
         }
+        {
+          from = "/hutao/cadcraft";
+          to = "cadcraft.${domain}";
+        }
+        {
+          from = "/hutao/effectcraft";
+          to = "effectcraft.${domain}";
+        }
+        {
+          from = "/hutao/filmcraft";
+          to = "filmcraft.${domain}";
+        }
       ];
     }
     # The sites above, each on its own name: the same directory of the same
@@ -381,6 +393,18 @@ let
     {
       host = "photocraft.${domain}";
       root = "${pagesRoot}/hutao/photocraft";
+    }
+    {
+      host = "cadcraft.${domain}";
+      root = "${pagesRoot}/hutao/cadcraft";
+    }
+    {
+      host = "effectcraft.${domain}";
+      root = "${pagesRoot}/hutao/effectcraft";
+    }
+    {
+      host = "filmcraft.${domain}";
+      root = "${pagesRoot}/hutao/filmcraft";
     }
     {
       host = "compress.${domain}";

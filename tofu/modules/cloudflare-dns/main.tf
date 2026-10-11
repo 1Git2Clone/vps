@@ -147,7 +147,7 @@ resource "cloudflare_dns_record" "bsky" {
 # modules/acme.nix alone would have been right about the VPS and would have
 # broken the other two.
 #
-#   letsencrypt.org  The VPS: lego issues the apex certificate and its ten SANs
+#   letsencrypt.org  The VPS: lego issues the apex certificate and its SANs
 #                    over DNS-01 (modules/acme.nix). AND Netlify, which serves
 #                    the apex itself — hu-tao.dev's A records are 75.2.60.5 and
 #                    99.83.231.61, which are Netlify, not this server. Netlify

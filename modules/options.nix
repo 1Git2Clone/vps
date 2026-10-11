@@ -32,6 +32,9 @@
         "search"
         "pages"
         "photocraft"
+        "cadcraft"
+        "effectcraft"
+        "filmcraft"
         "compress"
         "docs"
         # Tailnet-only vhosts. They belong on the same certificate as the rest

@@ -282,7 +282,7 @@ in
           # answered 200. The caddy container mounts /etc/caddy/certs, and
           # modules/acme.nix group-owns that directory BY caddy precisely so it
           # can read key.pem. So one `ln -s` in a published artifact reads out
-          # the private key for the apex certificate and all eleven SANs, over
+          # the private key for the apex certificate and all its SANs, over
           # https://pages.<domain>/<owner>/<repo>/.
           #
           # A published site is files and directories. A symlink in one has no
