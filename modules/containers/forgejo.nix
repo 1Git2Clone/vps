@@ -16,13 +16,22 @@ let
 in
 {
   virtualisation.oci-containers.containers.forgejo = {
-    # 16.0.5, a PATCH release within 16.0, and the reason to take it promptly is
-    # that it is a security release. Its notes carry a Critical fix: a patch
-    # applied through the web UI, web cherry-pick or the `/diffpatch` API could
-    # make `git apply` rewrite the temporary bare repo's own config, giving
-    # remote code execution ON THIS HOST — a variant of the 15.0.6 fix that was
-    # missed at the time. Alongside it, a CSRF that could attach an attacker's
-    # OpenID identity to a logged-in account, and OpenID sign-in is on here.
+    # 16.0.6, a PATCH release within 16.0 and another security release (the
+    # 2026-10-12 one). Its fix that matters here: a fork's pull request could
+    # trigger `pull_request_review` and `pull_request_review_comment`
+    # workflows without being treated as a fork, so with no approval gate and
+    # WITH the repo's secrets. Registration is closed, so only an existing
+    # account could open such a fork, but this instance runs Actions on public
+    # repos. Alongside it, label metadata readable across repos through the
+    # labels API and release-attachment metadata leaking on API tag creation.
+    #
+    # 16.0.5 before it was a security release too. Its notes carry a Critical
+    # fix: a patch applied through the web UI, web cherry-pick or the
+    # `/diffpatch` API could make `git apply` rewrite the temporary bare repo's
+    # own config, giving remote code execution ON THIS HOST — a variant of the
+    # 15.0.6 fix that was missed at the time. Alongside it, a CSRF that could
+    # attach an attacker's OpenID identity to a logged-in account, and OpenID
+    # sign-in is on here.
     #
     # 16.0.4 before it fixed the same class through template expansion
     # planting a `.git` folder, plus an access-token scope bypass and
@@ -45,7 +54,7 @@ in
     # the move to 16.0.3 during the data migration.
     #
     # Bump with: curl -sS 'https://codeberg.org/api/v1/repos/forgejo/forgejo/releases?limit=5'
-    image = "codeberg.org/forgejo/forgejo:16.0.5@sha256:cf5f5ae6acf2ababca0ee3d255705b83a47f35b25e07fc931d694d60664053fe";
+    image = "codeberg.org/forgejo/forgejo:16.0.6@sha256:e2c34a699543ca8a00217ee9ab2bea5feedc98bd6d0ea95ec287d3b7ae1355c6";
 
     # journald, so the fail2ban jail can read the SSH auth failures at all. The
     # default json-file driver writes to a path containing the container ID and
