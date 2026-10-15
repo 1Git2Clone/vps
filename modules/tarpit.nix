@@ -14,6 +14,11 @@
 # is opened in THREE places: here, the input chain in modules/firewall.nix and
 # tofu/modules/hetzner-firewall. A host service, so input, not forward.
 #
+# BOUND TO THE PUBLIC ADDRESS ONLY, because 22222 is shared: on the tailnet
+# address it is the real sshd (modules/services.nix), so the tarpit must not
+# hold the wildcard. -host is one address for every port, so 222 and 2022 move
+# with it, which costs nothing: a tarpit on the tailnet catches nobody.
+#
 # 222 is the module's `port` because the module grants CAP_NET_BIND_SERVICE
 # only when `port` (or the prometheus port) is below 1024; a privileged port
 # passed through extraOptions alone would fail to bind.
@@ -28,10 +33,13 @@
 # exporter bind loopback, and grafana (host networking) reads it at
 # localhost:9090. Its data is a 15-day window of bot statistics and is not in
 # the restic set on purpose.
+{ config, ... }:
+
 {
   services.endlessh-go = {
     enable = true;
     port = 222;
+    listenAddress = config.infra.publicIPv4;
     extraOptions = [
       "-port=2022"
       "-port=22222"

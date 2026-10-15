@@ -31,6 +31,19 @@
   sops.templates."tailscale-authkey".content =
     "${config.sops.placeholder.tailscale_oauth_client_secret}?ephemeral=false&preauthorized=true";
 
+  # Lets a socket bind an address the box does not hold yet. sshd binds the
+  # tailnet address and endlessh-go the public one, and at boot either can start
+  # before tailscaled or the uplink brings its address up; without this the
+  # bind fails and the unit with it, long after deploy-rs's rollback window.
+  boot.kernel.sysctl."net.ipv4.ip_nonlocal_bind" = 1;
+
+  # sshd's tailnet-address bind on 22222 fails while the tarpit still holds the
+  # wildcard there, which is what it did before this change. Starting sshd after
+  # endlessh-go (ordering only, so a failed tarpit cannot hold sshd back) means
+  # the switch that moves the tarpit onto the public address frees the port
+  # first; sshd keeps 2222 either way, since it carries on past one failed bind.
+  systemd.services.sshd.after = [ "endlessh-go.service" ];
+
   services = {
     openssh = {
       enable = true;
@@ -40,6 +53,26 @@
       # the tailnet and otherwise: Tailscale SSH is off (see below), and
       # deploys, the runner's jump hop and interactive logins all come here.
       ports = [ 2222 ];
+      # 22222 IS THE TAILNET-ONLY TRIAL. sshd listens there on the tailnet
+      # address alone, so on that port the public address has no sshd at all
+      # and endlessh-go (modules/tarpit.nix) holds it instead. 2222 keeps its
+      # old behaviour, every address, as the safety net until the trial is
+      # trusted. An explicit port on every entry, because a ListenAddress
+      # without one would follow `ports` for all of them.
+      listenAddresses = [
+        {
+          addr = "0.0.0.0";
+          port = 2222;
+        }
+        {
+          addr = "[::]";
+          port = 2222;
+        }
+        {
+          addr = config.infra.tailnetIPv4;
+          port = 22222;
+        }
+      ];
       settings = {
         PermitRootLogin = "no";
         PasswordAuthentication = false;
