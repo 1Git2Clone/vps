@@ -47,10 +47,13 @@ locals {
   dns_a_records = {
     cadcraft    = "417053f5b65b4d439889b67003c3442e"
     compress    = "a1d763516f65b95e6e4707e1f8e009be"
+    deckcraft   = "976977953c10218faf2665428257ee84"
     docs        = "935706807c5f76271aa3e4671a9fd3f2"
     effectcraft = "e85b6114a920b0442536ef8a4da2d395"
+    figcraft    = "4bcb66647ceae8a5611a3afa58738627"
     filmcraft   = "75170081f297ed3c273c68c859ed22f4"
     git         = "acf3cabcabfb15082fb920c213408b7f"
+    gridcraft   = "bdef5b47d5822011803dadbc9ea0f0c1"
     mail        = "d95eaec80d7ef0326de086aa2d7dd883"
     mc          = "8b5b420ea4b1c920e560ae488c7d824e"
     mc2         = "ae7ae954818b8660e32346a2ff864308"
@@ -61,6 +64,7 @@ locals {
     search      = "77ca2c34bc4fe585462349a4e0cd76b8"
     smtp        = "1a8fa2eac6aab44c98e9cb46a39073d5"
     status      = "2f7cf86c32a9d0f0aab797eebbac6d13"
+    wordcraft   = "ab793907bd0e1b74b79646862427a616"
   }
 
   # The tailnet-only names, same idea. These were created in the dashboard
