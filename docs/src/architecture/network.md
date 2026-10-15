@@ -127,7 +127,7 @@ That is also why door 3 is a policy file and not an nftables rule. **nftables
 cannot tell tailnet peers apart**: every packet off `tailscale0` looks the same
 to it, so "which peers may reach what" is a question this layer is structurally
 unable to answer. `tofu/tailscale-policy.hujson` is the layer that can, and it
-narrows the VPS to ten ports for the owner account — 6432 and 4317/4318 are
+narrows the VPS to eleven ports for the owner account — 6432 and 4317/4318 are
 no longer tailnet-reachable at all. See
 [The tailnet policy](tailnet.md).
 

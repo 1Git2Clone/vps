@@ -51,7 +51,7 @@ flowchart TB
     peer --> pol{"policy file"}
 
     pol -- "autogroup:self:*<br/>every port" --> own["your own devices<br/>laptop · desktop · phone"]
-    pol -- "tag:vps<br/>ten ports" --> vps["the VPS"]
+    pol -- "tag:vps<br/>eleven ports" --> vps["the VPS"]
     pol -- "tag:friends-ssh:22" --> friends["a friend's machine"]
 
     vps --> nft["host nftables<br/>iifname tailscale0 accept"]
@@ -74,7 +74,7 @@ and go through review.
 
 ```text
 acls: 1git2clone@github -> autogroup:self:*
-      1git2clone@github -> tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880
+      1git2clone@github -> tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880,22000
       1git2clone@github -> tag:friends-ssh:22
 ssh:  check  -> autogroup:self   as nonroot, root
       accept -> tag:friends-ssh  as nonroot, root
@@ -99,6 +99,7 @@ The port list on `tag:vps` is everything a tailnet client legitimately reaches:
 | 3000        | grafana, host networking                                                                                                                                         |
 | 8080        | dozzle direct — the path that still works when caddy is the broken part                                                                                          |
 | 8384        | syncthing's GUI                                                                                                                                                  |
+| 22000       | syncthing's sync protocol (tcp and QUIC). Without it the GUI on 8384 still answers and the VPS silently stops syncing with every device                          |
 | 8443 / 8880 | caddy's tailnet listeners, reachable directly as well as through the redirect                                                                                    |
 
 **Deliberately absent: 6432 and 4317/4318.** pgbouncer and tempo's OTLP

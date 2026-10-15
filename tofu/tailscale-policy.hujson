@@ -73,7 +73,8 @@
 	"acls": [
 		// Your own devices, to each other. Laptops, desktop, phone — syncthing
 		// pairs over this, and there is nothing to gain by taking a scalpel to a
-		// set of machines that are all equally yours.
+		// set of machines that are all equally yours. The VPS's syncthing is NOT
+		// covered here once it is tagged; it needs 22000 in the port list below.
 		//
 		// SRC IS THE OWNER ACCOUNT, NOT autogroup:member. Worth spelling out why,
 		// because the stock rule said member and that is NOT the hole it looks
@@ -119,6 +120,10 @@
 		//   8080  dozzle direct, the path that still works when caddy is the
 		//         broken part
 		//   8384  syncthing's GUI
+		//   22000 syncthing's sync protocol, tcp and QUIC. The GUI port alone
+		//         looks healthy while nothing syncs: from 2026-09-20, when the
+		//         tag took the VPS out of `autogroup:self`, until this was
+		//         added, every peer's connection to the VPS was dropped here.
 		//   8443  caddy's tailnet listener, reachable directly as well as via
 		//   8880  the redirect above
 		//
@@ -131,7 +136,7 @@
 		{
 			"action": "accept",
 			"src": ["1git2clone@github"],
-			"dst": ["tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880"],
+			"dst": ["tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880,22000"],
 		},
 
 		// tag:friends-ssh IS A DESTINATION ONLY. Those machines are here to be
@@ -258,6 +263,9 @@
 				"vps:443",
 				// dozzle direct, for when caddy is what broke.
 				"vps:8080",
+				// syncthing's sync port. Without it the GUI still answers and
+				// the VPS silently stops syncing with every device.
+				"vps:22000",
 				// The acl grant the friends ssh rule silently depends on. If
 				// someone "tidies up" that rule, ssh to those boxes stops working
 				// and the ssh section will look innocent; this catches it.
