@@ -35,6 +35,10 @@
         "cadcraft"
         "effectcraft"
         "filmcraft"
+        "figcraft"
+        "gridcraft"
+        "deckcraft"
+        "wordcraft"
         "compress"
         "docs"
         # Tailnet-only vhosts. They belong on the same certificate as the rest
