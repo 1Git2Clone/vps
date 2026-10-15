@@ -99,6 +99,24 @@ let
   # Where the pages volume is mounted inside this container.
   pagesRoot = "/srv/pages";
 
+  # The craft-projects sites, each on <name>.<domain>. One repo publishes all
+  # of them: craft-projects/pages uploads a single artifact with a directory
+  # per site, so they land side by side under craft-projects/pages/. The
+  # upstream mirrors themselves have Actions turned off and publish nothing.
+  # A new one is a name here, in infra.certSubdomains, in the tofu
+  # `subdomains` and in that repo's workflow.
+  crafts = [
+    "photocraft"
+    "cadcraft"
+    "effectcraft"
+    "filmcraft"
+    "figcraft"
+    "gridcraft"
+    "deckcraft"
+    "wordcraft"
+  ];
+  craftRoot = "${pagesRoot}/craft-projects/pages";
+
   # HSTS, emitted on EVERY site block below — caddy adds nothing of the sort on
   # its own, and until this line every vhost here answered without it
   # (`curl -D - https://git.<domain>/` showed no Strict-Transport-Security on
@@ -359,11 +377,10 @@ let
       # Some of the sites here have a name of their own, below. Their old
       # paths here redirect to it, query string and all, so a link to either
       # form lands on the same page.
+      #
+      # The crafts keep their first home, hutao/<name>, as a redirect too: the
+      # first four were published from there before moving to the org.
       redirects = [
-        {
-          from = "/hutao/photocraft";
-          to = "photocraft.${domain}";
-        }
         {
           from = "/hutao/compress";
           to = "compress.${domain}";
@@ -372,40 +389,28 @@ let
           from = "/hutao/vps/docs";
           to = "docs.${domain}";
         }
+      ]
+      ++ lib.concatMap (name: [
         {
-          from = "/hutao/cadcraft";
-          to = "cadcraft.${domain}";
+          from = "/hutao/${name}";
+          to = "${name}.${domain}";
         }
         {
-          from = "/hutao/effectcraft";
-          to = "effectcraft.${domain}";
+          from = "/craft-projects/pages/${name}";
+          to = "${name}.${domain}";
         }
-        {
-          from = "/hutao/filmcraft";
-          to = "filmcraft.${domain}";
-        }
-      ];
+      ]) crafts;
     }
-    # The sites above, each on its own name: the same directory of the same
-    # volume, served from the root of a host instead of under /<owner>/<repo>/.
-    # Anything built for a prefix (a SvelteKit `paths.base`, an mdBook
-    # `site-url`) has to be built for "/" instead, or its links 404 here.
-    {
-      host = "photocraft.${domain}";
-      root = "${pagesRoot}/hutao/photocraft";
-    }
-    {
-      host = "cadcraft.${domain}";
-      root = "${pagesRoot}/hutao/cadcraft";
-    }
-    {
-      host = "effectcraft.${domain}";
-      root = "${pagesRoot}/hutao/effectcraft";
-    }
-    {
-      host = "filmcraft.${domain}";
-      root = "${pagesRoot}/hutao/filmcraft";
-    }
+  ]
+  # The sites above and below, each on its own name: the same directory of the
+  # same volume, served from the root of a host instead of under
+  # /<owner>/<repo>/. Anything built for a prefix (a SvelteKit `paths.base`, an
+  # mdBook `site-url`) has to be built for "/" instead, or its links 404 here.
+  ++ map (name: {
+    host = "${name}.${domain}";
+    root = "${craftRoot}/${name}";
+  }) crafts
+  ++ [
     {
       host = "compress.${domain}";
       root = "${pagesRoot}/hutao/compress";

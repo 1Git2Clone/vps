@@ -11,14 +11,15 @@ Some of the sites also have a name of their own. Caddy serves the same
 directory from the root of a host, and the old path under `pages.hu-tao.dev`
 redirects there (308, query string kept):
 
-| Directory                    | Host                     | Old path, now a redirect |
-| ---------------------------- | ------------------------ | ------------------------ |
-| `hutao/photocraft`           | `photocraft.hu-tao.dev`  | `/hutao/photocraft/`     |
-| `hutao/cadcraft`             | `cadcraft.hu-tao.dev`    | `/hutao/cadcraft/`       |
-| `hutao/effectcraft`          | `effectcraft.hu-tao.dev` | `/hutao/effectcraft/`    |
-| `hutao/filmcraft`            | `filmcraft.hu-tao.dev`   | `/hutao/filmcraft/`      |
-| `hutao/compress`             | `compress.hu-tao.dev`    | `/hutao/compress/`       |
-| `hutao/vps/docs` (this book) | `docs.hu-tao.dev`        | `/hutao/vps/docs/`       |
+| Directory                      | Host                  | Old path, now a redirect                            |
+| ------------------------------ | --------------------- | --------------------------------------------------- |
+| `craft-projects/pages/<craft>` | `<craft>.hu-tao.dev`  | `/craft-projects/pages/<craft>/`, `/hutao/<craft>/` |
+| `hutao/compress`               | `compress.hu-tao.dev` | `/hutao/compress/`                                  |
+| `hutao/vps/docs` (this book)   | `docs.hu-tao.dev`     | `/hutao/vps/docs/`                                  |
+
+`<craft>` is each of photocraft, cadcraft, effectcraft, filmcraft, figcraft,
+gridcraft, deckcraft and wordcraft — the `crafts` list in
+`modules/containers/caddy.nix`. See [The craft sites](#the-craft-sites).
 
 A new name is three edits: the host in `modules/containers/caddy.nix` (with a
 `redirects` entry on the pages site if the old path should keep working), the
@@ -34,6 +35,28 @@ every link 404 there. compress's pages workflow sets no `BASE_PATH` for that
 reason. A host that serves one site can also carry that site's response
 headers host-wide; compress's `COOP`/`COEP` pair, which its multithreaded
 ffmpeg needs, does.
+
+## The craft sites
+
+The crafts are upstream [storytold](https://github.com/storytold) apps, kept on
+Forgejo in the `craft-projects` org: one repo per app, whose `main` and tags
+`modules/mirror-sync.nix` copies from GitHub once a day, and whose `pages`
+branch is that copy with the ArtCraft marks taken off.
+
+**None of them publishes itself.** Forgejo picks a commit's workflows from
+`.forgejo/workflows`, else `.gitea/workflows`, else `.github/workflows`, and
+there is no setting — instance, org or repo — to skip the last. A mirrored
+`main` has only upstream's `.github`, so every mirror push, tag and nightly
+schedule would run upstream's CI on the runner. That was measured, not
+guessed: under `hutao/` photocraft ran its corpus tests on a push and
+filmcraft's FreeBSD build fired every night. So **Actions are off on every
+mirror repo**, and a new mirror has Actions turned off before its first push.
+
+**One repo publishes all of them:** `craft-projects/pages`. Its one workflow
+fetches each app's upstream `<name>-web-<version>.zip` release, checks it
+against that release's `SHA256SUMS.txt`, unpacks it to `<name>/`, and uploads
+the lot as the one `pages` artifact. The versions are pinned in that
+workflow; bumping one is an edit there, and republishes all of them.
 
 ## The direction reversed
 

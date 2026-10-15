@@ -1,5 +1,5 @@
-# Keeps hutao/<repo> on Forgejo in step with an upstream GitHub repo: its
-# `main` and its tags, every hour. The point is a copy that outlives the
+# Keeps craft-projects/<repo> on Forgejo in step with an upstream GitHub repo:
+# its `main` and its tags, once a day. The point is a copy that outlives the
 # upstream — OpenRadioss's GitHub repo was deleted outright on 2026-10-01 and
 # its fork had to be rebuilt from whoever still had a clone.
 #
@@ -14,12 +14,19 @@
 # repo by hand.
 #
 # Only `main` and tags. Other branches stay whatever they are on Forgejo, which
-# is what keeps each repo's own `pages` branch out of this; and some upstream
-# branches start workflows on a push (cadcraft's `release` runs its release
-# pipeline on the runner), which `main` here does not.
+# is what keeps each repo's own `pages` branch (the copy without the ArtCraft
+# marks) out of this.
+#
+# ACTIONS ARE OFF on every repo in craft-projects except `pages`. Forgejo runs
+# a commit's .github/workflows whenever it has no .forgejo/workflows, and
+# there is no setting to stop that, so a mirrored `main` or tag would start
+# upstream's whole CI on the runner (it did: photocraft's corpus tests on a
+# push, filmcraft's FreeBSD build every night from its schedule). The sites
+# are published by craft-projects/pages instead; see docs/src/operations/pages.md.
+# A new mirror's repo needs Actions turned off BEFORE this first pushes to it.
 #
 # Each push to Forgejo as hutao needs a token with write on `repository`,
-# sops key mirror_sync/token (see secrets.example.yaml).
+# sops key mirror_sync/token (see secrets.example.yaml); hutao owns the org.
 {
   config,
   lib,
@@ -28,12 +35,16 @@
 }:
 
 let
-  # One line per mirror: "<github owner>/<repo>", synced to hutao/<repo>.
+  # One line per mirror: "<github owner>/<repo>", synced to craft-projects/<repo>.
   mirrors = [
     "storytold/photocraft"
     "storytold/cadcraft"
     "storytold/effectcraft"
     "storytold/filmcraft"
+    "storytold/figcraft"
+    "storytold/gridcraft"
+    "storytold/deckcraft"
+    "storytold/wordcraft"
   ];
 in
 {
@@ -48,7 +59,7 @@ in
     environment = {
       MIRRORS = lib.concatStringsSep " " mirrors;
       SRC_BASE = "https://github.com";
-      DST_BASE = "https://git.${config.infra.domain}/hutao";
+      DST_BASE = "https://git.${config.infra.domain}/craft-projects";
       GIT_TERMINAL_PROMPT = "0";
     };
 
@@ -103,9 +114,9 @@ in
         # below is where a rewrite gets refused.
         if git -C "$dir" fetch -q --no-tags "$SRC_BASE/$m.git" '+refs/heads/main:refs/heads/main' '+refs/tags/*:refs/tags/*' \
           && git -C "$dir" push -q "$DST_BASE/$repo.git" refs/heads/main:refs/heads/main 'refs/tags/*:refs/tags/*'; then
-          echo "mirror-sync: $m -> hutao/$repo ok"
+          echo "mirror-sync: $m -> $DST_BASE/$repo ok"
         else
-          echo "mirror-sync: $m -> hutao/$repo FAILED, left as it was" >&2
+          echo "mirror-sync: $m -> $DST_BASE/$repo FAILED, left as it was" >&2
           failed=1
         fi
       done
@@ -116,8 +127,8 @@ in
   systemd.timers.mirror-sync = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "hourly";
-      RandomizedDelaySec = "10m";
+      OnCalendar = "daily";
+      RandomizedDelaySec = "1h";
       Persistent = true;
     };
   };
