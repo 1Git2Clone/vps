@@ -77,6 +77,8 @@
   // The consequence to know about: an update nobody ticks is never applied, so
   // a security patch waits on a human exactly like a cosmetic one. The
   // dashboard is now the thing to read, not a notification to react to.
+  // EXCEPT for the internet-facing apps' patch releases: see the last
+  // packageRule, which opens those as pull requests straight away.
   //
   // prHourlyLimit above still matters, and more than before: it is what decides
   // how fast a batch of ticked boxes actually turns into branches.
@@ -152,6 +154,28 @@
       matchPackageNames: ["itzg/minecraft-server"],
       matchUpdateTypes: ["digest"],
       enabled: true,
+    },
+    // PATCH RELEASES OF THE INTERNET-FACING APPS SKIP THE DASHBOARD. That is
+    // where their security fixes ship, and under the approval rule above they
+    // sat as unticked boxes with nothing to say so: forgejo 16.0.6, a security
+    // release, waited three days next to cosmetic bumps. Here a patch opens a
+    // pull request on the next daily run, and the pull request is the alert.
+    // Patch releases carry no schema migrations, so taking them promptly is
+    // the cheap case; minor and major bumps still wait to be ticked.
+    //
+    // searxng is left out on purpose. Its versions are dates, so every new day
+    // reads as a "patch" and the branch would never settle, and it sits behind
+    // caddy's basic_auth, so it is not reachable the way these are.
+    {
+      matchPackageNames: [
+        "codeberg.org/forgejo/forgejo",
+        "roundcube/roundcubemail",
+        "louislam/uptime-kuma",
+        "deluan/navidrome",
+        "ghcr.io/docker-mailserver/docker-mailserver",
+      ],
+      matchUpdateTypes: ["patch"],
+      dependencyDashboardApproval: false,
     },
   ],
 }
