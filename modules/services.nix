@@ -37,42 +37,24 @@
   # bind fails and the unit with it, long after deploy-rs's rollback window.
   boot.kernel.sysctl."net.ipv4.ip_nonlocal_bind" = 1;
 
-  # sshd's tailnet-address bind on 22222 fails while the tarpit still holds the
-  # wildcard there, which is what it did before this change. Starting sshd after
-  # endlessh-go (ordering only, so a failed tarpit cannot hold sshd back) means
-  # the switch that moves the tarpit onto the public address frees the port
-  # first; sshd keeps 2222 either way, since it carries on past one failed bind.
-  systemd.services.sshd.after = [ "endlessh-go.service" ];
-
   services = {
     openssh = {
       enable = true;
       # 2222, not 22: forgejo publishes the host's port 22 so that git clone
       # URLs need no port — ssh reads no SRV record, so anything else has to be
-      # spelled out in every remote. This is THE administrative way in, over
-      # the tailnet and otherwise: Tailscale SSH is off (see below), and
-      # deploys, the runner's jump hop and interactive logins all come here.
+      # spelled out in every remote. This is THE administrative way in:
+      # Tailscale SSH is off (see below), and deploys, the runner's jump hop
+      # and interactive logins all come here.
+      #
+      # ON THE TAILNET ADDRESS ONLY. The public address has no sshd at all:
+      # endlessh-go (modules/tarpit.nix) holds 2222 there instead, so off the
+      # tailnet this port trickles an endless banner, and nothing filters
+      # either side, each address just has one listener. No IPv6 either; a
+      # client trying the tailnet v6 address first is refused and falls back.
+      # Locked out of the tailnet means the Hetzner console, where root and
+      # hutao have passwords (modules/users.nix).
       ports = [ 2222 ];
-      # 22222 IS THE TAILNET-ONLY TRIAL. sshd listens there on the tailnet
-      # address alone, so on that port the public address has no sshd at all
-      # and endlessh-go (modules/tarpit.nix) holds it instead. 2222 keeps its
-      # old behaviour, every address, as the safety net until the trial is
-      # trusted. An explicit port on every entry, because a ListenAddress
-      # without one would follow `ports` for all of them.
-      listenAddresses = [
-        {
-          addr = "0.0.0.0";
-          port = 2222;
-        }
-        {
-          addr = "[::]";
-          port = 2222;
-        }
-        {
-          addr = config.infra.tailnetIPv4;
-          port = 22222;
-        }
-      ];
+      listenAddresses = [ { addr = config.infra.tailnetIPv4; } ];
       settings = {
         PermitRootLogin = "no";
         PasswordAuthentication = false;

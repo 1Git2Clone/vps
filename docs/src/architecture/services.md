@@ -38,7 +38,7 @@ jail that reads the journal.
 | `postgres`       | not a container — a host service; unix socket + loopback only, never on `botnet`                                                                                                                                                                                                                                                            |
 | `pgbouncer`      | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain                                                                                                                                                                                                                 |
 | `syncthing`      | not a container — a host service; GUI on 8384, tailnet only; also `syncthing.`, where caddy must rewrite the `Host` header or syncthing's rebinding check answers 403                                                                                                                                                                       |
-| `endlessh-go`    | not a container — a host service; the SSH tarpit on 222, 2022 and 22222, public on purpose; its metrics on `127.0.0.1:2112`. See [Observability](observability.md#the-ssh-tarpit)                                                                                                                                                           |
+| `endlessh-go`    | not a container — a host service; the SSH tarpit on 222, 2022, 2222 and 22222, on the public address only; its metrics on `127.0.0.1:2112`. See [Observability](observability.md#the-ssh-tarpit)                                                                                                                                            |
 | `prometheus`     | not a container — a host service; loopback-only :9090, scraping the tarpit for grafana                                                                                                                                                                                                                                                      |
 
 The Forgejo Actions runner is **not on this list any more**: it lives on its
@@ -63,10 +63,11 @@ RSS is still not heap. Metaspace, the code cache, GC structures and direct
 buffers live outside `-Xmx`, so the ceiling is not a bound on what the container
 reports.
 
-Forgejo owns port 22, so **the host's sshd is on 2222**, and that is the way
-in — Tailscale SSH is off. Keeping 22 is what lets git remotes stay portless:
-ssh has no service discovery — it reads no `SRV` record — so anything else has
-to be spelled out in every clone URL or every client's ssh config.
+Forgejo owns port 22, so **the host's sshd is on 2222**, on the tailnet address
+only, and that is the way in — Tailscale SSH is off. Keeping 22 is what lets
+git remotes stay portless: ssh has no service discovery — it reads no `SRV`
+record — so anything else has to be spelled out in every clone URL or every
+client's ssh config.
 
 ## caddy is built here, not pulled
 

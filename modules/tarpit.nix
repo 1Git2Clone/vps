@@ -1,23 +1,22 @@
 # ==============================================================================
 # SSH tarpit — endlessh-go, and the prometheus that counts it
 # ==============================================================================
-# Bots find sshd on 2222 thousands of times a week and give up at "Invalid
-# user". This gives them somewhere worse to be: endlessh-go accepts the
+# Bots knock on alternative SSH ports thousands of times a week. This gives
+# them somewhere worse to be: endlessh-go accepts the
 # connection and trickles an endless pre-banner at them, one random line a
 # second, so a client that waits for the SSH version string waits for hours.
 # It is not a defence (sshd is key-only either way); it is a scoreboard.
 #
-# THE PORTS are three common alternative SSH ports: 222, 2022 and 22222. Which
-# one bots like best is what the dashboard's port split is for. Not 22
-# (forgejo's) and not 2222 (the real sshd, and endlessh-go's own default —
-# which is why `port` is always set here). A port
+# THE PORTS are four common alternative SSH ports: 222, 2022, 2222 and 22222.
+# Which one bots like best is what the dashboard's port split is for. Not 22,
+# which is forgejo's. A port
 # is opened in THREE places: here, the input chain in modules/firewall.nix and
 # tofu/modules/hetzner-firewall. A host service, so input, not forward.
 #
-# BOUND TO THE PUBLIC ADDRESS ONLY, because 22222 is shared: on the tailnet
+# BOUND TO THE PUBLIC ADDRESS ONLY, because 2222 is shared: on the tailnet
 # address it is the real sshd (modules/services.nix), so the tarpit must not
-# hold the wildcard. -host is one address for every port, so 222 and 2022 move
-# with it, which costs nothing: a tarpit on the tailnet catches nobody.
+# hold the wildcard. -host is one address for every port, which costs nothing:
+# a tarpit on the tailnet catches nobody.
 #
 # 222 is the module's `port` because the module grants CAP_NET_BIND_SERVICE
 # only when `port` (or the prometheus port) is below 1024; a privileged port
@@ -42,6 +41,7 @@
     listenAddress = config.infra.publicIPv4;
     extraOptions = [
       "-port=2022"
+      "-port=2222"
       "-port=22222"
       "-geoip_supplier=ip-api"
     ];

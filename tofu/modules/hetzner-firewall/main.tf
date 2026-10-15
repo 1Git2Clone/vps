@@ -13,7 +13,7 @@ locals {
   inbound = [
     { protocol = "udp", port = "41641", description = "Wireguard/Tailscale" },
     { protocol = "tcp", port = "22", description = "Forgejo SSH" },
-    { protocol = "tcp", port = "2222", description = "Host sshd (NixOS; 22 belongs to forgejo)" },
+    { protocol = "tcp", port = "2222", description = "SSH tarpit (endlessh-go); sshd is tailnet-only" },
     { protocol = "tcp", port = "222", description = "SSH tarpit (endlessh-go)" },
     { protocol = "tcp", port = "2022", description = "SSH tarpit (endlessh-go)" },
     { protocol = "tcp", port = "22222", description = "SSH tarpit (endlessh-go)" },

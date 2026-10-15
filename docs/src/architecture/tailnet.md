@@ -51,7 +51,7 @@ flowchart TB
     peer --> pol{"policy file"}
 
     pol -- "autogroup:self:*<br/>every port" --> own["your own devices<br/>laptop · desktop · phone"]
-    pol -- "tag:vps<br/>twelve ports" --> vps["the VPS"]
+    pol -- "tag:vps<br/>eleven ports" --> vps["the VPS"]
     pol -- "tag:friends-ssh:22" --> friends["a friend's machine"]
 
     vps --> nft["host nftables<br/>iifname tailscale0 accept"]

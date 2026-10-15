@@ -111,11 +111,11 @@ in
           ct state { established, related } accept
           iifname tailscale0 accept
 
-          # The host's own sshd. On 2222 because forgejo owns 22.
-          tcp dport { 2222 } ct state new accept
-
           # The SSH tarpit (modules/tarpit.nix): endlessh-go, not an sshd.
-          tcp dport { 222, 2022, 22222 } ct state new accept
+          # 2222 is here because publicly it IS the tarpit; the real sshd
+          # listens on the tailnet address only, which `iifname tailscale0
+          # accept` above already admits.
+          tcp dport { 222, 2022, 2222, 22222 } ct state new accept
 
           # Tailscale's own transport, so peers can find a direct path instead
           # of falling back to a DERP relay over 443.

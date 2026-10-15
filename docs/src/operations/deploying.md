@@ -124,7 +124,8 @@ deploy-critical there.
   primary-IP handover during a migration, so the same command works before and
   after cutover.
 - ssh is on **2222**. Port 22 belongs to forgejo, so that git clone URLs need no
-  port. Tailscale SSH is off, so 2222 with a normal key is the only ssh in.
+  port. Tailscale SSH is off, so 2222 with a normal key is the only ssh in,
+  and only over the tailnet: publicly, 2222 is the tarpit.
 
 ### If a deploy fails with "lacks a signature by a trusted key"
 

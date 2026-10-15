@@ -105,9 +105,6 @@
 		//         here (flake.nix pins -p 2222 precisely because 22 is forgejo
 		//         and Tailscale SSH cannot be scripted past its re-auth check).
 		//         Drop this port and deploys stop working.
-		//   22222 the same sshd, on the tailnet address only: the trial of
-		//         tailnet-only ssh. Publicly this port is the tarpit
-		//         (modules/tarpit.nix), so it answers nothing useful off-tailnet.
 		//   22    forgejo's ssh, for git over the tailnet. Forgejo's only because
 		//         Tailscale SSH is off on the vps (modules/services.nix); with it
 		//         on, tailscaled owned this port on the tailnet address.
@@ -139,7 +136,7 @@
 		{
 			"action": "accept",
 			"src": ["1git2clone@github"],
-			"dst": ["tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880,22000,22222"],
+			"dst": ["tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880,22000"],
 		},
 
 		// tag:friends-ssh IS A DESTINATION ONLY. Those machines are here to be
@@ -260,8 +257,6 @@
 			"accept": [
 				// Deploys. The single most load-bearing line in the file.
 				"vps:2222",
-				// The tailnet-only sshd trial; see the port list above.
-				"vps:22222",
 				// The split-DNS resolver, for the half-public names.
 				"vps:53",
 				// The tailnet vhosts, at the port the browser actually sends.

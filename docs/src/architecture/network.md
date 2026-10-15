@@ -127,7 +127,7 @@ That is also why door 3 is a policy file and not an nftables rule. **nftables
 cannot tell tailnet peers apart**: every packet off `tailscale0` looks the same
 to it, so "which peers may reach what" is a question this layer is structurally
 unable to answer. `tofu/tailscale-policy.hujson` is the layer that can, and it
-narrows the VPS to twelve ports for the owner account — 6432 and 4317/4318 are
+narrows the VPS to eleven ports for the owner account — 6432 and 4317/4318 are
 no longer tailnet-reachable at all. See
 [The tailnet policy](tailnet.md).
 
@@ -137,14 +137,15 @@ tailnet devices, git over ssh landed on Tailscale SSH instead of forgejo.
 Administration, deploys and the runner's jump hop all use sshd on 2222 with an
 ordinary key.
 
-**22222 is the tailnet-only trial.** The same sshd also listens on
-`<tailnet address>:22222`, and only there: on the public address that port
-belongs to the tarpit, which binds the public IPv4 alone. So off the tailnet,
-22222 trickles an endless banner, and on it, it logs you in. Nothing filters
-this; each address simply has one listener. Both binds survive a boot where
-tailscaled is slow, because `net.ipv4.ip_nonlocal_bind` lets them bind an
-address the box does not hold yet. 2222 still answers publicly as the safety
-net, until the trial is trusted and 2222 can go the same way.
+**sshd is on the tailnet address only.** It listens on `<tailnet address>:2222`
+and nowhere else; on the public address, 2222 belongs to the tarpit, which
+binds the public IPv4 alone. So off the tailnet 2222 trickles an endless
+banner, and on it, it logs you in. Nothing filters this: each address simply
+has one listener, and no firewall mistake can put sshd on the internet. Both
+binds survive a boot where tailscaled is slow, because
+`net.ipv4.ip_nonlocal_bind` lets them bind an address the box does not hold
+yet. Off the tailnet the way in is the Hetzner console, where root and hutao
+have passwords.
 
 Three of those services also answer by name — `dozzle.`, `grafana.` and
 `syncthing.` — and that is the same mechanism wearing a hat. Caddy runs a

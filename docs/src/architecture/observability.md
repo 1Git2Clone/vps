@@ -9,7 +9,7 @@ flowchart TB
     cont["every container"] -- journald --> doz["dozzle :8080<br/>tailnet"]
     cont -- journald --> jctl["journalctl"]
 
-    tarpit["endlessh-go<br/>:222 · :2022 · :22222"] -- "metrics :2112" --> prom["prometheus :9090<br/>loopback"]
+    tarpit["endlessh-go<br/>:222 · :2022 · :2222 · :22222"] -- "metrics :2112" --> prom["prometheus :9090<br/>loopback"]
     prom --> graf
 
     doz ~~~ kuma
@@ -62,11 +62,14 @@ Delete both once tempo's retention no longer reaches those dates.
 
 ## The SSH tarpit
 
-`modules/tarpit.nix` runs endlessh-go on **222, 2022 and 22222**, three common
-alternative SSH ports; the dashboard splits by port. It accepts the connection
-and sends a random line a second, forever, so a client waiting for the SSH
-version string waits for hours. It guards nothing (sshd on 2222 is key-only
-either way); it is there to waste bots' time and to count them.
+`modules/tarpit.nix` runs endlessh-go on **222, 2022, 2222 and 22222**, four
+common alternative SSH ports, on the public address only; the dashboard splits
+by port. It accepts the connection and sends a random line a second, forever,
+so a client waiting for the SSH version string waits for hours. 2222 is the
+real sshd's port too, but sshd listens on the tailnet address alone, so the
+public half of that port is free for the tarpit. It guards nothing (sshd is
+key-only and tailnet-only either way); it is there to waste bots' time and to
+count them.
 
 Its **Endlessh** dashboard, in the Provisioned folder, shows connections,
 time trapped, and a map of where they came from. The map comes from
