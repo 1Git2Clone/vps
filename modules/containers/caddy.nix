@@ -101,7 +101,7 @@ let
 
   # The craft-projects sites, each on <name>.<domain>. One repo publishes all
   # of them: craft-projects/pages uploads a single artifact with a directory
-  # per site, so they land side by side under craft-projects/pages/. The
+  # per app, so they land side by side under craft-projects/pages/apps/. The
   # upstream mirrors themselves have Actions turned off and publish nothing.
   # A new one is a name here, in infra.certSubdomains, in the tofu
   # `subdomains` and in that repo's workflow.
@@ -408,13 +408,13 @@ let
   # mdBook `site-url`) has to be built for "/" instead, or its links 404 here.
   ++ map (name: {
     host = "${name}.${domain}";
-    root = "${craftRoot}/${name}";
+    root = "${craftRoot}/apps/${name}";
   }) crafts
   ++ [
-    # All of them under one name: craft-projects/pages also publishes a shell
-    # at its root, an app switcher with the app framed below it, routed by
-    # hash (crafts.<domain>/#photocraft) because /<name>/ is the app itself.
-    # The per-craft hosts above stay until this one has proved itself.
+    # All of them under one name: craft-projects/pages is a SvelteKit site
+    # with a prerendered page per app at /<name>/, an app switcher with the
+    # app framed below it from /apps/<name>/. The per-craft hosts above serve
+    # those same app directories and stay until this one has proved itself.
     {
       host = "crafts.${domain}";
       root = craftRoot;
