@@ -11,16 +11,16 @@ Some of the sites also have a name of their own. Caddy serves the same
 directory from the root of a host, and the old path under `pages.hu-tao.dev`
 redirects there (308, query string kept):
 
-| Directory                           | Host                  | Old path, now a redirect                            |
-| ----------------------------------- | --------------------- | --------------------------------------------------- |
-| `craft-projects/pages/apps/<craft>` | `<craft>.hu-tao.dev`  | `/craft-projects/pages/<craft>/`, `/hutao/<craft>/` |
-| `craft-projects/pages`              | `crafts.hu-tao.dev`   | none                                                |
-| `hutao/compress`                    | `compress.hu-tao.dev` | `/hutao/compress/`                                  |
-| `hutao/vps/docs` (this book)        | `docs.hu-tao.dev`     | `/hutao/vps/docs/`                                  |
+| Directory                    | Host                  | Old path, now a redirect                                                           |
+| ---------------------------- | --------------------- | ---------------------------------------------------------------------------------- |
+| `craft-projects/pages`       | `crafts.hu-tao.dev`   | `/craft-projects/pages/<craft>/`, `/hutao/<craft>/` → `crafts.hu-tao.dev/<craft>/` |
+| `hutao/compress`             | `compress.hu-tao.dev` | `/hutao/compress/`                                                                 |
+| `hutao/vps/docs` (this book) | `docs.hu-tao.dev`     | `/hutao/vps/docs/`                                                                 |
 
-`<craft>` is each of photocraft, cadcraft, effectcraft, filmcraft, figcraft,
-gridcraft, deckcraft and wordcraft — the `crafts` list in
-`modules/containers/caddy.nix`. See [The craft sites](#the-craft-sites).
+`<craft>` is each of the eight crafts that had a path of their own before
+(the `oldCrafts` list in `modules/containers/caddy.nix`). They also had a host
+each, `<craft>.hu-tao.dev`; those are gone, DNS records and certificate names
+included. See [The craft sites](#the-craft-sites).
 
 A new name is three edits: the host in `modules/containers/caddy.nix` (with a
 `redirects` entry on the pages site if the old path should keep working), the
@@ -66,9 +66,17 @@ prerendered page of its own at `/<name>/`: a bar with an app switcher and the
 pinned version, and the app framed below it, same-origin, from
 `/apps/<name>/`. The version is read from `sites.json` at build time, so the
 badge can only ever show what was actually published. `/` sends the visitor on
-to an app, and still honours the old hash links (`/#photocraft`). The
-per-craft hosts serve `apps/<name>/` directly and stay up until this one has
-proved itself.
+to an app, and still honours the old hash links (`/#photocraft`).
+
+**Caching follows the file names.** Anything with a hash in its name
+(SvelteKit's `_app/immutable/`, an app's `<name>-<16 hex>[_bg].{js,wasm}`) is
+`immutable` for a year; everything else is `no-cache`, revalidated against its
+ETag, so a release shows on the next load. Per app would be wrong: EffectCraft,
+FilmCraft and LightCraft keep their file names across releases, and
+FilmCraft's own `_headers` still asks for `immutable` on them. The workflow
+also writes a `.br` beside every file (`pnpm precompress`), and caddy serves
+those as they are (`precompressed br`) rather than compressing tens of MiB of
+wasm per request.
 
 **Renovate keeps the versions moving.** The repo's `renovate.json` reads
 each `"<name>": "<version>"` in `sites.json` as a `storytold/<name>` GitHub

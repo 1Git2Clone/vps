@@ -99,13 +99,13 @@ let
   # Where the pages volume is mounted inside this container.
   pagesRoot = "/srv/pages";
 
-  # The craft-projects sites, each on <name>.<domain>. One repo publishes all
-  # of them: craft-projects/pages uploads a single artifact with a directory
-  # per app, so they land side by side under craft-projects/pages/apps/. The
-  # upstream mirrors themselves have Actions turned off and publish nothing.
-  # A new one is a name here, in infra.certSubdomains, in the tofu
-  # `subdomains` and in that repo's workflow.
-  crafts = [
+  # The craft-projects sites, all on crafts.<domain>: craft-projects/pages
+  # uploads one artifact, a SvelteKit site with every app under apps/<name>/.
+  # The upstream mirrors themselves have Actions turned off and publish
+  # nothing. These are only the crafts that had a home of their own before
+  # (see the redirects on pages.<domain>); a new one is a line in that repo's
+  # sites.json and nothing here.
+  oldCrafts = [
     "photocraft"
     "cadcraft"
     "effectcraft"
@@ -378,8 +378,9 @@ let
       # paths here redirect to it, query string and all, so a link to either
       # form lands on the same page.
       #
-      # The crafts keep their first home, hutao/<name>, as a redirect too: the
-      # first four were published from there before moving to the org.
+      # The crafts keep both their old homes, hutao/<name> (the first four
+      # were published from there before moving to the org) and the org's own
+      # path, as redirects to their page on crafts.<domain>.
       redirects = [
         {
           from = "/hutao/compress";
@@ -393,31 +394,52 @@ let
       ++ lib.concatMap (name: [
         {
           from = "/hutao/${name}";
-          to = "${name}.${domain}";
+          to = "crafts.${domain}/${name}";
         }
         {
           from = "/craft-projects/pages/${name}";
-          to = "${name}.${domain}";
+          to = "crafts.${domain}/${name}";
         }
-      ]) crafts;
+      ]) oldCrafts;
     }
   ]
   # The sites above and below, each on its own name: the same directory of the
   # same volume, served from the root of a host instead of under
   # /<owner>/<repo>/. Anything built for a prefix (a SvelteKit `paths.base`, an
   # mdBook `site-url`) has to be built for "/" instead, or its links 404 here.
-  ++ map (name: {
-    host = "${name}.${domain}";
-    root = "${craftRoot}/apps/${name}";
-  }) crafts
   ++ [
-    # All of them under one name: craft-projects/pages is a SvelteKit site
+    # All the crafts under one name: craft-projects/pages is a SvelteKit site
     # with a prerendered page per app at /<name>/, an app switcher with the
-    # app framed below it from /apps/<name>/. The per-craft hosts above serve
-    # those same app directories and stay until this one has proved itself.
+    # app framed below it from /apps/<name>/.
     {
       host = "crafts.${domain}";
       root = craftRoot;
+
+      # The workflow writes a .br copy beside every text and wasm file, so
+      # nothing is compressed per request: PhotoCraft's wasm alone is tens of
+      # MiB, and `encode` would compress it again for every visitor.
+      precompressed = true;
+
+      # Anything with a hash in its name is cached for good, everything else
+      # is revalidated (a 304 against the ETag), so a release shows on the
+      # next load. Keyed on the name rather than per app, because the apps'
+      # own _headers disagree with their files: FilmCraft's asks for
+      # `immutable` on all its .js, though filmcraft_web.js keeps its name
+      # across releases, as do EffectCraft's and LightCraft's.
+      headers = [
+        {
+          path = "/*";
+          values = {
+            "Cache-Control" = "no-cache";
+            "X-Content-Type-Options" = "nosniff";
+          };
+        }
+        {
+          # SvelteKit's output, and wasm-bindgen's <name>-<16 hex>[_bg].{js,wasm}.
+          pathRegexp = ''^/(_app/immutable/|apps/[^/]+/[^/]+-[0-9a-f]{16}(_bg)?\.(js|wasm)$)'';
+          values."Cache-Control" = "public, max-age=31536000, immutable";
+        }
+      ];
     }
     {
       host = "compress.${domain}";
@@ -667,15 +689,28 @@ let
           ]
           ++ [ "\t}" ]
         )
-        # Response headers, each entry scoped to a path matcher. `header` is an
-        # ordered handler with a default position, so unlike rate_limit it
-        # needs no `order` line in the global block.
-        ++ lib.concatMap (
-          h:
-          [ "\theader ${h.path} {" ]
-          ++ lib.mapAttrsToList (name: value: "\t\t${name} \"${value}\"") h.values
+        # Response headers, each entry scoped to a path or a path regexp. In a
+        # `route` they run in the order written, so a later entry overrides an
+        # earlier one; outside one caddy sorts them by path and the catch-all
+        # `/*` would win. `header` is an ordered handler with a default
+        # position, so unlike rate_limit it needs no `order` line.
+        ++ lib.optionals (site ? headers) (
+          lib.concatLists (
+            lib.imap0 (
+              i: h: lib.optional (h ? pathRegexp) "\t@headers${toString i} path_regexp ${h.pathRegexp}"
+            ) site.headers
+          )
+          ++ [ "\troute {" ]
+          ++ lib.concatLists (
+            lib.imap0 (
+              i: h:
+              [ "\t\theader ${if h ? pathRegexp then "@headers${toString i}" else h.path} {" ]
+              ++ lib.mapAttrsToList (name: value: "\t\t\t${name} \"${value}\"") h.values
+              ++ [ "\t\t}" ]
+            ) site.headers
+          )
           ++ [ "\t}" ]
-        ) (site.headers or [ ])
+        )
         # A `handle` of its own, NOT a bare `respond`: caddy orders `handle`
         # before `respond`, so on git.<domain> — whose upstream sits inside
         # handle blocks for restrictRunners — a bare respond would never run
@@ -708,12 +743,19 @@ let
         ]
         ++ (
           if site ? root then
-            [
-              "\troot * ${site.root}"
-              # No `browse`: a missing index.html is a 404, not a listing of
-              # whatever else the workflow put there.
-              "\tfile_server"
-            ]
+            [ "\troot * ${site.root}" ]
+            # No `browse`: a missing index.html is a 404, not a listing of
+            # whatever else the workflow put there.
+            ++ (
+              if site.precompressed or false then
+                [
+                  "\tfile_server {"
+                  "\t\tprecompressed br"
+                  "\t}"
+                ]
+              else
+                [ "\tfile_server" ]
+            )
           else if site.rewriteHost or false then
             [
               "\treverse_proxy ${site.upstream} {"
