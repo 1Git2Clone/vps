@@ -109,7 +109,10 @@
       # organizations, and `hutao` is a user. That 404 killed the first run
       # before any repo was processed. Carried over verbatim from the workflow.
       RENOVATE_AUTODISCOVER = "true";
-      RENOVATE_AUTODISCOVER_FILTER = "hutao/*,skavex/*";
+      # craft-projects/pages by name only: the rest of that org is mirrors,
+      # which must never get a Renovate branch (Actions are off there, and a
+      # push to a mirror is overwritten or refused by mirror-sync).
+      RENOVATE_AUTODISCOVER_FILTER = "hutao/*,skavex/*,craft-projects/pages";
 
       # "use what is on PATH" — otherwise Renovate installs a second Nix.
       RENOVATE_BINARY_SOURCE = "global";

@@ -14,6 +14,7 @@ redirects there (308, query string kept):
 | Directory                      | Host                  | Old path, now a redirect                            |
 | ------------------------------ | --------------------- | --------------------------------------------------- |
 | `craft-projects/pages/<craft>` | `<craft>.hu-tao.dev`  | `/craft-projects/pages/<craft>/`, `/hutao/<craft>/` |
+| `craft-projects/pages`         | `crafts.hu-tao.dev`   | none                                                |
 | `hutao/compress`               | `compress.hu-tao.dev` | `/hutao/compress/`                                  |
 | `hutao/vps/docs` (this book)   | `docs.hu-tao.dev`     | `/hutao/vps/docs/`                                  |
 
@@ -57,6 +58,22 @@ fetches each app's upstream `<name>-web-<version>.zip` release, checks it
 against that release's `SHA256SUMS.txt`, unpacks it to `<name>/`, and uploads
 the lot as the one `pages` artifact. The versions are pinned in that
 workflow; bumping one is an edit there, and republishes all of them.
+
+**`crafts.hu-tao.dev` is all of them under one name.** The same workflow puts
+that repo's `index.html` at the root of the artifact, beside the apps: a bar
+with an app switcher and the pinned version, and the chosen app framed below
+it, same-origin, from `<name>/`. The route is the hash
+(`crafts.hu-tao.dev/#photocraft`), because `/<name>/` is the app itself and
+caddy rewrites nothing. The version comes from a `versions.json` the workflow
+writes out of its own `SITES` list, so the badge can only ever show what was
+actually published. The per-craft hosts stay up until this one has proved
+itself.
+
+**Renovate keeps the versions moving.** The repo's `renovate.json` reads each
+`<name>:<version>` line in `SITES` as a `storytold/<name>` GitHub release, and
+`modules/renovate.nix` discovers `craft-projects/pages` by name — the rest of
+that org is mirrors and is deliberately left out. The `renovate` bot account
+needs write on that one repo, granted by hand as a collaborator.
 
 ## The direction reversed
 

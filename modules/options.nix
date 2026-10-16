@@ -39,6 +39,7 @@
         "gridcraft"
         "deckcraft"
         "wordcraft"
+        "crafts"
         "compress"
         "docs"
         # Tailnet-only vhosts. They belong on the same certificate as the rest

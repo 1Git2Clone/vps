@@ -31,7 +31,7 @@ variable "subdomains" {
   # owns port 22 and this host's sshd sits on 2222.
   #
   # The A record for mc2 is still required: an SRV target has to resolve.
-  default = ["mail", "git", "minecraft", "mc", "mc2", "music", "status", "smtp", "search", "pages", "photocraft", "cadcraft", "effectcraft", "filmcraft", "figcraft", "gridcraft", "deckcraft", "wordcraft", "compress", "docs"]
+  default = ["mail", "git", "minecraft", "mc", "mc2", "music", "status", "smtp", "search", "pages", "photocraft", "cadcraft", "effectcraft", "filmcraft", "figcraft", "gridcraft", "deckcraft", "wordcraft", "crafts", "compress", "docs"]
 }
 
 variable "tailnet_ipv4" {

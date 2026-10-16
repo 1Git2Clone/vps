@@ -411,6 +411,14 @@ let
     root = "${craftRoot}/${name}";
   }) crafts
   ++ [
+    # All of them under one name: craft-projects/pages also publishes a shell
+    # at its root, an app switcher with the app framed below it, routed by
+    # hash (crafts.<domain>/#photocraft) because /<name>/ is the app itself.
+    # The per-craft hosts above stay until this one has proved itself.
+    {
+      host = "crafts.${domain}";
+      root = craftRoot;
+    }
     {
       host = "compress.${domain}";
       root = "${pagesRoot}/hutao/compress";

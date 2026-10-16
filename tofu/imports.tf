@@ -47,6 +47,7 @@ locals {
   dns_a_records = {
     cadcraft    = "417053f5b65b4d439889b67003c3442e"
     compress    = "a1d763516f65b95e6e4707e1f8e009be"
+    crafts      = "2eb048966e31e9a4de451d26e43f787c"
     deckcraft   = "976977953c10218faf2665428257ee84"
     docs        = "935706807c5f76271aa3e4671a9fd3f2"
     effectcraft = "e85b6114a920b0442536ef8a4da2d395"
