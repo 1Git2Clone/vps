@@ -819,12 +819,9 @@
               # lockfile untouched and an `artifactErrors` comment on it. hutao/vps
               # has no package.json and was never affected; skavex/skavex is.
               #
-              # pnpm_10 and not pnpm: skavex's pnpm-lock.yaml is lockfileVersion
-              # '9.0' and it declares no `packageManager` field, so nothing tells
-              # Renovate which major to use. nixpkgs' unversioned `pnpm` is 11, and
-              # a major that rewrites the lockfile format would turn every update
-              # into a whole-file diff. Pin it to the major that wrote the lock.
-              pnpm_10
+              # A pinned major, and the same one as the unit's PATH: see the pnpm
+              # comment in modules/renovate.nix for why 11 and why pinned.
+              pnpm_11
             ];
           };
         }

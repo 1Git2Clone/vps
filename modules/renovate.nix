@@ -56,16 +56,20 @@
       # For git operations over ssh (fetching/pushing to non-http remotes).
       openssh
 
-      # pnpm_10, NOT unversioned pnpm: skavex's pnpm-lock.yaml is
+      # A pinned major, NOT unversioned pnpm: skavex's pnpm-lock.yaml is
       # lockfileVersion '9.0' and declares no `packageManager` field, so
-      # nothing tells Renovate which major to use. nixpkgs' unversioned pnpm
-      # is 11, and a major that rewrites the lockfile format would turn every
-      # update into a whole-file diff. Pin it to the major that wrote the
-      # lock. Without any pnpm at all, npm-manager repos die on
+      # nothing tells Renovate which major to use, and a major that rewrote
+      # the lockfile format would turn every update into a whole-file diff.
+      # 10, 11 and 12 all write '9.0' (LOCKFILE_MAJOR_VERSION in pnpm's
+      # source at v10.34.0, v11.27.0, v12.9.0), so the pin is about the
+      # format, not 10 itself: nixos-26.05 marked pnpm 10.34.0 insecure on
+      # 2026-10-20, and the system no longer evaluates with it on PATH.
+      # Recheck the format before moving the pin past 12. Without any pnpm
+      # at all, npm-manager repos die on
       # `spawn pnpm ENOENT` — but only AFTER the branch is already pushed, so
       # Renovate opens the PR anyway with the lockfile untouched and an
       # artifactErrors comment on it.
-      pnpm_10
+      pnpm_11
     ];
 
     serviceConfig = {
