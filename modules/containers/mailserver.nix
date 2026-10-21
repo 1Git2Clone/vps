@@ -89,6 +89,25 @@ let
         ],
     ];
   '';
+
+  # Apache's only peer is caddy, so without this every access-log line and
+  # roundcube's REMOTE_ADDR read 172.18.0.x — the php2shell audit (2026-10-21)
+  # could tell scanners from users by user agent alone. caddy overwrites any
+  # X-Forwarded-For a client sends (no trusted_proxies), so the header is
+  # caddy's word, and only the docker range — the same one fail2banJail
+  # exempts — is trusted to give it. webmail publishes no port, so nothing
+  # outside a docker network can reach Apache to forge it.
+  #
+  # The log formats are redefined with %a, the address mod_remoteip rewrote,
+  # rather than relying on %h. conf-enabled loads before sites-enabled, whose
+  # 000-default.conf is where the image's CustomLog picks up `combined`.
+  apacheRemoteIp = pkgs.writeText "remoteip.conf" ''
+    LoadModule remoteip_module /usr/lib/apache2/modules/mod_remoteip.so
+    RemoteIPHeader X-Forwarded-For
+    RemoteIPInternalProxy 172.16.0.0/12
+    LogFormat "%a %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" combined
+    LogFormat "%v:%p %a %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" vhost_combined
+  '';
 in
 {
   sops.templates."dms.env".content = ''
@@ -258,6 +277,7 @@ in
         "roundcube_config:/var/roundcube/config"
         # Nested inside the volume above; docker mounts by destination depth.
         "${managesieve}:/var/roundcube/config/managesieve.php:ro"
+        "${apacheRemoteIp}:/etc/apache2/conf-enabled/remoteip.conf:ro"
       ];
 
       dependsOn = [ "mailserver" ];
