@@ -126,6 +126,11 @@
 		//         added, every peer's connection to the VPS was dropped here.
 		//   8443  caddy's tailnet listener, reachable directly as well as via
 		//   8880  the redirect above
+		//   993   imaps, and 465/587 submission. Split DNS hands tailnet devices
+		//   465   the tailnet address for mail.<domain> (it is half-public since
+		//   587   webmail went tailnet-only, 2026-10-21), so their mail clients
+		//         connect HERE; without these, IMAP times out on the tailnet
+		//         while the same ports are open to the whole internet.
 		//
 		// DELIBERATELY ABSENT: 6432 (pgbouncer) and 4317/4318 (tempo's OTLP
 		// receivers). Both bind 0.0.0.0 and are reached by the discord bot over
@@ -136,7 +141,7 @@
 		{
 			"action": "accept",
 			"src": ["1git2clone@github"],
-			"dst": ["tag:vps:22,53,80,443,2222,3000,8080,8384,8443,8880,22000"],
+			"dst": ["tag:vps:22,53,80,443,465,587,993,2222,3000,8080,8384,8443,8880,22000"],
 		},
 
 		// tag:friends-ssh IS A DESTINATION ONLY. Those machines are here to be
@@ -261,6 +266,9 @@
 				"vps:53",
 				// The tailnet vhosts, at the port the browser actually sends.
 				"vps:443",
+				// Mail clients, which split DNS sends here for mail.<domain>.
+				"vps:993",
+				"vps:587",
 				// dozzle direct, for when caddy is what broke.
 				"vps:8080",
 				// syncthing's sync port. Without it the GUI still answers and
