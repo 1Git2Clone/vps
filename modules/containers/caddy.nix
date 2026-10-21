@@ -38,8 +38,8 @@ let
 
   # Stock caddy has no rate limiting, so this is a caddy built with the
   # caddy-ratelimit module compiled in — the ONLY departure from the official
-  # image. Version tracks nixpkgs' caddy, which is 2.11.4, the same tag the
-  # official image was pinned to, so nothing about caddy's own behaviour moves.
+  # image. Version tracks nixpkgs' caddy, 2.11.7 since the 2026-10-20 flake
+  # update; the official image stopped being the reference at 2.11.4.
   #
   # withPlugins runs xcaddy and vendors the module's Go deps; `hash` is the
   # fixed-output hash of that vendor tree. Set it to lib.fakeHash, build once,
@@ -58,11 +58,11 @@ let
   # Expect this after a `nix flake update`, not on the machine that ran it.
   #
   # The module contents are still pinned independently of this value —
-  # go.sum carries upstream's hashes for caddy v2.11.4 and the plugin, and a
+  # go.sum carries upstream's hashes for caddy and the plugin, and a
   # tampered module fails there regardless of what is written here.
   caddyWithRateLimit = pkgs.caddy.withPlugins {
     plugins = [ "github.com/mholt/caddy-ratelimit@v0.1.0" ];
-    hash = "sha256-w5ovOoAjzA1HlC2s1GDwKo4fwPJKO3Ou3K/5AiUl4Kk=";
+    hash = "sha256-nYE5/88oJ9Od6ohlzfr3uybPlNnrqnPccmIqyn1Kz7E=";
   };
 
   # A minimal image around that binary, matching the two things the official
