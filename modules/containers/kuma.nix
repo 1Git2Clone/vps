@@ -52,7 +52,7 @@ in
 {
   virtualisation.oci-containers.containers.kuma = {
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/louislam/uptime-kuma/tags?page_size=20&ordering=last_updated'
-    image = "louislam/uptime-kuma:2.5.5";
+    image = "louislam/uptime-kuma:2.5.6";
     volumes = [ "kuma_data:/app/data" ];
     networks = [ proxyNetwork ];
 

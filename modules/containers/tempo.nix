@@ -55,14 +55,19 @@ let
 in
 {
   virtualisation.oci-containers.containers.tempo = {
-    # Pinned to the 3.0.0 release, not `latest` — `latest` is a main-branch
+    # Pinned to a released 3.0.x tag, not `latest` — `latest` is a main-branch
     # build, so the tag reports a version that was never released.
+    #
+    # 3.0.5 and NOT 3.1.0, which Renovate offers as the "newer" version: 3.1.0
+    # shipped 2026-09-29, before 3.0.4 (Go stdlib CVEs, 2026-10-16) and 3.0.5
+    # (Go 1.26.10, CVE-2026-111943 — the eMudhra roots in Go's fallback
+    # bundle, 2026-10-21). Higher version, older fixes; check the dates.
     #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/grafana/tempo/tags/<version>'
     # and NOT the tag LISTING: grafana/tempo publishes enough tags that every
     # 3.x falls outside the 100 most-recently-updated, so a listing looks like
     # 3.x does not exist at all. Ask for the exact tag instead.
-    image = "grafana/tempo:3.0.3";
+    image = "grafana/tempo:3.0.5";
 
     cmd = [ "-config.file=/etc/tempo.yaml" ];
 

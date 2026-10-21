@@ -331,7 +331,7 @@ let
       host = "status.${domain}";
       upstream = "kuma:3001";
 
-      # The public status page never opens socket.io — kuma 2.5.5 lists
+      # The public status page never opens socket.io — kuma 2.5.6 lists
       # /status* and / in noSocketIOPages and loads everything over
       # /api/status-page/* — so /socket.io/ is ONLY the admin login and
       # dashboard. It is closed here, and open on the tailnet copy of this

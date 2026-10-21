@@ -94,7 +94,7 @@ in
     # restore of grafana_data, not a deploy.
     #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/grafana/grafana/tags?page_size=20&ordering=last_updated'
-    image = "grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572";
+    image = "grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f";
 
     environment = {
       # Behind caddy now. Grafana builds redirects and absolute links from
