@@ -94,7 +94,7 @@ The port list on `tag:vps` is everything a tailnet client legitimately reaches:
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **2222**    | the host's own sshd — **deploy-critical**, `deploy .#vps` connects here. Drop it and deploys stop                                                                |
 | 22          | forgejo's ssh, for git over the tailnet                                                                                                                          |
-| 53          | the split-DNS resolver: answers `git.` and `status.` with this box's tailnet address, see [below](#split-dns-for-the-half-public-names)                          |
+| 53          | the split-DNS resolver: answers `git.`, `mail.` and `status.` with this box's tailnet address, see [below](#split-dns-for-the-half-public-names)                 |
 | 80 / 443    | redirected to 8880 / 8443 by the firewall's prerouting. **The ACL sees the port the client sent**, before the rewrite, so these are the ones that must be listed |
 | 3000        | grafana, host networking                                                                                                                                         |
 | 8080        | dozzle direct — the path that still works when caddy is the broken part                                                                                          |
@@ -291,11 +291,13 @@ The client tofu uses for the policy itself is a different one, scoped to
 
 ## Split DNS for the half-public names
 
-`git.<domain>` and `status.<domain>` are served twice: publicly, and on caddy's
-tailnet listener with their admin paths open (see
-[Access control](access-control.md#site-administration-is-tailnet-only)). The
+`git.<domain>`, `mail.<domain>` and `status.<domain>` are served twice:
+publicly, and on caddy's tailnet listener with their admin paths open (see
+[Access control](access-control.md#site-administration-is-tailnet-only)).
+`mail.` is all admin path: its public copy 404s everything, and it keeps the
+public record only because it is also the IMAP/SMTP host. The
 tailnet-only names need nothing like this — their public A record already
-points at the tailnet address, which only the tailnet can reach. These two must
+points at the tailnet address, which only the tailnet can reach. These must
 keep their public address for everyone else, so one public record cannot serve
 both audiences.
 
@@ -316,7 +318,7 @@ everything else. Nothing is configured per device, phones included.
   [Network](network.md). Before that redirect existed, those requests hung and
   Forgejo's webpack chunk loads failed.
 - **If the resolver is down, your tailnet devices most likely cannot resolve
-  those two names at all.** Split DNS sends them only there and Tailscale
+  those names at all.** Split DNS sends them only there and Tailscale
   documents no fallback. Everyone else is unaffected, and both names live on
   this same box anyway, so the case that matters is CoreDNS alone failing,
   which systemd restarts. Order matters for the same reason: deploy the

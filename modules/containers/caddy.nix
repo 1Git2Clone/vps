@@ -330,13 +330,15 @@ let
       loginMatch = "path /auth/login";
     }
     {
+      # Closed publicly: every path 404s, and roundcube is served only by the
+      # tailnet copy further down. The name cannot simply move below the
+      # marker — mail.<domain> is also the IMAP/SMTP host, so its public A
+      # record has to stay, and keeping this public copy is what puts it in
+      # splitDnsHosts. Taken off the internet for PHP CVE-2026-109618/109619
+      # (php2shell); roundcube's admin-free login was the whole attack surface.
       host = "mail.${domain}";
       upstream = "webmail:80";
-
-      # Roundcube's login form posts to `/?_task=login`. Roundcube also locks
-      # an account after 3 failures a minute (login_rate_limit), but only per
-      # account and only for accounts it has seen; this is per address.
-      loginMatch = "query _task=login";
+      blockedPaths = [ "*" ];
     }
     gitSite
     {
@@ -527,6 +529,17 @@ let
       host = "status.${domain}";
       upstream = "kuma:3001";
       tailnet = true;
+    }
+    {
+      # mail.<domain> AGAIN: the only copy that serves roundcube.
+      host = "mail.${domain}";
+      upstream = "webmail:80";
+      tailnet = true;
+
+      # Roundcube's login form posts to `/?_task=login`. Roundcube also locks
+      # an account after 3 failures a minute (login_rate_limit), but only per
+      # account and only for accounts it has seen; this is per address.
+      loginMatch = "query _task=login";
     }
     # git.<domain> AGAIN, on the tailnet listener, with the site-admin paths
     # open. Same limits. No runner restriction: the runner is deliberately off

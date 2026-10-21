@@ -149,7 +149,7 @@ variable "split_dns_subdomains" {
     modules/containers/caddy.nix, which computes the list from the caddy sites.
   EOT
   type        = set(string)
-  default     = ["git", "status"]
+  default     = ["git", "mail", "status"]
 }
 
 variable "tailnet_ipv4" {
