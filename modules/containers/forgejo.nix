@@ -87,6 +87,14 @@ in
       # someone else finish it.
       FORGEJO__security__INSTALL_LOCK = "true";
 
+      # Real client addresses in forgejo's own log and session list, from
+      # caddy's X-Forwarded-For (REVERSE_PROXY_LIMIT defaults to one hop). The
+      # docker range is caddy's — its proxy-network address is not pinned —
+      # and caddy strips X-Real-IP, which this middleware would otherwise
+      # prefer. Address only: reverse-proxy AUTHENTICATION is a separate
+      # switch and stays off.
+      FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES = "172.16.0.0/12";
+
       FORGEJO__service__DISABLE_REGISTRATION = "true";
       FORGEJO__service__REQUIRE_SIGNIN_VIEW = "false";
       FORGEJO__admin__DISABLE_REGULAR_ORG_CREATION = "true";

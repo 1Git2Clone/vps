@@ -652,6 +652,20 @@ let
           "${site.host}${lib.optionalString (site.tailnet or false) ":${toString tailnetHttpsPort}"} {"
           "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
           "\theader ${hsts}"
+          # THE ONE PLACE THE REAL CLIENT ADDRESS IS RECORDED. Every upstream's
+          # peer is caddy, so their own logs read 172.18.0.x — the php2shell
+          # audit (2026-10-21) could only tell users from scanners by user
+          # agent. To the journal (`journalctl -u docker-caddy`), JSON, with
+          # Authorization and Cookie redacted by caddy's default.
+          "\tlog"
+          # Caddy is the only source of client-identity headers. It overwrites
+          # X-Forwarded-For itself; these it would pass through from the client,
+          # and upstreams that trust caddy believe them: forgejo's proxy
+          # middleware prefers X-Real-IP over X-Forwarded-For, navidrome
+          # prefers True-Client-IP, and Remote-User is navidrome's header login.
+          "\trequest_header -X-Real-IP"
+          "\trequest_header -True-Client-IP"
+          "\trequest_header -Remote-User"
         ]
         # HTTP/3 ON THE TAILNET, ADVERTISED ON 443. caddy fills Alt-Svc from
         # the LISTENER's port, so the tailnet sites would say h3=":8443". udp

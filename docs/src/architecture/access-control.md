@@ -111,3 +111,33 @@ a misconfigured rate limiter throttles requests, it cannot take the box down.
 The env file is read by docker at container _start_, so it re-resolves the sops
 generation symlink each time. A _mounted_ template would pin a stale inode —
 see [Secrets](secrets.md#the-stale-symlink-trap).
+
+## Client addresses
+
+Every upstream's TCP peer is caddy, so the real client address exists in one
+place: **caddy's access log**, `journalctl -u docker-caddy`, one JSON line per
+request on every site, Authorization and Cookie redacted. Start an audit there.
+
+Caddy is also the only source of client-identity headers. It overwrites
+`X-Forwarded-For` and strips `X-Real-IP`, `True-Client-IP` and `Remote-User`
+on every site, so an upstream that trusts caddy cannot be handed an identity by
+the client. Two upstreams do trust it, both for the docker range `172.16.0.0/12`
+because caddy's proxy-network address is not pinned:
+
+- **forgejo** — `REVERSE_PROXY_TRUSTED_PROXIES`, address only.
+- **webmail** — Apache `mod_remoteip`, so the access log and Roundcube's
+  `REMOTE_ADDR` (its login rate limit) see the client.
+
+**navidrome deliberately does not.** Its only trust setting,
+`ExtAuth.TrustedSources`, also turns on `Remote-User` header login, and an
+empty `UserHeader` is ignored. Trusting the docker range would let any
+container on the proxy network log in as anyone. Its client addresses are in
+caddy's log.
+
+**Known gap: IPv6 on the published ports.** 22, 25, 465, 587, 993 and 25565
+reach their IPv4-only containers through `docker-proxy` when the client is on
+IPv6, which rewrites the source to the gateway, `172.18.0.1`. Seen in
+forgejo's ssh log on 2026-10-21; the same path serves DMS and Minecraft, and
+DMS's fail2ban exempts the docker range, so an IPv6 client there is never
+banned. Fixing it means IPv6 on the docker networks, which means recreating
+them.
