@@ -31,7 +31,7 @@ variable "subdomains" {
   # owns port 22 and this host's sshd sits on 2222.
   #
   # The A record for mc2 is still required: an SRV target has to resolve.
-  default = ["mail", "git", "minecraft", "mc", "mc2", "music", "status", "smtp", "search", "pages", "crafts", "compress", "docs"]
+  default = ["mail", "git", "minecraft", "mc", "mc2", "status", "smtp", "pages", "crafts", "compress", "docs"]
 }
 
 variable "tailnet_ipv4" {
@@ -75,7 +75,7 @@ variable "tailnet_subdomains" {
     record of their own to issue it.
   EOT
   type        = set(string)
-  default     = ["dozzle", "grafana", "syncthing"]
+  default     = ["dozzle", "grafana", "music", "search", "syncthing"]
 }
 
 variable "dkim_cloudflare_key" {

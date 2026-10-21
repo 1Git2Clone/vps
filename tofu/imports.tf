@@ -53,9 +53,7 @@ locals {
     mc        = "8b5b420ea4b1c920e560ae488c7d824e"
     mc2       = "ae7ae954818b8660e32346a2ff864308"
     minecraft = "cc4c0e13050cc0b3fd928f65db032ce9"
-    music     = "e4aea113292b407283fcbb447abe723f"
     pages     = "0c8b8dbe295b4f125050da6acbe836a6"
-    search    = "77ca2c34bc4fe585462349a4e0cd76b8"
     smtp      = "1a8fa2eac6aab44c98e9cb46a39073d5"
     status    = "2f7cf86c32a9d0f0aab797eebbac6d13"
   }
@@ -66,9 +64,15 @@ locals {
   # or a 81058, not a no-op. Verified against the API before being written down:
   # all three are A, unproxied, TTL auto, pointing at the same address
   # module.dns would have used, so the import is clean and changes nothing.
+  #
+  # music and search are the public records that went tailnet-only on
+  # 2026-10-21. Same record IDs; the moved blocks in module.dns carry existing
+  # state across, so these only matter when planning from empty state.
   dns_tailnet_records = {
     dozzle    = "3ab68becc67f0b5cfa1270091b18b720"
     grafana   = "007693e357dd0d4a75056a3e42882ad8"
+    music     = "e4aea113292b407283fcbb447abe723f"
+    search    = "77ca2c34bc4fe585462349a4e0cd76b8"
     syncthing = "de30585a21727101a2e0c3480f0eca43"
   }
 

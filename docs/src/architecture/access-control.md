@@ -92,8 +92,8 @@ flowchart TB
     class r429,r401 bad
 ```
 
-- caddy's `basic_auth` on the `search.` site is the only thing between the
-  instance and the internet. The credential is passed through caddy's own
+- `search.` is tailnet-only, and caddy's `basic_auth` there is the second
+  layer behind it. The credential is passed through caddy's own
   `{$VAR}` env substitution from a sops-rendered env file — **not** a Nix
   string, because the Caddyfile is a world-readable store path and a bcrypt
   hash there is one anyone with a shell could crack.

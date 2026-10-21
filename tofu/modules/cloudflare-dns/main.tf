@@ -215,3 +215,17 @@ resource "cloudflare_dns_record" "caa" {
     value = each.value.value
   }
 }
+
+# music and search went tailnet-only (php2shell, 2026-10-21) and their records
+# changed resource, not identity: the same Cloudflare record now points at the
+# tailnet address. Without these, the plan destroys a["music"] — the very
+# record imports.tf has tailnet["music"] adopting — and the name disappears.
+moved {
+  from = cloudflare_dns_record.a["music"]
+  to   = cloudflare_dns_record.tailnet["music"]
+}
+
+moved {
+  from = cloudflare_dns_record.a["search"]
+  to   = cloudflare_dns_record.tailnet["search"]
+}

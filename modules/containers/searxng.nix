@@ -1,7 +1,8 @@
 # ==============================================================================
 # SearXNG — metasearch
 # ==============================================================================
-# Publishes no port. Reached only through caddy at search.<domain>, like kuma.
+# Publishes no port. Reached only through caddy at search.<domain>, and that
+# only on the tailnet listener.
 #
 # NOTE ON AUTHENTICATION: searxng has no accounts of its own — no admin user, no
 # login, nothing to seed. Access control is entirely the proxy's job, so the
@@ -10,8 +11,8 @@
 #
 # That is also why `limiter` is off below. The limiter exists to keep a PUBLIC
 # instance from being scraped, and it requires a valkey/redis to hold its
-# counters — a whole second container for a site that already refuses anyone
-# without the password.
+# counters — a whole second container for a site the internet cannot reach and
+# that refuses anyone without the password.
 { config, pkgs, ... }:
 
 let

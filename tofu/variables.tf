@@ -154,9 +154,9 @@ variable "split_dns_subdomains" {
 
 variable "tailnet_ipv4" {
   description = <<-EOT
-    This box's tailscale address, from `tailscale status`. dozzle, grafana and
-    syncthing become A records pointing at it — resolvable by anything,
-    reachable only from the tailnet. Empty creates no records.
+    This box's tailscale address, from `tailscale status`. dozzle, grafana,
+    music, search and syncthing become A records pointing at it — resolvable
+    by anything, reachable only from the tailnet. Empty creates no records.
 
     ALSO THE `vps` HOST IN THE TAILNET POLICY FILE, which is why the validation
     below arrived alongside tofu/tailscale.tf. Empty is a legitimate answer for

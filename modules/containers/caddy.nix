@@ -316,20 +316,6 @@ let
 
   sites = [
     {
-      host = "music.${domain}";
-      upstream = "navidrome:4533";
-
-      # Subsonic clients authenticate on EVERY /rest/ call and a library sync
-      # is thousands of them, so the site-wide brake sits high. The Subsonic
-      # brute-force fix is navidrome's own (0.64.1 throttles failed logins);
-      # this caps the web UI's login.
-      rateLimit = {
-        events = 1200;
-        window = "1m";
-      };
-      loginMatch = "path /auth/login";
-    }
-    {
       # Closed publicly: every path 404s, and roundcube is served only by the
       # tailnet copy further down. The name cannot simply move below the
       # marker — mail.<domain> is also the IMAP/SMTP host, so its public A
@@ -470,12 +456,39 @@ let
       host = "docs.${domain}";
       root = "${pagesRoot}/hutao/vps/docs";
     }
+
+    # ---- Tailnet-only, below this line -------------------------------------
+    #
+    # `tailnet = true` is the ONLY difference: it moves the site off 443 and
+    # onto `tailnetHttpsPort`, a listener the firewall never exposes to the
+    # internet, and the firewall rewrites tailscale0's 443 onto it so the URL
+    # still carries no port. Same certificate as everything above — the names
+    # are SANs on it, issued over DNS-01, which needs no public A record.
+    #
+    # Adding one of these to the PUBLIC set is a one-word mistake with no
+    # visible symptom: it would simply start answering the internet.
+    {
+      host = "music.${domain}";
+      upstream = "navidrome:4533";
+      tailnet = true;
+
+      # Subsonic clients authenticate on EVERY /rest/ call and a library sync
+      # is thousands of them, so the site-wide brake sits high. The Subsonic
+      # brute-force fix is navidrome's own (0.64.1 throttles failed logins);
+      # this caps the web UI's login.
+      rateLimit = {
+        events = 1200;
+        window = "1m";
+      };
+      loginMatch = "path /auth/login";
+    }
     {
       host = "search.${domain}";
       upstream = "searxng:8080";
+      tailnet = true;
 
-      # searxng has no accounts of its own, so this is the ONLY thing standing
-      # between the instance and the open internet — see
+      # searxng has no accounts of its own. Tailnet-only now, so this is the
+      # second layer rather than the only one — see
       # modules/containers/searxng.nix.
       #
       # `{$VAR}` is caddy's own environment substitution, done when it loads
@@ -505,17 +518,6 @@ let
         window = "1m";
       };
     }
-
-    # ---- Tailnet-only, below this line -------------------------------------
-    #
-    # `tailnet = true` is the ONLY difference: it moves the site off 443 and
-    # onto `tailnetHttpsPort`, a listener the firewall never exposes to the
-    # internet, and the firewall rewrites tailscale0's 443 onto it so the URL
-    # still carries no port. Same certificate as everything above — the names
-    # are SANs on it, issued over DNS-01, which needs no public A record.
-    #
-    # Adding one of these to the PUBLIC set is a one-word mistake with no
-    # visible symptom: it would simply start answering the internet.
     {
       host = "dozzle.${domain}";
       upstream = "dozzle:8080";
@@ -608,7 +610,7 @@ let
   zoneName = site: site.host + lib.optionalString (site.tailnet or false) "-tailnet";
 
   # HALF-PUBLIC NAMES: served on both listeners, public and tailnet. The
-  # tailnet-only names (dozzle, grafana, syncthing) need nothing special —
+  # tailnet-only names (dozzle, grafana, music, …) need nothing special —
   # their public A record already points at the tailnet address, which only
   # the tailnet can reach. These cannot: the internet must keep getting the
   # public address. So tailnet devices are handed the tailnet address by
