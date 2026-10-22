@@ -20,17 +20,10 @@ variable "subdomains" {
     routes none of this.
   EOT
   type        = set(string)
-  # "mc" is an alias for "minecraft": same A record, same address. Minecraft
-  # needs nothing more, because the server is on the default 25565 and clients
-  # connect with a bare hostname.
-  #
-  # "mc2" is the SECOND world, which is on 25566 and therefore does need more:
-  # Minecraft — unlike ssh — DOES read SRV records (_minecraft._tcp.<host>),
-  # which is the supported way to hide a port from players. See the SRV record
-  # in main.tf. That is exactly the trick forgejo could not use, which is why it
-  # owns port 22 and this host's sshd sits on 2222.
-  #
-  # The A record for mc2 is still required: an SRV target has to resolve.
+  # "minecraft", "mc" and "mc2" are all the same address on 25565. mc-router
+  # tells the worlds apart by the hostname in the client's handshake (see
+  # modules/containers/minecraft.nix in the NixOS config), so a world needs
+  # only its A record here, no SRV and no port of its own.
   default = ["mail", "git", "minecraft", "mc", "mc2", "status", "smtp", "pages", "crafts", "compress", "docs"]
 }
 

@@ -258,11 +258,6 @@ import {
 }
 
 import {
-  to = module.dns.cloudflare_dns_record.minecraft2_srv
-  id = "${var.cloudflare_zone_id}/065cd7f358df976afa6a2f484e59c61e"
-}
-
-import {
   to = module.dns.cloudflare_dns_record.bsky
   id = "${var.cloudflare_zone_id}/49002efb9babb52cd5dc5a207fb42cd0"
 }
