@@ -306,6 +306,18 @@
       '';
     };
 
+    mcIpRange = lib.mkOption {
+      type = lib.types.str;
+      default = "172.31.0.128/25";
+      description = ''
+        Where docker hands out `mcNetwork` addresses to containers that do
+        not ask for one, i.e. the worlds. It must exclude `mcRouterAddress`,
+        or whichever world starts before mc-router can take that address,
+        which both stops mc-router starting and lets that world reach
+        minecraft-scaler. Learned on the first deploy, 2026-10-22.
+      '';
+    };
+
     mcRouterAddress = lib.mkOption {
       type = lib.types.str;
       default = "172.31.0.2";

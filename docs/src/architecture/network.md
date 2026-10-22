@@ -59,11 +59,11 @@ This boundary is also why fail2ban jails for containerised services set
 
 ## Docker networks
 
-| Network  | Subnet                   | Purpose                                                                                                                                                                                                 |
-| -------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `proxy`  | docker's pool            | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                       |
-| `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule         |
-| `mc`     | `172.31.0.0/24` (pinned) | mc-router (pinned at 172.31.0.2) and the Minecraft worlds behind it. Pinned because the firewall's input rule and `minecraft-scaler` (on the gateway, 172.31.0.1:25580) admit mc-router's address alone |
+| Network  | Subnet                   | Purpose                                                                                                                                                                                                                                                                                |
+| -------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxy`  | docker's pool            | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                                                                                                      |
+| `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule                                                                                        |
+| `mc`     | `172.31.0.0/24` (pinned) | mc-router (pinned at 172.31.0.2) and the Minecraft worlds behind it, which get addresses from `172.31.0.128/25` so they can never take mc-router's. Pinned because the firewall's input rule and `minecraft-scaler` (on the gateway, 172.31.0.1:25580) admit mc-router's address alone |
 
 `modules/containers/default.nix` creates each network as a oneshot systemd unit
 that every container on it `requires`, so a container can never start onto a

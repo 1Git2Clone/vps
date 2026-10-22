@@ -51,10 +51,13 @@ let
     ];
 
     # Pinned for the same reason: the firewall and minecraft-scaler name
-    # mc-router's address and the gateway.
+    # mc-router's address and the gateway. The worlds take their addresses
+    # from mcIpRange, which leaves mcRouterAddress free: on the first deploy
+    # the worlds started first, and world 1 was handed 172.31.0.2.
     ${config.infra.mcNetwork} = [
       "--subnet=${config.infra.mcSubnet}"
       "--gateway=${config.infra.mcGateway}"
+      "--ip-range=${config.infra.mcIpRange}"
     ];
   };
 in
