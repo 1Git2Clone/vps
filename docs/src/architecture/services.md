@@ -159,6 +159,21 @@ referenced image, and never a volume. The runner's podman prune is the one that
 runs `--all`, and what that costs is covered in
 [CI runner isolation](runner.md#the-garbage-collector-eats-it).
 
+## Navidrome plugins are pinned too
+
+Navidrome plugins (`.ndp`, WebAssembly) are fetched by hash in `navidrome.nix`
+and mounted read-only at `/plugins`, so adding or upgrading one is a commit.
+Renovate does not track them. Turning one on, and its settings, happen in the
+admin UI and are stored in `navidrome_data`.
+
+That makes `navidrome_data` hold a third-party credential:
+**discord-rich-presence** logs into Discord's gateway as the user, with a
+Discord _user_ token pasted into its settings. That is a self-bot by Discord's
+rules and was accepted knowingly. The token is in restic's backups along
+with the rest of the volume. While a track plays the plugin sets the account to
+Do Not Disturb, and because `music.` is tailnet-only its cover-art option uploads
+covers to `uguu.se`.
+
 ## The serenity bot is built during activation
 
 Upstream publishes no image, so `serenity-bot.nix` builds one from upstream's

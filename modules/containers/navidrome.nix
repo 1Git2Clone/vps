@@ -3,8 +3,24 @@
 # ==============================================================================
 # Bound to loopback: reached through caddy on the proxy network, never directly,
 # so 4533 never needs a firewall rule.
-{ config, ... }:
+{ config, pkgs, ... }:
 
+let
+  # Plugins are pinned here like the image, so an upgrade is a commit. Each
+  # .ndp only reaches the hosts its manifest lists; enabling one, and its
+  # settings, happen in the admin UI and live in navidrome_data.
+  #
+  # discord-rich-presence logs into Discord's gateway as the USER, with a user
+  # token pasted into its settings — a self-bot by Discord's rules, accepted
+  # on purpose. It forces "dnd" status while a track plays (rpc.go), and since
+  # navidrome is tailnet-only its cover-art option uploads covers to uguu.se.
+  plugins = pkgs.linkFarm "navidrome-plugins" {
+    "discord-rich-presence.ndp" = pkgs.fetchurl {
+      url = "https://github.com/navidrome/discord-rich-presence-plugin/releases/download/v2.0.0/discord-rich-presence.ndp";
+      hash = "sha256-3NskjB+sJqB0U837ljAxJZSTWd8NKxMKNq4sJRo9FfE=";
+    };
+  };
+in
 {
   # Last.fm. Both halves come from one application registration at
   # https://www.last.fm/api/account/create. The API key is nominally the public
@@ -58,12 +74,18 @@
     # `-e` argument in the unit, and the unit is a world-readable store path.
     environmentFiles = [ config.sops.templates."navidrome.env".path ];
 
+    # NOT the default <DataFolder>/plugins: navidrome writes each plugin's own
+    # state under that path whatever this says, so the read-only store copy
+    # gets a folder of its own and /data/plugins stays writable.
+    environment.ND_PLUGINS_FOLDER = "/plugins";
+
     volumes = [
       "navidrome_data:/data"
       # The library itself stays a host bind mount — it is synced onto this box
       # by syncthing and is not this system's data to own. Read-only: navidrome
       # has no business writing to it.
       "/home/hutao/syncthing/Music:/music:ro"
+      "${plugins}:/plugins:ro"
     ];
 
     networks = [ config.infra.proxyNetwork ];
