@@ -173,6 +173,7 @@
         "louislam/uptime-kuma",
         "deluan/navidrome",
         "ghcr.io/docker-mailserver/docker-mailserver",
+        "itzg/mc-router",
       ],
       matchUpdateTypes: ["patch"],
       dependencyDashboardApproval: false,

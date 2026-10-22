@@ -399,6 +399,13 @@
                 inherit nixpkgs system;
               };
 
+              # The Minecraft running-worlds cap and minecraft-scaler, booted
+              # against stand-in worlds. HAND-RUN ONLY, NOT IN CI, for the same
+              # /dev/kvm reason as the two above.
+              minecraft-cap = import ./tests/minecraft-cap.nix {
+                inherit nixpkgs system;
+              };
+
               # The static, CI-run counterpart to runner-firewall above. It
               # cannot prove the kernel enforces the one-way rule — only a
               # booted VM sending real packets can, which is what

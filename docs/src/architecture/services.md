@@ -18,28 +18,30 @@ jail that reads the journal.
 
 ## What runs, and how it is reached
 
-| Service          | Exposure                                                                                                                                                                                                                                                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `caddy`          | 80/443 (+443/udp) for the public sites, and 8880/8443 for the tailnet-only ones — the second pair is kept private by its absence from the firewall's allow-lists, and nftables rewrites tailscale0's 80/443 onto it so those URLs carry no port. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
-| `cloudflared`    | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly                                                                                                                                                                                |
-| `mailserver`     | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host                                                                                                                                                                                                                                                                           |
-| `webmail`        | roundcube, proxied at `mail.` on the tailnet only — the public copy 404s every path                                                                                                                                                                                                                                                         |
-| `forgejo`        | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.`; site admin (`/admin`, `/api/v1/admin`) tailnet-only                                                                                                                                                                                                                    |
-| `navidrome`      | `127.0.0.1:4533`, reached only through caddy at `music.`, on the tailnet listener                                                                                                                                                                                                                                                           |
-| `kuma`           | proxy network only, reached at `status.`; the admin socket only on the tailnet copy of that name                                                                                                                                                                                                                                            |
-| `searxng`        | proxy network only, reached at `search.` on the tailnet listener, behind `basic_auth` with caddy `rate_limit` in front of the bcrypt                                                                                                                                                                                                        |
-| `dozzle`         | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
-| `grafana`        | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
-| `tempo`          | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address                                                                                                                                                                                                                     |
-| `minecraft`      | 25565; RCON on loopback only (25575). Heap 1 G floor / 6 G ceiling — see below                                                                                                                                                                                                                                                              |
-| `minecraft2`     | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; 25566, reached via the `_minecraft._tcp.mc2` SRV record; RCON on loopback only (25576). Heap 1 G / 4 G                                                                                                                                  |
-| `serenity-bot-0` | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669`                                                                                                                                                                                                                       |
-| `serenity-redis` | `botnet` only, no published port, no volume — a cache with a Discord fallback                                                                                                                                                                                                                                                               |
-| `postgres`       | not a container — a host service; unix socket + loopback only, never on `botnet`                                                                                                                                                                                                                                                            |
-| `pgbouncer`      | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain                                                                                                                                                                                                                 |
-| `syncthing`      | not a container — a host service; GUI on 8384, tailnet only; also `syncthing.`, where caddy must rewrite the `Host` header or syncthing's rebinding check answers 403                                                                                                                                                                       |
-| `endlessh-go`    | not a container — a host service; the SSH tarpit on 222, 2022, 2222 and 22222, on the public address only; its metrics on `127.0.0.1:2112`. See [Observability](observability.md#the-ssh-tarpit)                                                                                                                                            |
-| `prometheus`     | not a container — a host service; loopback-only :9090, scraping the tarpit for grafana                                                                                                                                                                                                                                                      |
+| Service            | Exposure                                                                                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `caddy`            | 80/443 (+443/udp) for the public sites, and 8880/8443 for the tailnet-only ones — the second pair is kept private by its absence from the firewall's allow-lists, and nftables rewrites tailscale0's 80/443 onto it so those URLs carry no port. Built locally with the `caddy-ratelimit` module (`caddy.withPlugins`), not the stock image |
+| `cloudflared`      | Tunnel connected, but **nothing routes through it** — `git`/`music`/`mail`/`smtp` are unproxied A records straight to the VPS, so caddy serves them directly                                                                                                                                                                                |
+| `mailserver`       | SMTP/IMAP direct on 25, 465, 587, 993 — an MX must reach the host                                                                                                                                                                                                                                                                           |
+| `webmail`          | roundcube, proxied at `mail.` on the tailnet only — the public copy 404s every path                                                                                                                                                                                                                                                         |
+| `forgejo`          | **SSH on 22**, so clone URLs need no port; HTTP via caddy at `git.`; site admin (`/admin`, `/api/v1/admin`) tailnet-only                                                                                                                                                                                                                    |
+| `navidrome`        | `127.0.0.1:4533`, reached only through caddy at `music.`, on the tailnet listener                                                                                                                                                                                                                                                           |
+| `kuma`             | proxy network only, reached at `status.`; the admin socket only on the tailnet copy of that name                                                                                                                                                                                                                                            |
+| `searxng`          | proxy network only, reached at `search.` on the tailnet listener, behind `basic_auth` with caddy `rate_limit` in front of the bcrypt                                                                                                                                                                                                        |
+| `dozzle`           | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
+| `grafana`          | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
+| `tempo`            | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address                                                                                                                                                                                                                     |
+| `mc-router`        | **25565**, the only public Minecraft port; picks the world by the hostname in the handshake and wakes it through `minecraft-scaler`. See [Worlds on demand](#worlds-on-demand-at-most-two-at-once)                                                                                                                                          |
+| `minecraft`        | `minecraft.`, `mc.` and bare-IP joins via mc-router; no published game port. RCON on loopback only (25575). Heap 1 G floor / 6 G ceiling — see below                                                                                                                                                                                        |
+| `minecraft2`       | second world, MC **1.21.1** on the `java21` image (world 1 is 26.1.2/java25) with its own mod list; `mc2.` via mc-router, no published game port; RCON on loopback only (25576). Heap 1 G / 4 G                                                                                                                                             |
+| `serenity-bot-0`   | **nothing published**; an outbound Discord gateway client, on the `botnet` network. tokio-console on `127.0.0.1:6669`                                                                                                                                                                                                                       |
+| `serenity-redis`   | `botnet` only, no published port, no volume — a cache with a Discord fallback                                                                                                                                                                                                                                                               |
+| `postgres`         | not a container — a host service; unix socket + loopback only, never on `botnet`                                                                                                                                                                                                                                                            |
+| `pgbouncer`        | not a container — a host service; 6432, reachable from `botnet` and the tailnet, kept private by the firewall's input chain                                                                                                                                                                                                                 |
+| `syncthing`        | not a container — a host service; GUI on 8384, tailnet only; also `syncthing.`, where caddy must rewrite the `Host` header or syncthing's rebinding check answers 403                                                                                                                                                                       |
+| `endlessh-go`      | not a container — a host service; the SSH tarpit on 222, 2022, 2222 and 22222, on the public address only; its metrics on `127.0.0.1:2112`. See [Observability](observability.md#the-ssh-tarpit)                                                                                                                                            |
+| `prometheus`       | not a container — a host service; loopback-only :9090, scraping the tarpit for grafana                                                                                                                                                                                                                                                      |
+| `minecraft-scaler` | not a container — a host service; mc-router's scale webhook on the `mc` network gateway, `172.31.0.1:25580`, reachable from mc-router's address alone                                                                                                                                                                                       |
 
 The Forgejo Actions runner is **not on this list any more**: it lives on its
 own machine. See [CI runner isolation](runner.md).
@@ -62,6 +64,41 @@ useful.
 RSS is still not heap. Metaspace, the code cache, GC structures and direct
 buffers live outside `-Xmx`, so the ceiling is not a bound on what the container
 reports.
+
+### Worlds on demand, at most two at once
+
+The box has 16 G and no swap, and mail lives on it too, so every world at its
+heap ceiling at once is a job for the OOM killer. No world starts at boot.
+Instead:
+
+- **mc-router** owns 25565 and reads the hostname the player typed. A **login**
+  to a sleeping world (not a server-list ping, so scanners cannot wake one)
+  POSTs `{"action":"up"}` to `minecraft-scaler` and holds the player for up to
+  3 minutes while the world boots. Ten minutes after the last player leaves it
+  POSTs `{"action":"down"}`.
+- **minecraft-scaler** turns those into `systemctl start` / `stop` of
+  `docker-<world>.service`, for the worlds in `worlds` only. It runs as root
+  because polkit is off, with every capability dropped and systemd's
+  `IPAddressAllow` set to mc-router's address.
+- **The cap** is an `ExecCondition` on each world's unit: it counts the other
+  worlds that are not `inactive`/`failed` and refuses at two. Being in the
+  unit, it holds for a hand-typed `systemctl start` too. A refusal skips the
+  start rather than failing it, so `Restart=always` does not retry it, and the
+  scaler answers 409 so mc-router drops the login instead of waiting.
+
+What players see: a sleeping world's server-list entry says it is asleep, the
+first join wakes it and usually times out, and a second join a minute later
+gets in. When two worlds are already up, the join is refused until one sleeps.
+
+The cost is that worlds see mc-router's address as every player's. Nothing
+here keys on player IPs (whitelist and bans are by UUID); PROXY protocol would
+fix it but needs a mod on every world.
+
+`modules/containers/minecraft-cap.nix` holds both halves, and
+`nix build .#checks.x86_64-linux.minecraft-cap -L` boots them against stand-in
+worlds. A new world is a container, an entry in `worlds` in
+`modules/containers/minecraft.nix`, a `MAPPING` line, and an A record in
+`tofu/modules/cloudflare-dns`.
 
 Forgejo owns port 22, so **the host's sshd is on 2222**, on the tailnet address
 only, and that is the way in — Tailscale SSH is off. Keeping 22 is what lets

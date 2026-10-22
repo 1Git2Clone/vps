@@ -276,6 +276,55 @@
       '';
     };
 
+    mcNetwork = lib.mkOption {
+      type = lib.types.str;
+      default = "mc";
+      description = ''
+        Docker network for mc-router and the Minecraft worlds behind it. The
+        worlds publish nothing to the internet: mc-router owns 25565 and
+        reaches each world by container name on this network.
+      '';
+    };
+
+    mcSubnet = lib.mkOption {
+      type = lib.types.str;
+      default = "172.31.0.0/24";
+      description = ''
+        Subnet pinned onto `mcNetwork`, for the same reason as `botSubnet`:
+        the firewall names addresses on it. The worlds run third-party mods,
+        so this network gets no host access beyond mc-router's one rule.
+      '';
+    };
+
+    mcGateway = lib.mkOption {
+      type = lib.types.str;
+      default = "172.31.0.1";
+      description = ''
+        The host's address on `mcNetwork`, where minecraft-scaler listens for
+        mc-router's scale webhook. MUST be the first usable address of
+        `mcSubnet`.
+      '';
+    };
+
+    mcRouterAddress = lib.mkOption {
+      type = lib.types.str;
+      default = "172.31.0.2";
+      description = ''
+        mc-router's fixed address on `mcNetwork`. Pinned because it is the
+        ONLY source allowed to reach minecraft-scaler, in both the firewall
+        and the scaler's own IPAddressAllow.
+      '';
+    };
+
+    mcScalerPort = lib.mkOption {
+      type = lib.types.port;
+      default = 25580;
+      description = ''
+        minecraft-scaler's port on `mcGateway`. Private by its absence from
+        the public allow-lists, like grafana's 3000.
+      '';
+    };
+
     dockerBridgeGateway = lib.mkOption {
       type = lib.types.str;
       default = "172.17.0.1";

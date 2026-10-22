@@ -157,8 +157,7 @@ in
             465,
             587,
             993,
-            25565,
-            25566
+            25565
           } ct state new accept
 
           # HTTP/3, matching caddy's published 443/udp.
@@ -181,6 +180,12 @@ in
             4317,
             6432
           } ct state new accept
+
+          # MC-ROUTER CALLING minecraft-scaler, the same input-hook shape as the
+          # bot's rule. Its own address only, not mcSubnet: the worlds share
+          # that network and run third-party mods, and a world that could POST
+          # here could start or stop the others.
+          iifname "br-*" ip saddr ${config.infra.mcRouterAddress} tcp dport ${toString config.infra.mcScalerPort} ct state new accept
 
           # CADDY REACHING BACK INTO THE HOST, for the two tailnet vhosts whose
           # backend is not a container on the proxy network: grafana on 3000 and
@@ -227,12 +232,15 @@ in
           # saddr != <v6 botSubnet>` sibling, or these three ports go dark over
           # v6 with every other check passing.
           #
-          # The residual is deliberate and worth naming: searxng, kuma, forgejo,
-          # navidrome and the two minecraft servers share the proxy bridge with
-          # caddy and are still matched. Subtracting them needs a pinned subnet
-          # and therefore a network recreation, which is a maintenance window,
-          # not an edit.
-          iifname "br-*" ip saddr != ${config.infra.botSubnet} tcp dport {
+          # mcSubnet is subtracted for the same reason: the minecraft worlds run
+          # mods off Modrinth, which is third-party code with the world's
+          # privileges.
+          #
+          # The residual is deliberate and worth naming: searxng, kuma, forgejo
+          # and navidrome share the proxy bridge with caddy and are still
+          # matched. Subtracting them needs a pinned subnet and therefore a
+          # network recreation, which is a maintenance window, not an edit.
+          iifname "br-*" ip saddr != { ${config.infra.botSubnet}, ${config.infra.mcSubnet} } tcp dport {
             3000,
             8384,
             ${toString config.infra.tailnetHttpsPort}
@@ -319,7 +327,7 @@ in
           #   25    smtp          465  smtps
           #   587   submission    993  imaps
           #   80    http          443  https
-          #   25565 minecraft      25566 minecraft (second world)
+          #   25565 mc-router, in front of every minecraft world
           tcp dport {
             22,
             25,
@@ -328,8 +336,7 @@ in
             465,
             587,
             993,
-            25565,
-            25566
+            25565
           } ct state new accept
 
           # HTTP/3, which caddy publishes on 443/udp.

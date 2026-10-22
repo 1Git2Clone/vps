@@ -49,6 +49,13 @@ let
       "--subnet=${config.infra.botSubnet}"
       "--gateway=${config.infra.botGateway}"
     ];
+
+    # Pinned for the same reason: the firewall and minecraft-scaler name
+    # mc-router's address and the gateway.
+    ${config.infra.mcNetwork} = [
+      "--subnet=${config.infra.mcSubnet}"
+      "--gateway=${config.infra.mcGateway}"
+    ];
   };
 in
 {
@@ -60,6 +67,7 @@ in
     ./grafana.nix
     ./kuma.nix
     ./mailserver.nix
+    ./mc-router.nix
     ./minecraft.nix
     ./navidrome.nix
     ./searxng.nix

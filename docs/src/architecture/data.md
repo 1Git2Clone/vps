@@ -94,13 +94,17 @@ files open and is not consistent on disk. That job stops the containers in
 `backupPrepareCommand` and restarts them from `backupCleanupCommand` (an
 `ExecStopPost`), so the servers return whether restic succeeded or not.
 
-Both worlds share **one** job, and therefore one downtime window: a second job
-would mean a second stop/start cycle and a second restic run against the same
-repository.
+Every world shares **one** job, and therefore one downtime window: a job per
+world would mean a stop/start cycle and a restic run each against the same
+repository. Only the worlds that were up are restarted, and while the job runs
+`/run/minecraft-hold` refuses every world start, so mc-router cannot wake one
+mid-snapshot.
 
 > **Every world volume must be in this job's `paths` _and_ in the daily job's
 > `exclude`.** A volume missing from the exclude list is archived hot by the
-> daily run, which is exactly the corruption this job exists to prevent.
+> daily run, which is exactly the corruption this job exists to prevent. Both
+> lists are built from `worlds` in `modules/containers/minecraft.nix`, so a
+> world added there is covered by both.
 
 ## The password is the key
 

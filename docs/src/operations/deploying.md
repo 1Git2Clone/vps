@@ -201,11 +201,11 @@ ssh -p 2222 hutao@vps '
   systemctl --failed                   # want: empty
   sudo ls /run/secrets | wc -l         # want: 31
   sudo docker ps --format "{{.Names}} {{.Status}}"
-  for u in caddy forgejo mailserver webmail kuma navidrome searxng pages-hook minecraft minecraft2 \
+  for u in caddy forgejo mailserver webmail kuma navidrome searxng pages-hook mc-router \
            grafana tempo dozzle cloudflared serenity-bot-0 serenity-redis; do
     echo "$u restarts=$(systemctl show -p NRestarts --value docker-$u)"
   done
-  systemctl is-active postgresql pgbouncer serenity-bot-image'
+  systemctl is-active postgresql pgbouncer serenity-bot-image minecraft-scaler'
 ```
 
 Non-zero `NRestarts` means a crashloop that `systemctl is-active` will happily

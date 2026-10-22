@@ -9,16 +9,20 @@
 # stop path is the part that matters here. See modules/backups.nix, which stops
 # BOTH containers for the one weekly snapshot.
 #
-# Host ports, so the two never collide. The MC versions differ on purpose —
-# world 2's mods are built for 1.21.1 — which is why the mod lists are separate:
+# No world publishes its game port. mc-router owns the public 25565 and picks
+# the world by the hostname the player typed, waking it through
+# minecraft-scaler and putting it back to sleep when everyone has left. At most
+# two are up at once — see ./minecraft-cap.nix. The MC versions differ on
+# purpose — world 2's mods are built for 1.21.1 — which is why the mod lists
+# are separate:
 #
-#   world       MC        game    RCON (loopback)   volume
-#   minecraft   26.1.2    25565   25575             minecraft_data
-#   minecraft2  1.21.1    25566   25576             minecraft2_data
+#   world       MC        hostnames               RCON (loopback)   volume
+#   minecraft   26.1.2    minecraft. mc. bare IP   25575             minecraft_data
+#   minecraft2  1.21.1    mc2.                     25576             minecraft2_data
 #
-# The container side stays 25565/25575 in both; only the host side moves. 25566
-# is off the default port, so players reach world 2 by the SRV record on
-# mc2.<domain> — see tofu/modules/cloudflare-dns.
+# A new world is a container, an entry in `worlds` and a MAPPING line in
+# ./mc-router.nix. The weekly backup, the cap and the scaler all follow
+# `worlds`.
 #
 # Individual mods are managed via MODRINTH_PROJECTS ( Modrinth project slugs ).
 # The image auto-selects the newest compatible version for the MC version + loader.
@@ -26,6 +30,13 @@
 { config, lib, ... }:
 
 let
+  inherit (config.infra) mcNetwork;
+
+  worlds = [
+    "minecraft"
+    "minecraft2"
+  ];
+
   # THE TWO LISTS ARE NOT SHARED, and cannot be: the worlds run different MC
   # versions (26.1.2 and 1.21.1), and a slug is only installable where that mod
   # has a build for that version + loader. Three of world 1's mods have no
@@ -124,6 +135,10 @@ let
   ];
 in
 {
+  imports = [ ./minecraft-cap.nix ];
+
+  minecraftCap.worlds = worlds;
+
   sops.templates."minecraft.env".content = ''
     RCON_PASSWORD=${config.sops.placeholder.minecraft_rcon_password}
   '';
@@ -176,8 +191,11 @@ in
 
     environmentFiles = [ config.sops.templates."minecraft.env".path ];
 
+    # Woken by minecraft-scaler, not by boot: an idle world costs nothing.
+    autoStart = false;
+    networks = [ mcNetwork ];
+
     ports = [
-      "25565:25565"
       # RCON on loopback only. It is an unauthenticated-by-design remote console
       # once you have the password, so it never leaves the host.
       "127.0.0.1:25575:25575"
@@ -247,10 +265,10 @@ in
 
     environmentFiles = [ config.sops.templates."minecraft2.env".path ];
 
-    ports = [
-      "25566:25565"
-      "127.0.0.1:25576:25575"
-    ];
+    autoStart = false;
+    networks = [ mcNetwork ];
+
+    ports = [ "127.0.0.1:25576:25575" ];
 
     volumes = [ "minecraft2_data:/data" ];
 
@@ -259,6 +277,7 @@ in
 
   # The module's default is 120s, which would have systemd kill the unit while
   # docker is still politely waiting out the 300s above.
-  systemd.services.docker-minecraft.serviceConfig.TimeoutStopSec = lib.mkForce 360;
-  systemd.services.docker-minecraft2.serviceConfig.TimeoutStopSec = lib.mkForce 360;
+  systemd.services = lib.genAttrs (map (w: "docker-${w}") worlds) (_: {
+    serviceConfig.TimeoutStopSec = lib.mkForce 360;
+  });
 }

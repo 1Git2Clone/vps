@@ -3,16 +3,16 @@
 Every service has exactly one gate, and they differ by what the service itself
 supports.
 
-| Service        | Gate                                                                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| grafana        | real login from sops; anonymous-Admin off, sign-up off                                                                                          |
-| dozzle         | bcrypt hash from sops, in a `users.yml` copied to a stable path                                                                                 |
-| minecraft RCON | password from sops, loopback only; one password per world (25575 / 25576)                                                                       |
-| serenity bot   | discord token + AI key + db password, all sops                                                                                                  |
-| **kuma**       | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy. |
-| syncthing      | GUI password from sops via `guiPasswordFile`, declared rather than inherited                                                                    |
-| pages-hook     | HMAC of the Forgejo system webhook; the secret is in sops and must match the hook's Secret field                                                |
-| **searxng**    | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file    |
+| Service        | Gate                                                                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| grafana        | real login from sops; anonymous-Admin off, sign-up off                                                                                             |
+| dozzle         | bcrypt hash from sops, in a `users.yml` copied to a stable path                                                                                    |
+| minecraft RCON | password from sops, loopback only; one password per world (25575 / 25576). `minecraft-scaler` has no password: only mc-router's address reaches it |
+| serenity bot   | discord token + AI key + db password, all sops                                                                                                     |
+| **kuma**       | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy.    |
+| syncthing      | GUI password from sops via `guiPasswordFile`, declared rather than inherited                                                                       |
+| pages-hook     | HMAC of the Forgejo system webhook; the secret is in sops and must match the hook's Secret field                                                   |
+| **searxng**    | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file       |
 
 ## Site administration is tailnet-only
 

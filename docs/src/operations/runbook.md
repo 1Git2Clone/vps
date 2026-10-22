@@ -59,11 +59,32 @@ snapshots, and a bare `latest` can name one of those, which carries no archive.
 path under the target. The slug is the image reference with `/`, `:` and `@`
 each replaced by `_`. Verified end to end on 2026-09-21.
 
-The weekly minecraft job stops both worlds' servers, snapshots, and starts
-them again from `ExecStopPost` — so they come back whether restic succeeded or
-not. A live world is not consistent on disk: the server holds region files open
-and writes them in place, which is why the daily backup excludes that volume and
-this job exists.
+The weekly minecraft job stops every world that is up, snapshots, and starts
+those again from `ExecStopPost` — so they come back whether restic succeeded or
+not, and a world that was asleep stays asleep. While it runs,
+`/run/minecraft-hold` refuses every world start, so a login through mc-router
+cannot wake a world mid-snapshot. A live world is not consistent on disk: the
+server holds region files open and writes them in place, which is why the daily
+backup excludes the world volumes and this job exists.
+
+## Minecraft worlds by hand
+
+Worlds start when someone joins and stop ten minutes after the last player
+leaves (see [Services](../architecture/services.md#worlds-on-demand-at-most-two-at-once)).
+By hand, it is plain systemd, and the cap of two still applies:
+
+```sh
+systemctl list-units 'docker-minecraft*'          # which worlds are up
+sudo systemctl stop docker-minecraft2             # free a slot
+sudo systemctl start docker-minecraft2            # silently skipped at the cap
+journalctl -u docker-minecraft2 | grep minecraft-cap   # ...and this says why
+journalctl -u minecraft-scaler -u docker-mc-router     # wake/sleep traffic
+```
+
+A world started by hand, or one left running by a deploy, has nobody connected
+through mc-router, so it never gets the idle stop. Stop it when you are done.
+A leftover `/run/minecraft-hold` (it only survives if the backup unit itself
+was killed) refuses every start until removed.
 
 ## On the runner
 

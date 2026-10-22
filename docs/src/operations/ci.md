@@ -89,6 +89,13 @@ slower just to boot two minimal nodes. It stays hand-run on a machine with KVM:
 nix build .#checks.x86_64-linux.runner-firewall -L
 ```
 
+`minecraft-cap` is hand-run for the same reason. It boots the Minecraft
+running-worlds cap and `minecraft-scaler` against three stand-in worlds:
+
+```sh
+nix build .#checks.x86_64-linux.minecraft-cap -L
+```
+
 ## Writing a workflow that runs here
 
 The runner is a different machine from the VPS, with no access to its volumes

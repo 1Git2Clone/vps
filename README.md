@@ -37,7 +37,7 @@ nothing to remember to run.
 ├── tests/                # VM and network tests behind checks.* and packages.minecraft-mods
 ├── renovate.json5        # this repo's Renovate config
 ├── modules/
-│   ├── options.nix       # infra.* — domain, tailnet IP, proxy network
+│   ├── options.nix       # infra.* — domain, tailnet IP, docker networks
 │   ├── secrets.nix       # the sops keys (serenity's live with their modules)
 │   ├── acme.nix          # one certificate, DNS-01 via Cloudflare
 │   ├── firewall.nix      # nftables, including the container forward path

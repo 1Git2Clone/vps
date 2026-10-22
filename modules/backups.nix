@@ -1,4 +1,16 @@
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  inherit (config.minecraftCap) worlds holdFile;
+  systemctl = "${config.systemd.package}/bin/systemctl";
+  worldVolumes = map (w: "/var/lib/docker/volumes/${w}_data") worlds;
+  worldUnits = lib.escapeShellArgs (map (w: "docker-${w}.service") worlds);
+in
 
 {
   sops.templates."restic-b2.env".content = ''
@@ -45,10 +57,7 @@
     # — see the `minecraft` backup below. Copying a live world is exactly what
     # that job exists to avoid, and that applies to every world, not just the
     # first: a volume missing from this list is backed up hot by the daily job.
-    exclude = [
-      "/var/lib/docker/volumes/minecraft_data"
-      "/var/lib/docker/volumes/minecraft2_data"
-    ];
+    exclude = worldVolumes;
 
     timerConfig = {
       OnCalendar = "daily";
@@ -73,9 +82,10 @@
   };
 
   # The weekly quiescent minecraft snapshot, ported from scripts/mc-backup.sh.
-  # ONE job for BOTH worlds: they share a window, so world 1 is down while
-  # world 2 is archived. Splitting them into two jobs would mean two stop/start
-  # cycles and two restic runs against the same repository for no gain.
+  # ONE job for EVERY world: they share a window, so world 1 is down while
+  # world 2 is archived. Splitting them into per-world jobs would mean a
+  # stop/start cycle and a restic run each against the same repository for no
+  # gain.
   # Same repository, same password — restic deduplicates against the daily
   # snapshots, so the overlap costs almost nothing.
   #
@@ -90,10 +100,7 @@
     passwordFile = config.sops.secrets.backups_restic_password.path;
     environmentFile = config.sops.templates."restic-b2.env".path;
 
-    paths = [
-      "/var/lib/docker/volumes/minecraft_data"
-      "/var/lib/docker/volumes/minecraft2_data"
-    ];
+    paths = worldVolumes;
 
     timerConfig = {
       OnCalendar = "Sun 04:00";
@@ -104,15 +111,35 @@
     # Pruning belongs to the daily job alone. Two jobs pruning the same
     # repository on their own retention policies fight over each other's
     # snapshots.
+    #
+    # Worlds sleep when nobody is on (modules/containers/minecraft.nix), so
+    # only the ones that were up come back. The hold file records them and,
+    # while it exists, refuses every start — mc-router waking a world
+    # mid-snapshot is exactly the hot copy this job exists to avoid.
     backupPrepareCommand = ''
-      ${config.systemd.package}/bin/systemctl stop docker-minecraft.service docker-minecraft2.service
+      # Hold first, so nothing starts between reading the states and stopping.
+      : > ${holdFile}
+      up=""
+      for u in ${worldUnits}; do
+        case "$(${systemctl} show -P ActiveState "$u")" in
+          inactive | failed) ;;
+          *) up="$up $u" ;;
+        esac
+      done
+      echo "$up" > ${holdFile}
+      ${systemctl} stop ${worldUnits}
     '';
 
     # Runs from ExecStopPost, so unlike the healthcheck ping in the daily job
-    # it is unconditional: the server must come back whether restic succeeded
-    # or not.
+    # it is unconditional: the worlds must come back whether restic succeeded
+    # or not. The hold goes first, or the starts would be refused by it.
     backupCleanupCommand = ''
-      ${config.systemd.package}/bin/systemctl start docker-minecraft.service docker-minecraft2.service
+      up=$(cat ${holdFile} 2>/dev/null || true)
+      rm -f ${holdFile}
+      if [ -n "$up" ]; then
+        # shellcheck disable=SC2086 # one word per unit
+        ${systemctl} start $up
+      fi
     '';
   };
 }

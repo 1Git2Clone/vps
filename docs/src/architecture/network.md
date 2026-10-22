@@ -18,7 +18,7 @@ flowchart TB
     ts --> inp
 
     inp --> hostsvc["host namespace<br/>sshd :2222 · grafana :3000<br/>tempo :4317/4318 · pgbouncer :6432<br/>syncthing GUI :8384<br/>tarpit :222/2022/22222"]
-    fwd --> dock["docker networks<br/><code>proxy</code> · <code>botnet</code>"]
+    fwd --> dock["docker networks<br/><code>proxy</code> · <code>botnet</code> · <code>mc</code>"]
     dock --> caddy["caddy"]
     caddy --> pub["public vhosts :443"]
     caddy --> priv["tailnet vhosts :8443"]
@@ -59,10 +59,11 @@ This boundary is also why fail2ban jails for containerised services set
 
 ## Docker networks
 
-| Network  | Subnet                   | Purpose                                                                                                                                                                                         |
-| -------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `proxy`  | docker's pool            | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                               |
-| `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule |
+| Network  | Subnet                   | Purpose                                                                                                                                                                                                 |
+| -------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxy`  | docker's pool            | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                       |
+| `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule         |
+| `mc`     | `172.31.0.0/24` (pinned) | mc-router (pinned at 172.31.0.2) and the Minecraft worlds behind it. Pinned because the firewall's input rule and `minecraft-scaler` (on the gateway, 172.31.0.1:25580) admit mc-router's address alone |
 
 `modules/containers/default.nix` creates each network as a oneshot systemd unit
 that every container on it `requires`, so a container can never start onto a
@@ -79,13 +80,19 @@ start and a rollback; pinning it costs a full container restart on every deploy
 that touches the line.
 
 The input rule that makes that route work is
-`iifname "br-*" ip saddr != 172.30.0.0/24 tcp dport { 3000, 8384, 8443 }`, and
-the exclusion is the point. The rule above it grants the bot exactly two ports
+
+```nft
+iifname "br-*" ip saddr != { 172.30.0.0/24, 172.31.0.0/24 } tcp dport { 3000, 8384, 8443 }
+```
+
+and the exclusion is the point. The rule above it grants the bot exactly two ports
 (4317, 6432) from exactly `botSubnet`; without the `!=`, this one immediately
 handed the same bridge three more, so a narrow grant was followed by a broad one
 and only the broad one meant anything. The bot is the right container to
 subtract first — it is the only one here whose input is arbitrary text from
-strangers that it then ships to a third-party model.
+strangers that it then ships to a third-party model. The `mc` network is
+subtracted too: the worlds run mods off Modrinth, third-party code with the
+world's privileges.
 
 What remains matched is **deliberate and worth knowing**: searxng, kuma,
 forgejo, navidrome, dozzle, cloudflared, mailserver, webmail and pages-hook
