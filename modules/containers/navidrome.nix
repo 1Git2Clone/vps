@@ -14,12 +14,18 @@ let
   # token pasted into its settings — a self-bot by Discord's rules, accepted
   # on purpose. It forces "dnd" status while a track plays (rpc.go), and since
   # navidrome is tailnet-only its cover-art option uploads covers to uguu.se.
-  plugins = pkgs.linkFarm "navidrome-plugins" {
-    "discord-rich-presence.ndp" = pkgs.fetchurl {
-      url = "https://github.com/navidrome/discord-rich-presence-plugin/releases/download/v2.0.0/discord-rich-presence.ndp";
-      hash = "sha256-3NskjB+sJqB0U837ljAxJZSTWd8NKxMKNq4sJRo9FfE=";
-    };
-  };
+  #
+  # Copied, not linkFarm'd: a symlink into /nix/store dangles inside the
+  # container, which has no store, and navidrome logged "no such file" for
+  # the plugin on the 2026-10-22 deploy.
+  plugins = pkgs.runCommand "navidrome-plugins" { } ''
+    install -Dm444 ${
+      pkgs.fetchurl {
+        url = "https://github.com/navidrome/discord-rich-presence-plugin/releases/download/v2.0.0/discord-rich-presence.ndp";
+        hash = "sha256-3NskjB+sJqB0U837ljAxJZSTWd8NKxMKNq4sJRo9FfE=";
+      }
+    } $out/discord-rich-presence.ndp
+  '';
 in
 {
   # Last.fm. Both halves come from one application registration at
