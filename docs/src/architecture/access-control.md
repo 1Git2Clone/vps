@@ -121,8 +121,10 @@ request on every site, Authorization and Cookie redacted. Start an audit there.
 Caddy is also the only source of client-identity headers. It overwrites
 `X-Forwarded-For` and strips `X-Real-IP`, `True-Client-IP` and `Remote-User`
 on every site, so an upstream that trusts caddy cannot be handed an identity by
-the client. Two upstreams do trust it, both for the docker range `172.16.0.0/12`
-because caddy's proxy-network address is not pinned:
+the client. Two upstreams do trust it, both for the docker range `172.16.0.0/12`.
+Caddy's proxy-network address is pinned now (#43, `infra.caddyIPv4`,
+172.18.0.2), so both could trust that one address instead; they have not been
+narrowed yet:
 
 - **forgejo** — `REVERSE_PROXY_TRUSTED_PROXIES`, address only.
 - **webmail** — Apache `mod_remoteip`, so the access log and Roundcube's
@@ -133,6 +135,21 @@ because caddy's proxy-network address is not pinned:
 empty `UserHeader` is ignored. Trusting the docker range would let any
 container on the proxy network log in as anyone. Its client addresses are in
 caddy's log.
+
+**Tailnet requests carry the client's tailnet address**, `100.x`. Until #43
+they all read `172.18.0.1`: the firewall `redirect`ed tailnet 443 to the host's
+own 8443, where docker-proxy accepted it and reconnected to caddy from the
+bridge gateway. It now DNATs to caddy's pinned address instead, see
+[Tailscale](network.md#tailscale). Two consequences:
+
+- the tailnet copies of every site are **rate-limited per device**. Caddy's
+  `private_ranges` exemption covers `172.16.0.0/12` but not the tailnet's
+  `100.64.0.0/10`, so before #43 every tailnet request was exempt.
+- webmail's `mod_remoteip` and forgejo now log and limit tailnet users by
+  their `100.x` address.
+
+A tailnet client on IPv6 still goes through docker-proxy and still reads
+`172.18.0.1`, for the reason below.
 
 **Known gap: IPv6 on the published ports.** 22, 25, 465, 587, 993 and 25565
 reach their IPv4-only containers through `docker-proxy` when the client is on

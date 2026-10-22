@@ -894,6 +894,10 @@ in
     networks = [ proxyNetwork ];
 
     extraOptions = [
+      # A fixed address, so the firewall can DNAT tailnet 80/443 straight to
+      # caddy and keep the client's address (#43). See `infra.caddyIPv4`.
+      "--ip=${config.infra.caddyIPv4}"
+
       # Not root. The certificate directory is group-owned by `caddy` (see
       # modules/acme.nix), so this account reads exactly those files and
       # nothing else on the host.

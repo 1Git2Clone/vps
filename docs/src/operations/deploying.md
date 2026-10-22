@@ -167,6 +167,77 @@ Then `deploy .#vps`.
 
 ---
 
+## Recreating the proxy network (#43)
+
+A one-time step, done **before** the first deploy that pins the `proxy`
+network's subnet. `docker-network-proxy.service` only creates a network that is
+missing. It never changes an existing one, so the subnet, gateway and
+`--ip-range` from `infra.proxySubnet` / `proxyGateway` / `proxyIpRange` land
+only when the network is created again. On a fresh machine there is nothing to
+do.
+
+**Do it before the deploy, not after.** The new caddy unit passes
+`--ip=172.18.0.2`, and docker refuses `--ip` on a network created without
+`--subnet`. Deploying first leaves caddy failing to start, the public sites
+down with it, and deploy-rs aborting on the failed unit (see
+[the abort that was worse than the failure](recovery.md#the-abort-that-was-worse-than-the-failure)).
+Done in this order, the old generation's containers start on the new network
+with addresses from the dynamic range, and the deploy only recreates caddy.
+
+Outage: every container on `proxy`, mail included, for about a minute. Senders
+retry SMTP.
+
+```sh
+# 1. On the workstation, from the branch being deployed: the network unit's
+#    own script, so the create arguments come from the repo, not from typing.
+nix eval --raw .#nixosConfigurations.vps-hetzner.config.systemd.services.docker-network-proxy.script \
+  > /tmp/create-proxy.sh
+cat /tmp/create-proxy.sh     # want: --subnet=172.18.0.0/16 --gateway=172.18.0.1 --ip-range=172.18.128.0/17
+
+# 2. On the box: the units on the network, read from docker rather than a list.
+units=$(ssh -p 2222 hutao@vps \
+  "sudo docker network inspect proxy --format '{{range .Containers}}docker-{{.Name}} {{end}}'")
+echo "$units"
+
+# 3. Stop them, remove the network, create it from the script, start them again.
+ssh -p 2222 hutao@vps "sudo systemctl stop $units && sudo docker network rm proxy"
+ssh -p 2222 hutao@vps 'sudo bash -s' < /tmp/create-proxy.sh
+ssh -p 2222 hutao@vps "sudo docker network inspect proxy --format '{{json .IPAM.Config}}' \
+  && sudo systemctl start $units"
+
+# 4. Deploy as usual. caddy is recreated at 172.18.0.2 and nftables switches
+#    tailnet 80/443 from redirect to DNAT.
+deploy .#vps
+```
+
+`systemctl stop` removes each container (oci-containers runs them with
+`--rm`), which is what lets `docker network rm` succeed. If it still reports
+active endpoints, `sudo docker network inspect proxy` names what is left.
+
+Then check that it did what it was for:
+
+```sh
+ssh -p 2222 hutao@vps "sudo docker inspect caddy --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'"
+# want: 172.18.0.2
+
+# From a tailnet device, then read caddy's log for that request:
+curl -sS -o /dev/null -w '%{http_code}\n' https://grafana.hu-tao.dev/
+ssh -p 2222 hutao@vps 'journalctl -u docker-caddy -n 50 -o cat | grep grafana | tail -1'
+# want: "remote_ip":"100.x.y.z", the device's tailnet address, not 172.18.0.1
+
+# HTTP/3 now takes the forwarded path that udp 8443 direct never got through
+# (see the known quirk in architecture/network.md). Needs a curl built with HTTP/3:
+curl -sS --http3-only -o /dev/null -w '%{http_code} %{http_version}\n' https://grafana.hu-tao.dev/
+# want: a status code and 3. A timeout means tailnet HTTP/3 is broken; browsers
+# fall back to TCP, but the udp rule should go back to `redirect` until it is fixed.
+```
+
+Kuma's tailnet monitors should stay green throughout the deploy. Kuma reaches
+`https://<name>:8443` from the proxy bridge, so it arrives on the input hook
+and never passes through the tailscale0 rules.
+
+---
+
 ## What makes this automatic (and what used to break it)
 
 Every item below is now in the config. They are listed because each one, when

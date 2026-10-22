@@ -95,12 +95,12 @@ The port list on `tag:vps` is everything a tailnet client legitimately reaches:
 | **2222**    | the host's own sshd — **deploy-critical**, `deploy .#vps` connects here. Drop it and deploys stop                                                                |
 | 22          | forgejo's ssh, for git over the tailnet                                                                                                                          |
 | 53          | the split-DNS resolver: answers `git.`, `mail.` and `status.` with this box's tailnet address, see [below](#split-dns-for-the-half-public-names)                 |
-| 80 / 443    | redirected to 8880 / 8443 by the firewall's prerouting. **The ACL sees the port the client sent**, before the rewrite, so these are the ones that must be listed |
+| 80 / 443    | DNAT'd to caddy's 8880 / 8443 by the firewall's prerouting. **The ACL sees the port the client sent**, before the rewrite, so these must be listed               |
 | 3000        | grafana, host networking                                                                                                                                         |
 | 8080        | dozzle direct — the path that still works when caddy is the broken part                                                                                          |
 | 8384        | syncthing's GUI                                                                                                                                                  |
 | 22000       | syncthing's sync protocol (tcp and QUIC). Without it the GUI on 8384 still answers and the VPS silently stops syncing with every device                          |
-| 8443 / 8880 | caddy's tailnet listeners, reachable directly as well as through the redirect                                                                                    |
+| 8443 / 8880 | caddy's tailnet listeners, reachable directly as well as through the DNAT                                                                                        |
 
 **Deliberately absent: 6432 and 4317/4318.** pgbouncer and tempo's OTLP
 receivers bind `0.0.0.0` and are reached by the discord bot over the docker
@@ -319,9 +319,9 @@ everything else. Nothing is configured per device, phones included.
   OAuth client alongside Policy File.
 - **HTTP/3 has to follow the same route.** A browser that saw the public
   `Alt-Svc: h3=":443"` keeps it for 30 days and then sends QUIC to udp 443 at
-  the tailnet address. The firewall redirects tailscale0's udp 443 to the
+  the tailnet address. The firewall DNATs tailscale0's udp 443 to the
   tailnet listener, which speaks HTTP/3 as well — see
-  [Network](network.md). Before that redirect existed, those requests hung and
+  [Network](network.md). Before that rule existed, those requests hung and
   Forgejo's webpack chunk loads failed.
 - **If the resolver is down, your tailnet devices most likely cannot resolve
   those names at all.** Split DNS sends them only there and Tailscale

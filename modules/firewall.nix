@@ -81,9 +81,22 @@ in
         # PRIORITY IS THE LOAD-BEARING PART. Docker's own prerouting chain sits
         # at dstnat (-100) and has a rule for the published 443 (tcp and udp), so anything
         # later than that would find the packet already DNAT'd to caddy's PUBLIC
-        # listener and rewrite nothing. -110 runs first, and docker's own rule
-        # for the rewritten port then delivers the packet to the container
-        # exactly as it would any other.
+        # listener and rewrite nothing. -110 runs first, and netfilter NATs a
+        # connection once, so docker's rule then never applies to it.
+        #
+        # DNAT TO CADDY ITSELF, NOT `redirect`. A redirect delivers to the
+        # host, where docker-proxy owns the published port and opens a second
+        # connection to caddy from the bridge gateway, so caddy saw every
+        # tailnet client as 172.18.0.1 (#43). A DNAT to caddy's pinned address
+        # (`infra.caddyIPv4`) is forwarded into the bridge with the client's
+        # own source. The forward chain admits it with `iifname tailscale0
+        # accept`, and docker's own filter admits it because the destination
+        # is a port caddy publishes.
+        #
+        # IPv4 ONLY. The docker networks have no IPv6, so a tailnet client on
+        # IPv6 can only reach caddy through docker-proxy, and keeps the
+        # redirect. Those connections still read 172.18.0.1. The tailnet names
+        # are A records, so that path is only taken by hand.
         #
         # The side effect, stated plainly: a tailnet client can no longer reach
         # the PUBLIC sites through this host's tailnet address. It never could
@@ -92,8 +105,8 @@ in
         chain prerouting {
           type nat hook prerouting priority -110; policy accept;
 
-          iifname tailscale0 tcp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
-          iifname tailscale0 tcp dport 80 redirect to :${toString config.infra.tailnetHttpPort}
+          iifname tailscale0 meta nfproto ipv4 tcp dport 443 dnat ip to ${config.infra.caddyIPv4}:${toString config.infra.tailnetHttpsPort}
+          iifname tailscale0 meta nfproto ipv4 tcp dport 80 dnat ip to ${config.infra.caddyIPv4}:${toString config.infra.tailnetHttpPort}
 
           # HTTP/3 takes the same turn. Without it, a browser holding the
           # public listener's `Alt-Svc: h3=":443"` sends QUIC to udp 443 at
@@ -101,7 +114,11 @@ in
           # PUBLIC listener — the copy of git./status. with the admin paths
           # closed — or, as measured before this line existed, nowhere at all,
           # and the request hung (Forgejo's webpack chunks failed that way).
-          iifname tailscale0 udp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
+          iifname tailscale0 meta nfproto ipv4 udp dport 443 dnat ip to ${config.infra.caddyIPv4}:${toString config.infra.tailnetHttpsPort}
+
+          iifname tailscale0 meta nfproto ipv6 tcp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
+          iifname tailscale0 meta nfproto ipv6 tcp dport 80 redirect to :${toString config.infra.tailnetHttpPort}
+          iifname tailscale0 meta nfproto ipv6 udp dport 443 redirect to :${toString config.infra.tailnetHttpsPort}
         }
 
         chain input {
@@ -142,13 +159,18 @@ in
           # This list therefore mirrors the forward chain exactly. Anything
           # published to the internet must appear in BOTH.
           #
-          # WHAT THIS DOES NOT DO: mask client addresses. Measured 2026-09-24
-          # (#30): caddy's per-IP rate limit counted a public client's real
-          # address on 330 of 330 requests (exactly 300 through, then 429), and
-          # docker-mailserver's fail2ban logs and bans real public addresses —
-          # six banned by its postfix jail at the time. So services see the
-          # client IP whichever path a connection takes, and per-IP controls
-          # key on the right address.
+          # WHAT THIS DOES NOT DO: mask PUBLIC IPv4 client addresses. Measured
+          # 2026-09-24 (#30): caddy's per-IP rate limit counted a public
+          # client's real address on 330 of 330 requests (exactly 300 through,
+          # then 429), and docker-mailserver's fail2ban logs and bans real
+          # public addresses — six banned by its postfix jail at the time.
+          #
+          # docker-proxy DOES mask an address whenever it carries the
+          # connection: it reconnects to the container from the bridge
+          # gateway, 172.18.0.1. That happens to IPv6 clients on the public
+          # ports (see "Client addresses" in
+          # docs/src/architecture/access-control.md), and it happened to every
+          # tailnet request while prerouting used `redirect` (#43).
           tcp dport {
             22,
             25,
@@ -201,12 +223,12 @@ in
           # bridge with caddy — so they arrive here as plain input instead, and
           # a monitor pointed at the name simply times out.
           #
-          # NOT narrowed to a POSITIVE source subnet, unlike that rule. The
-          # proxy network is left on docker's address pool (see
-          # modules/containers/default.nix) and pinning a subnet onto a network
-          # that already exists means deleting it by hand, which detaches every
-          # container on it. So `br-*` stays, and the one subnet this repo DOES
-          # pin is subtracted instead.
+          # NOT narrowed to a POSITIVE source subnet, unlike that rule. It was
+          # written while the proxy network was on docker's address pool, so
+          # `br-*` stayed and the one pinned subnet, botSubnet, was subtracted
+          # instead. The proxy network is pinned now (`infra.proxySubnet`,
+          # #43), so narrowing this rule no longer needs a network
+          # recreation. It just has not been done.
           #
           # THE EXCLUSION IS WHY THE RULE ABOVE IS WORTH WRITING. That rule
           # grants the bot exactly two ports, 4317 and 6432, from exactly
@@ -238,8 +260,9 @@ in
           #
           # The residual is deliberate and worth naming: searxng, kuma, forgejo
           # and navidrome share the proxy bridge with caddy and are still
-          # matched. Subtracting them needs a pinned subnet and therefore a
-          # network recreation, which is a maintenance window, not an edit.
+          # matched. Only caddy has a fixed address on that bridge, so the
+          # narrowest version would admit caddy's address to 3000 and 8384 and
+          # keep 8443 open to the bridge for kuma.
           iifname "br-*" ip saddr != { ${config.infra.botSubnet}, ${config.infra.mcSubnet} } tcp dport {
             3000,
             8384,
@@ -318,6 +341,8 @@ in
 
           # The tailnet reaches every published port: dozzle on 8080 is
           # tailnet-only precisely because it is absent from the list below.
+          # This is also what admits the prerouting DNAT of tailnet 80/443 to
+          # caddy's tailnet listeners (`infra.caddyIPv4`).
           iifname tailscale0 accept
 
           # From anywhere else, the published ports that are meant to be public.

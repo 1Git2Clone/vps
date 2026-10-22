@@ -92,9 +92,15 @@ let
   # That race fails intermittently at boot, which is the worst shape a bug can
   # take here.
   networks = {
-    # Left to docker's address pool: nothing names an address on it, because
-    # caddy resolves its upstreams by container name over the embedded DNS.
-    ${config.infra.proxyNetwork} = [ ];
+    # Pinned so caddy can have a fixed address (`infra.caddyIPv4`), which the
+    # firewall DNATs tailnet traffic to. Upstreams are still resolved by name;
+    # caddy is the only container with a pinned address. Pinning it meant
+    # recreating the network by hand once (#43, docs/src/operations/deploying.md).
+    ${config.infra.proxyNetwork} = [
+      "--subnet=${config.infra.proxySubnet}"
+      "--gateway=${config.infra.proxyGateway}"
+      "--ip-range=${config.infra.proxyIpRange}"
+    ];
 
     # Pinned, because `infra.botGateway` is a literal in the bot's DATABASE_URL
     # and OTLP endpoint and in the firewall's input rule. See modules/options.nix.

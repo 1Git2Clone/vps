@@ -61,9 +61,15 @@ This boundary is also why fail2ban jails for containerised services set
 
 | Network  | Subnet                   | Purpose                                                                                                                                                                                                                                                                                |
 | -------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `proxy`  | docker's pool            | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                                                                                                      |
+| `proxy`  | `172.18.0.0/16` (pinned) | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                                                                                                      |
 | `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule                                                                                        |
 | `mc`     | `172.31.0.0/24` (pinned) | mc-router (pinned at 172.31.0.2) and the Minecraft worlds behind it, which get addresses from `172.31.0.128/25` so they can never take mc-router's. Pinned because the firewall's input rule and `minecraft-scaler` (on the gateway, 172.31.0.1:25580) admit mc-router's address alone |
+
+`proxy` is pinned so caddy can sit at a fixed `172.18.0.2` (`infra.caddyIPv4`),
+the address the tailnet DNAT below sends to. Docker gives every other container
+an address from `172.18.128.0/17` (`infra.proxyIpRange`), so none of them can
+take caddy's while it is down. The subnet is the one docker's pool had already
+assigned, so the `172.16.0.0/12` trust settings still cover it.
 
 `modules/containers/default.nix` creates each network as a oneshot systemd unit
 that every container on it `requires`, so a container can never start onto a
@@ -113,9 +119,9 @@ versioning block of type `external` with a `params.command` that syncthing
 execs, and a folder rooted at `~/.ssh` writes `authorized_keys` as `hutao`, who
 has passwordless sudo. The credential is now declarative, so it fails closed.
 
-Subtracting the rest needs a **positive** source match, which needs a
-pinned subnet on `proxy`, which means deleting a network that already exists and
-detaching every container on it — a maintenance window, not an edit.
+Subtracting the rest needs a **positive** source match. That used to need a
+pinned subnet on `proxy`, and so a network recreation; the subnet is pinned now
+(#43), so it is a rule change that has not been made yet.
 
 One silent consequence of adding `ip saddr`: the rule is now **IPv4-only**,
 where the bare version matched both families. That is free today because
@@ -166,25 +172,48 @@ What makes the URL portless is a `nat` prerouting chain:
 
 ```text
 type nat hook prerouting priority -110; policy accept;
-iifname tailscale0 tcp dport 443 redirect to :8443
-iifname tailscale0 tcp dport 80  redirect to :8880
-iifname tailscale0 udp dport 443 redirect to :8443
+iifname tailscale0 meta nfproto ipv4 tcp dport 443 dnat ip to 172.18.0.2:8443
+iifname tailscale0 meta nfproto ipv4 tcp dport 80  dnat ip to 172.18.0.2:8880
+iifname tailscale0 meta nfproto ipv4 udp dport 443 dnat ip to 172.18.0.2:8443
+# the same three as `redirect to :8443` / `:8880` for ipv6
 ```
+
+**DNAT to caddy, not `redirect`, so caddy sees the client.** This chain used to
+`redirect` to the host's own 8443. That delivered the connection to
+`docker-proxy`, which owns the published port on the host and connects onward
+to caddy from the bridge gateway, so every tailnet request reached caddy, its
+access log and its rate limits as `172.18.0.1` (#43). A DNAT to caddy's pinned
+address is forwarded into the bridge with the client's own source. It needs
+caddy's address to be fixed, which is why the `proxy` network has a pinned
+subnet. The forward chain's `iifname tailscale0 accept` admits it, and docker's
+own filter admits it because 8443 and 8880 are ports caddy publishes.
+
+IPv6 keeps the redirect: the docker networks have no IPv6, so docker-proxy is
+the only way a v6 packet reaches caddy, and those requests still read
+`172.18.0.1`. The tailnet names are A records, so nothing takes that path
+unless someone types the v6 address.
 
 The udp line is HTTP/3. The tailnet listener speaks it too (8443/udp is
 published), and its sites advertise `h3=":443"` rather than caddy's default
 `h3=":8443"`: udp 8443 sent directly over the tailnet did not get through when
-measured, while udp 443 through this redirect did. A browser that learned the
+measured, while udp 443 through the old redirect did. A browser that learned the
 public listener's `h3=":443"` takes the same path once split DNS points `git.`
-or `status.` at the tailnet address. Without the redirect that traffic hung —
+or `status.` at the tailnet address. Without the udp rule that traffic hung —
 Forgejo's webpack chunk loads failed on it — and with docker's rule it would
 reach the public listener, whose copies of those names close the admin paths.
 
 **Known quirk, unexplained:** udp 8443 sent directly over the tailnet does not
-reach caddy, while tcp 8443 direct and udp 443 through the redirect both do.
-Nothing uses it — the tailnet sites advertise `:443` — so it is recorded here
-rather than chased. `docker port caddy` and `nft list ruleset | grep 8443` on
-the box are where to start if it ever matters.
+reach caddy, while tcp 8443 direct and udp 443 through the redirect both did.
+`docker port caddy` and `nft list ruleset | grep 8443` on the box are where to
+start. **It matters again since #43:** udp 8443 direct is forwarded to the
+container by docker's DNAT, and udp 443 is now forwarded the same way by ours,
+where the redirect used to hand it to docker-proxy on the host. If whatever
+drops the first also drops the second, HTTP/3 over the tailnet stops working.
+Browsers fall back to TCP when QUIC fails, but the hang described above is the
+symptom to watch for. One untested guess is the MTU: tailscale0 is 1280, and a
+forwarded QUIC packet cannot be fragmented, where docker-proxy's own socket
+could. The check after the migration is in
+[Deploying](../operations/deploying.md#recreating-the-proxy-network-43).
 
 Two details in those lines do all the work, and they are independent:
 
@@ -205,7 +234,7 @@ flowchart TB
 
     iif -- "tailscale0" --> prio{"our chain's<br/>priority?"}
 
-    prio -- "-110, ahead ✓" --> rw["redirect 443 → 8443"]
+    prio -- "-110, ahead ✓" --> rw["DNAT 443 → caddy:8443"]
     rw --> priv["caddy :8443<br/>tailnet vhosts"] --> ok2(["200"])
 
     prio -- "after -100 ✗" --> dn2["docker dstnat first"]

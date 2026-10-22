@@ -165,6 +165,63 @@
       '';
     };
 
+    proxySubnet = lib.mkOption {
+      type = lib.types.str;
+      default = "172.18.0.0/16";
+      description = ''
+        Subnet pinned onto `proxyNetwork` at creation. Docker only accepts
+        `--ip` on a network created with `--subnet`, and `caddyIPv4` needs
+        `--ip`. The value is the one docker's address pool had already given
+        the network, so the docker-range trust settings (`172.16.0.0/12` in
+        forgejo, webmail and both fail2bans) still cover it.
+
+        PINNING IT MEANT RECREATING THE NETWORK. The network unit in
+        modules/containers/default.nix only creates a missing network, so an
+        existing one keeps its old settings. The one-time migration is in
+        docs/src/operations/deploying.md.
+      '';
+    };
+
+    proxyGateway = lib.mkOption {
+      type = lib.types.str;
+      default = "172.18.0.1";
+      description = ''
+        The host's address on `proxyNetwork`. Passed to `--gateway`
+        explicitly, the same as `botGateway`: with `proxyIpRange` set, docker
+        can take the gateway from that range instead of the start of the
+        subnet, and 172.18.0.1 is the address the logs and docs already name.
+        MUST be inside `proxySubnet` and outside `proxyIpRange`.
+      '';
+    };
+
+    proxyIpRange = lib.mkOption {
+      type = lib.types.str;
+      default = "172.18.128.0/17";
+      description = ''
+        The part of `proxySubnet` docker hands out to containers that do not
+        ask for an address. Everything below it, 172.18.0.0-172.18.127.255, is
+        free for pinned addresses. If a pinned address were inside the range, a
+        container started while caddy was down could take it, and caddy would
+        then fail to start.
+      '';
+    };
+
+    caddyIPv4 = lib.mkOption {
+      type = lib.types.str;
+      default = "172.18.0.2";
+      description = ''
+        Caddy's fixed address on `proxyNetwork`. MUST be inside `proxySubnet`
+        and outside `proxyIpRange`.
+
+        The firewall's prerouting chain DNATs tailscale0's 80 and 443 straight
+        to this address. Before #43 it used `redirect`, which handed every
+        tailnet connection to the host's docker-proxy, and docker-proxy
+        connects onward from the gateway: caddy saw 172.18.0.1 for every
+        tailnet client. A DNAT to the container keeps the client's own
+        address, so it needs an address that cannot change.
+      '';
+    };
+
     tailnetHttpsPort = lib.mkOption {
       type = lib.types.port;
       default = 8443;
@@ -172,8 +229,8 @@
         Caddy's SECOND https listener, carrying the vhosts that are meant for
         the tailnet alone — dozzle, grafana, music, search, syncthing, webmail,
         and the admin side of status and git. Two places must agree on it: caddy publishes it, and the
-        firewall's prerouting chain rewrites tailscale0's port 443 onto it,
-        which is what lets the URL be
+        firewall's prerouting chain DNATs tailscale0's port 443 to it at
+        `caddyIPv4`, which is what lets the URL be
         `https://dozzle.<domain>` with no port in it.
 
         It is published on 0.0.0.0 like every other container port and kept
