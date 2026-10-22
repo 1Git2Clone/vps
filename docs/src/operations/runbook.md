@@ -81,6 +81,13 @@ journalctl -u docker-minecraft2 | grep minecraft-cap   # ...and this says why
 journalctl -u minecraft-scaler -u docker-mc-router     # wake/sleep traffic
 ```
 
+**Adding a friend** is the in-game `/whitelist add <name>`, then
+`sudo systemctl restart docker-mc-router` so they can wake worlds too.
+mc-router reads its allowlist only at start, and the restart drops everyone
+connected, so do it when nobody is on. Until then they can join a world that
+is already up, just not wake one. `journalctl -u docker-mc-router | grep
+allow-deny` prints how many players may wake a world.
+
 A world started by hand, or one left running by a deploy, has nobody connected
 through mc-router, so it never gets the idle stop. Stop it when you are done.
 A leftover `/run/minecraft-hold` (it only survives if the backup unit itself

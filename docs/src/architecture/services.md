@@ -76,6 +76,12 @@ Instead:
   POSTs `{"action":"up"}` to `minecraft-scaler` and holds the player for up to
   3 minutes while the world boots. Ten minutes after the last player leaves it
   POSTs `{"action":"down"}`.
+- **Only whitelisted players wake a world.** mc-router's allowlist is rebuilt
+  from every world's `whitelist.json` each time it starts, so scanners that
+  send a login get nowhere and no player list lives in this public repo. It
+  fails closed: no readable whitelist means nobody wakes anything. mc-router
+  compares the UUID the client claims; Mojang's check still happens at the
+  world, which is online-mode with an enforced whitelist.
 - **minecraft-scaler** turns those into `systemctl start` / `stop` of
   `docker-<world>.service`, for the worlds in `worlds` only. It runs as root
   because polkit is off, with every capability dropped and systemd's
