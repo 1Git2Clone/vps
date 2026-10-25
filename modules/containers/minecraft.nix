@@ -19,7 +19,7 @@
 #   minecraft   mc1    26.1.2    minecraft. mc. bare IP   25575             minecraft_data
 #   minecraft2  mc2    1.21.1    mc2.                     25576             minecraft2_data
 #   minecraft3  mc3    26.2      mc3.                     25577             minecraft3_data
-#   minecraft4  mc4    26.1.2    mc4.                     25578             minecraft4_data
+#   minecraft4  mc4    26.3      mc4.                     25578             minecraft4_data
 #
 # WHAT A WORLD RUNS IS ITS PACK, packs/<pack>, not a list here. Each is pinned
 # to exact Modrinth versions, and the .mrpack built from it is mounted into the
@@ -214,9 +214,9 @@ in
       motd = "A Third Place for Gemstones to Chill";
     };
 
-    # Fourth world: mc1's pack, lightened for players on integrated graphics.
-    # Same Minecraft version and image as world 1; what it leaves out, and why,
-    # is in docs/src/minecraft/worlds/mc4.md.
+    # Fourth world: mc1's pack, lightened for players on integrated graphics,
+    # and on 26.3, which every mod it kept supports. Same image as world 1;
+    # what it leaves out, and why, is in docs/src/minecraft/worlds/mc4.md.
     minecraft4 = world {
       name = "minecraft4";
       image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";

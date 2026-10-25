@@ -9,7 +9,7 @@ look and run better, so a pack from here can always join its world.
 | [world 1](worlds/mc1.md) | `mc.hu-tao.dev`  | 26.1.2    | the main survival world                              | [gemstones.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack)                 |
 | [world 2](worlds/mc2.md) | `mc2.hu-tao.dev` | 1.21.1    | zombies: hordes, mutants, guns, bunkers              | [gemstones-zombies.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies.mrpack) |
 | [world 3](worlds/mc3.md) | `mc3.hu-tao.dev` | 26.2      | Vanilla+: new biomes, structures and animals         | [vanilla-plus.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack)           |
-| [world 4](worlds/mc4.md) | `mc4.hu-tao.dev` | 26.1.2    | world 1's pack, light enough for integrated graphics | [gemstones-lite.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack)       |
+| [world 4](worlds/mc4.md) | `mc4.hu-tao.dev` | 26.3      | world 1's pack, light enough for integrated graphics | [gemstones-lite.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack)       |
 
 `minecraft.hu-tao.dev` and the server's bare IP also reach world 1. Each
 world's page says what its mods do and lists every one of them.

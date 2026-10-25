@@ -2,15 +2,16 @@
 
 <!-- description:
      World 4 on mc4.hu-tao.dev: world 1's close-to-vanilla survival on
-     Minecraft 26.1.2, with a pack trimmed to run on integrated graphics. -->
+     Minecraft 26.3, with a pack trimmed to run on integrated graphics. -->
 
 **Join at** `mc4.hu-tao.dev`
 **Pack** [gemstones-lite.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack)
-**Minecraft** 26.1.2
+**Minecraft** 26.3
 
 [World 1](mc1.md)'s pack, cut down for a PC with integrated graphics and 8 GB of
-RAM. Gameplay and conveniences are the same; what is gone is everything that
-costs frames without changing how the game plays.
+RAM, and a version newer: every mod it kept has a 26.3 build. Gameplay and
+conveniences are the same; what is gone is everything that costs frames
+without changing how the game plays.
 
 ## What changes for everyone
 
@@ -32,7 +33,7 @@ costs frames without changing how the game plays.
   game while it is in the background.
 - **Interface**: the same as world 1's: VoxelMap, Jade, AppleSkin, Shulker Box
   Tooltip, Mouse Tweaks, Controlling, Zoomify, More Chat History, Better Mount
-  HUD, Borderless Mining and Mod Menu.
+  HUD and Mod Menu.
 - **Visuals**: only 3D Skin Layers.
 
 ## What is left out, and why
@@ -46,6 +47,7 @@ costs frames without changing how the game plays.
 | BetterGrassify, Sodium Shadowy Path Blocks       | purely cosmetic                                                                      |
 | EMF, ETF, Continuity, OptiGUI, Skyboxify, Puzzle | they drive resource pack features, and the pack ships no resource packs              |
 | the Discord integration                          | world 1's alone                                                                      |
+| Borderless Mining                                | it has no 26.3 build                                                                 |
 
 ## Tips
 

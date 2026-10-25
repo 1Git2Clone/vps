@@ -95,7 +95,7 @@ whitelisted, then join.
 | world 1 | `mc.hu-tao.dev`  | 26.1.2    | [gemstones.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack)                 |
 | world 2 | `mc2.hu-tao.dev` | 1.21.1    | [gemstones-zombies.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies.mrpack) |
 | world 3 | `mc3.hu-tao.dev` | 26.2      | [vanilla-plus.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack)           |
-| world 4 | `mc4.hu-tao.dev` | 26.1.2    | [gemstones-lite.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack)       |
+| world 4 | `mc4.hu-tao.dev` | 26.3      | [gemstones-lite.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack)       |
 
 A sleeping world wakes when you join: you are turned away once while it starts,
 so join again a minute later. The full guide, including what to do when the
