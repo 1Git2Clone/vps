@@ -92,14 +92,15 @@ jobs:
           cp -r docs/book/. _site/docs/
 
       # The worlds' modpacks, for players: the same builds the containers
-      # install (packs/mrpack.nix). The paths are the download links handed
-      # out, so they do not change:
-      #   https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack
-      #   https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies.mrpack
-      #   https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack
-      #   https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack
+      # install (packs/mrpack.nix). Each name carries the pack's Minecraft
+      # version, so a link changes when the version does:
+      #   https://pages.hu-tao.dev/hutao/vps/mc1/gemstones-<minecraft>.mrpack
+      #   https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies-<minecraft>.mrpack
+      #   https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus-<minecraft>.mrpack
+      #   https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite-<minecraft>.mrpack
       # The file name is the build's own (`<hash>-<name>.mrpack`, minus the
-      # hash), so it cannot disagree with packs/default.nix.
+      # hash), so it cannot disagree with packs/default.nix; the handbook's
+      # links are checked against it by packs/mod-list.py.
       - name: Stage the modpacks
         run: |
           for pack in mc1 mc2 mc3 mc4; do

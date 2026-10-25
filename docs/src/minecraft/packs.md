@@ -122,13 +122,15 @@ leak onto the server.
 1. Commit; the hooks run the checks.
 2. Deploy (see [Deploying](../operations/deploying.md)). A world that is up
    restarts with the new pack; a sleeping one picks it up when it wakes.
-3. Push `main`. The pages workflow rebuilds the packs and publishes them at the
-   same links, and since the build is reproducible the published file is
-   byte-identical to the server's:
+3. Push `main`. The pages workflow rebuilds the packs and publishes them, and
+   since the build is reproducible the published file is byte-identical to the
+   server's. A pack's file name ends in its Minecraft version, so moving a pack
+   to a new version moves its link too; the mod-lists hook fails until every
+   link in the handbook says the new name:
 
 ```sh
 nix build --print-out-paths .#mc1-mrpack | xargs sha256sum
-curl -s https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack | sha256sum
+curl -s https://pages.hu-tao.dev/hutao/vps/mc1/gemstones-26.1.2.mrpack | sha256sum
 ```
 
 ## A new world

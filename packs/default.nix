@@ -1,7 +1,10 @@
 # Every world's pack. The key is the pack's directory here and its directory
-# on pages; the .mrpack inside is named by `fileName`:
+# on pages; the .mrpack inside is named by `fileName` and the pack's own
+# Minecraft version, so a download says which game version it is for:
 #
-#   https://pages.hu-tao.dev/hutao/vps/<key>/<fileName>.mrpack
+#   https://pages.hu-tao.dev/hutao/vps/<key>/<fileName>-<minecraft>.mrpack
+#
+# The handbook's links to these are checked against it by packs/mod-list.py.
 #
 # Read by modules/containers/minecraft.nix (what each server installs) and by
 # the flake (the checks, and what pages.yml publishes). See ./mrpack.nix.

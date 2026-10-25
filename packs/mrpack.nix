@@ -42,7 +42,8 @@
   jq,
   zip,
   python3,
-  # The packwiz directory, and the name of the .mrpack built from it.
+  # The packwiz directory, and the name of the .mrpack built from it, before
+  # the -<minecraft version> the build appends.
   dir,
   fileName,
 }:
@@ -115,7 +116,7 @@ let
   );
 
   mrpack =
-    runCommand "${fileName}.mrpack"
+    runCommand "${fileName}-${pack.versions.minecraft}.mrpack"
       {
         nativeBuildInputs = [
           jq

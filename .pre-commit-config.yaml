@@ -111,7 +111,8 @@ repos:
         name: handbook mod lists (packs/mod-list.py)
         entry: nix develop .#ci -c python3 -I packs/mod-list.py
         language: system
-        files: ^packs/
+        # The handbook too: it also checks the download links there.
+        files: ^(packs/|docs/src/|README\.md$)
         pass_filenames: false
 
       # Every hard dependency met on both sides, in every pack; see `check` in

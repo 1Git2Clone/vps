@@ -28,7 +28,7 @@ packs/mc1/                 a packwiz pack: one .pw.toml per mod, each pinning an
   config/...               client config files
       │
       ▼  packs/mrpack.nix
-gemstones.mrpack
+gemstones-26.1.2.mrpack    named <pack>-<minecraft version>
       ├──▶ mounted into the world's container; itzg installs it (TYPE=MODRINTH)
       └──▶ published on pages; players import it into their launcher
 ```

@@ -8,10 +8,17 @@ pack adds, each linked to its Modrinth project. The world pages include these
 with mdBook's {{#include}}, so the prose is written by hand and the list never
 is: a hand-kept list goes stale the first time someone runs `packwiz update`.
 
+Then it checks the handbook's download links: every .mrpack link, and the
+Minecraft version beside it, must match what packs/default.nix builds. Those
+are written by hand, so it fails and names each stale line rather than
+rewriting them.
+
 Run by the mod-lists pre-commit hook. Like packwiz refresh, it only writes a
 file whose content changed, and pre-commit stops the commit when it did.
 """
 import pathlib
+import re
+import sys
 import textwrap
 import tomllib
 import unicodedata
@@ -96,3 +103,39 @@ for pack_toml in sorted(root.glob("mc*/pack.toml")):
     if not target.exists() or target.read_text() != out:
         target.write_text(out)
         print(f"wrote {target.relative_to(root.parent)}")
+
+
+# The download links. Each .mrpack is named after its pack and its Minecraft
+# version (packs/default.nix), so a link written by hand goes stale with every
+# version bump. Not rewritten here: the links sit in aligned tables, and a new
+# width means re-padding prose tables. Failing names each line to fix instead.
+
+repo = root.parent
+names = dict(re.findall(r'(mc\d+) = pack \./mc\d+ "([^"]+)";', (root / "default.nix").read_text()))
+mc = {
+    p.parent.name: tomllib.loads(p.read_text())["versions"]["minecraft"]
+    for p in root.glob("mc*/pack.toml")
+}
+link = re.compile(r"\[([^\]]*\.mrpack)\]\(https://pages\.hu-tao\.dev/hutao/vps/(mc\d+)/([^)]*)\)")
+stale = []
+pages = [repo / "README.md", *sorted((repo / "docs" / "src").rglob("*.md"))]
+for page in pages:
+    if re.fullmatch(r"mc\d+-mods\.md", page.name):
+        continue
+    where = page.relative_to(repo)
+    for n, line in enumerate(page.read_text().splitlines(), 1):
+        for text, key, path in link.findall(line):
+            want = f"{names[key]}-{mc[key]}.mrpack"
+            if text != want or path != want:
+                stale.append(f"{where}:{n}: {key}'s pack is {want}")
+            # A world table's row carries the version in a cell of its own.
+            if line.startswith("|") and f"| {mc[key]} " not in line:
+                stale.append(f"{where}:{n}: {key} is on Minecraft {mc[key]}")
+    world = re.fullmatch(r"(mc\d+)\.md", page.name)
+    if world and world[1] in mc:
+        found = re.search(r"^\*\*Minecraft\*\* (\S+)$", page.read_text(), re.M)
+        if found and found[1] != mc[world[1]]:
+            stale.append(f"{where}: {world[1]} is on Minecraft {mc[world[1]]}, the page says {found[1]}")
+if stale:
+    print("handbook out of step with the packs:", *stale, sep="\n  ", file=sys.stderr)
+    sys.exit(1)
