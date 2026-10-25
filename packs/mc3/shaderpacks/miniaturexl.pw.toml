@@ -1,0 +1,13 @@
+name = "MiniatureXL"
+filename = "MiniatureXL 1.0.zip"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/nshTeIRo/versions/KECWGfU0/MiniatureXL%201.0.zip"
+hash-format = "sha512"
+hash = "1cbf8efb0a9f71d1c3aa723c4170ffc6f0c08fbb640526fdd91f2c98f4b9bab2e33e3903b7062785ece6b8587c4c434d4f59d98f5775247252c1b168ad7ded7d"
+
+[update]
+[update.modrinth]
+mod-id = "nshTeIRo"
+version = "KECWGfU0"

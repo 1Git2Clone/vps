@@ -21,8 +21,13 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # packs/mc3 is packwiz's tree: its index.toml holds the hash of every
+      # file, so a "fixed" config file is a pack packwiz calls corrupt. The
+      # files are the pack author's, byte for byte.
       - id: trailing-whitespace
+        exclude: ^packs/mc3/
       - id: end-of-file-fixer
+        exclude: ^packs/mc3/
       - id: check-merge-conflict
       - id: check-yaml
         # secrets.yaml is sops output: valid YAML, but the parser has no reason
@@ -85,6 +90,27 @@ repos:
         entry: nix develop .#ci -c markdownlint-cli2
         language: system
         files: \.md$
+        pass_filenames: false
+
+      # mc3's modpack. Both run only when something under packs/ is staged.
+      #
+      # refresh rewrites index.toml, packwiz's hash of every file in the pack.
+      # A stale one means the pack's own tool calls it corrupt; when refresh
+      # changes it, the commit stops for a re-stage, like any fixer here.
+      - id: packwiz-refresh
+        name: packwiz refresh (packs/mc3)
+        entry: nix develop .#ci -c sh -c 'cd packs/mc3 && packwiz refresh'
+        language: system
+        files: ^packs/
+        pass_filenames: false
+
+      # Every hard dependency met on both sides; see `check` in packs/mc3.nix.
+      # The first run fetches the pack's ~300 MB of jars, then they are cached.
+      - id: mc3-pack
+        name: mc3 pack dependencies
+        entry: nix build --no-link .#checks.x86_64-linux.mc3-pack
+        language: system
+        files: ^(packs/|tests/mc3-pack-deps\.py$)
         pass_filenames: false
 
       # gitleaks over a hand-rolled "is it still encrypted" grep: it scans the

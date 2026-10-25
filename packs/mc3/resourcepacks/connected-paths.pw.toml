@@ -1,0 +1,13 @@
+name = "Connected Paths"
+filename = "Connected-Paths 26.2-26.3 v3.1.1.zip"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/Nyfj98b5/versions/Ta2igb3Q/Connected-Paths%2026.2-26.3%20v3.1.1.zip"
+hash-format = "sha512"
+hash = "f0b04106f9a89220afb2bd3c5f4462488e9b3e23c24a929acb1e8b0e6c3d0f5e1f1f472149140b26ebd29f87ef6afe7ac55eae12675e254f4f2ea47871bed6a8"
+
+[update]
+[update.modrinth]
+mod-id = "Nyfj98b5"
+version = "Ta2igb3Q"

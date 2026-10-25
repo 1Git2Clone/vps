@@ -88,6 +88,15 @@ jobs:
           mkdir -p _site/docs
           cp -r docs/book/. _site/docs/
 
+      # mc3's modpack, for players: the same build mc3's container installs
+      # (packs/mc3.nix). The path is the download link handed out, so it does
+      # not change:
+      #   https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack
+      - name: Stage mc3's modpack
+        run: |
+          mkdir -p _site/mc3
+          cp "$(nix build --print-out-paths --no-link .#mc3-mrpack)" _site/mc3/vanilla-plus.mrpack
+
       # upload-artifact is a JavaScript action and this job runs on the `nix`
       # label — nixos/nix carries no node, which is the same reason Checkout
       # above is a hand-written `git fetch`. Without this the step dies before

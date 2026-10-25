@@ -19,15 +19,24 @@
 #   world       MC        hostnames               RCON (loopback)   volume
 #   minecraft   26.1.2    minecraft. mc. bare IP   25575             minecraft_data
 #   minecraft2  1.21.1    mc2.                     25576             minecraft2_data
+#   minecraft3  26.2      mc3.                     25577             minecraft3_data
+#
+# World 3 is not a mod list here: it is a modpack, packs/mc3, which is also
+# what its players install. See its container below.
 #
 # A new world is a container, an entry in `worlds` and a MAPPING line in
 # ./mc-router.nix. The weekly backup, the cap and the scaler all follow
 # `worlds`.
 #
-# Individual mods are managed via MODRINTH_PROJECTS ( Modrinth project slugs ).
-# The image auto-selects the newest compatible version for the MC version + loader.
-# To switch to a modpack instead, use MODPACK_PLATFORM + MODRINTH_MODPACK or CF_SLUG.
-{ config, lib, ... }:
+# Worlds 1 and 2 manage individual mods via MODRINTH_PROJECTS (Modrinth project
+# slugs); the image auto-selects the newest compatible version for the MC
+# version + loader. World 3 is a modpack instead (MODRINTH_MODPACK).
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   inherit (config.infra) mcNetwork;
@@ -35,6 +44,7 @@ let
   worlds = [
     "minecraft"
     "minecraft2"
+    "minecraft3"
   ];
 
   # THE TWO LISTS ARE NOT SHARED, and cannot be: the worlds run different MC
@@ -139,140 +149,203 @@ in
 
   minecraftCap.worlds = worlds;
 
-  sops.templates."minecraft.env".content = ''
-    RCON_PASSWORD=${config.sops.placeholder.minecraft_rcon_password}
-  '';
+  # One console password per world: <world>_rcon_password in modules/secrets.nix.
+  sops.templates = lib.listToAttrs (
+    map (
+      w:
+      lib.nameValuePair "${w}.env" {
+        content = ''
+          RCON_PASSWORD=${config.sops.placeholder."${w}_rcon_password"}
+        '';
+      }
+    ) worlds
+  );
 
-  sops.templates."minecraft2.env".content = ''
-    RCON_PASSWORD=${config.sops.placeholder.minecraft2_rcon_password}
-  '';
+  virtualisation.oci-containers.containers = {
+    minecraft = {
+      # Digest-pinned: java25 is a ROLLING tag, so the tag alone says nothing
+      # about what runs. The digest is the image the world is currently on, read
+      # off the box — a rebuild or a re-pull can no longer swap the JRE under a
+      # live world without the swap appearing here as a diff.
+      image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";
 
-  virtualisation.oci-containers.containers.minecraft = {
-    # Digest-pinned: java25 is a ROLLING tag, so the tag alone says nothing
-    # about what runs. The digest is the image the world is currently on, read
-    # off the box — a rebuild or a re-pull can no longer swap the JRE under a
-    # live world without the swap appearing here as a diff.
-    image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";
+      environment = {
+        EULA = "TRUE";
+        ENABLE_RCON = "true";
 
-    environment = {
-      EULA = "TRUE";
-      ENABLE_RCON = "true";
+        TYPE = "FABRIC";
+        VERSION = "26.1.2";
 
-      TYPE = "FABRIC";
-      VERSION = "26.1.2";
+        # -Xms/-Xmx, split. itzg's MEMORY sets BOTH to the same value, so the JVM
+        # commits the whole heap at boot and never gives it back — which is why an
+        # idle server sat at 4+ G of RSS. A low floor plus G1's periodic
+        # concurrent GC (JEP 346) lets it uncommit while nobody is on.
+        INIT_MEMORY = "1G";
+        MAX_MEMORY = "6G";
 
-      # -Xms/-Xmx, split. itzg's MEMORY sets BOTH to the same value, so the JVM
-      # commits the whole heap at boot and never gives it back — which is why an
-      # idle server sat at 4+ G of RSS. A low floor plus G1's periodic
-      # concurrent GC (JEP 346) lets it uncommit while nobody is on.
-      INIT_MEMORY = "1G";
-      MAX_MEMORY = "6G";
+        # G1 only uncommits at the end of a GC cycle, and an idle server triggers
+        # no GCs at all — so without a periodic one the heap stays at its
+        # high-water mark forever. Costs one concurrent cycle per 5 min idle.
+        JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
 
-      # G1 only uncommits at the end of a GC cycle, and an idle server triggers
-      # no GCs at all — so without a periodic one the heap stays at its
-      # high-water mark forever. Costs one concurrent cycle per 5 min idle.
-      JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
+        ONLINE_MODE = "TRUE";
+        ENABLE_WHITELIST = "TRUE";
+        ENFORCE_WHITELIST = "TRUE";
 
-      ONLINE_MODE = "TRUE";
-      ENABLE_WHITELIST = "TRUE";
-      ENFORCE_WHITELIST = "TRUE";
+        DIFFICULTY = "hard";
+        GAMEMODE = "survival";
+        MOTD = "A Place for Gemstones to Chill";
 
-      DIFFICULTY = "hard";
-      GAMEMODE = "survival";
-      MOTD = "A Place for Gemstones to Chill";
+        SPAWN_PROTECTION = "0";
 
-      SPAWN_PROTECTION = "0";
+        # Individual mods via Modrinth (auto-selects newest for 26.1.2 Fabric).
+        # Remove a slug to uninstall; add a slug to install.
+        # :beta suffix needed for mods without a stable release for this MC version.
+        MODRINTH_PROJECTS = lib.concatStringsSep "," minecraftMods;
+      };
 
-      # Individual mods via Modrinth (auto-selects newest for 26.1.2 Fabric).
-      # Remove a slug to uninstall; add a slug to install.
-      # :beta suffix needed for mods without a stable release for this MC version.
-      MODRINTH_PROJECTS = lib.concatStringsSep "," minecraftMods;
+      environmentFiles = [ config.sops.templates."minecraft.env".path ];
+
+      # Woken by minecraft-scaler, not by boot: an idle world costs nothing.
+      autoStart = false;
+      networks = [ mcNetwork ];
+
+      ports = [
+        # RCON on loopback only. It is an unauthenticated-by-design remote console
+        # once you have the password, so it never leaves the host.
+        "127.0.0.1:25575:25575"
+      ];
+
+      volumes = [ "minecraft_data:/data" ];
+
+      extraOptions = stopOptions;
     };
 
-    environmentFiles = [ config.sops.templates."minecraft.env".path ];
+    # Second world. Same image, its own volume, its own RCON password — the two
+    # consoles are deliberately not interchangeable.
+    #
+    # MAX_MEMORY is 4G rather than 6G: the box is a cx43 (16 G) and also runs
+    # mail, forgejo, grafana and tempo. 6G + 6G leaves no headroom.
+    #
+    # VERSION IS 1.21.1, NOT world 1's 26.1.2. The zombie mods this world exists
+    # for are built for 1.21.1 and stop there, so the version is the whole point
+    # rather than an oversight — do not "sync" it with world 1. Moving it means
+    # rechecking every slug in minecraft2Mods against the new version.
+    minecraft2 = {
+      # java21, not java25 like world 1: 1.21.1 targets Java 21, and its mods are
+      # compiled against it. Mixin/ASM on a JDK newer than the one a mod was built
+      # for is the classic modded-server crash, and there is nothing to gain here.
+      # Digest-pinned for the same reason as world 1, and it matters more here:
+      # a rolling tag could move this world onto a newer JDK point release, which
+      # is exactly the mixin/ASM break the paragraph above warns about.
+      image = "itzg/minecraft-server:java21@sha256:50bdc4b0746c48456d8e737a017786a94c02295b14a8f0f4cb02592a0388cc09";
 
-    # Woken by minecraft-scaler, not by boot: an idle world costs nothing.
-    autoStart = false;
-    networks = [ mcNetwork ];
+      environment = {
+        EULA = "TRUE";
+        ENABLE_RCON = "true";
 
-    ports = [
-      # RCON on loopback only. It is an unauthenticated-by-design remote console
-      # once you have the password, so it never leaves the host.
-      "127.0.0.1:25575:25575"
-    ];
+        TYPE = "FABRIC";
+        VERSION = "1.21.1";
 
-    volumes = [ "minecraft_data:/data" ];
+        # -Xms/-Xmx, split. itzg's MEMORY sets BOTH to the same value, so the JVM
+        # commits the whole heap at boot and never gives it back — which is why an
+        # idle server sat at 4+ G of RSS. A low floor plus G1's periodic
+        # concurrent GC (JEP 346) lets it uncommit while nobody is on.
+        INIT_MEMORY = "1G";
+        MAX_MEMORY = "4G";
 
-    extraOptions = stopOptions;
-  };
+        # G1 only uncommits at the end of a GC cycle, and an idle server triggers
+        # no GCs at all — so without a periodic one the heap stays at its
+        # high-water mark forever. Costs one concurrent cycle per 5 min idle.
+        JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
 
-  # Second world. Same image, its own volume, its own RCON password — the two
-  # consoles are deliberately not interchangeable.
-  #
-  # MAX_MEMORY is 4G rather than 6G: the box is a cx43 (16 G) and also runs
-  # mail, forgejo, grafana and tempo. 6G + 6G leaves no headroom.
-  #
-  # VERSION IS 1.21.1, NOT world 1's 26.1.2. The zombie mods this world exists
-  # for are built for 1.21.1 and stop there, so the version is the whole point
-  # rather than an oversight — do not "sync" it with world 1. Moving it means
-  # rechecking every slug in minecraft2Mods against the new version.
-  virtualisation.oci-containers.containers.minecraft2 = {
-    # java21, not java25 like world 1: 1.21.1 targets Java 21, and its mods are
-    # compiled against it. Mixin/ASM on a JDK newer than the one a mod was built
-    # for is the classic modded-server crash, and there is nothing to gain here.
-    # Digest-pinned for the same reason as world 1, and it matters more here:
-    # a rolling tag could move this world onto a newer JDK point release, which
-    # is exactly the mixin/ASM break the paragraph above warns about.
-    image = "itzg/minecraft-server:java21@sha256:50bdc4b0746c48456d8e737a017786a94c02295b14a8f0f4cb02592a0388cc09";
+        ONLINE_MODE = "TRUE";
+        ENABLE_WHITELIST = "TRUE";
+        ENFORCE_WHITELIST = "TRUE";
 
-    environment = {
-      EULA = "TRUE";
-      ENABLE_RCON = "true";
+        DIFFICULTY = "hard";
+        GAMEMODE = "survival";
+        MOTD = "A Second Place for Gemstones to Chill";
 
-      TYPE = "FABRIC";
-      VERSION = "1.21.1";
+        # Vanilla defaults this to 16, which stops NON-OPS breaking any block
+        # within 16 of world spawn — ops are exempt, so the symptom is "you have
+        # to be op to build", not an error message. A whitelisted server has no
+        # griefers to protect spawn from.
+        SPAWN_PROTECTION = "0";
 
-      # -Xms/-Xmx, split. itzg's MEMORY sets BOTH to the same value, so the JVM
-      # commits the whole heap at boot and never gives it back — which is why an
-      # idle server sat at 4+ G of RSS. A low floor plus G1's periodic
-      # concurrent GC (JEP 346) lets it uncommit while nobody is on.
-      INIT_MEMORY = "1G";
-      MAX_MEMORY = "4G";
+        # Auto-selects newest compatible for 1.21.1 Fabric — a DIFFERENT set of
+        # builds from world 1's, which is why this list is its own.
+        MODRINTH_PROJECTS = lib.concatStringsSep "," minecraft2Mods;
+      };
 
-      # G1 only uncommits at the end of a GC cycle, and an idle server triggers
-      # no GCs at all — so without a periodic one the heap stays at its
-      # high-water mark forever. Costs one concurrent cycle per 5 min idle.
-      JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
+      environmentFiles = [ config.sops.templates."minecraft2.env".path ];
 
-      ONLINE_MODE = "TRUE";
-      ENABLE_WHITELIST = "TRUE";
-      ENFORCE_WHITELIST = "TRUE";
+      autoStart = false;
+      networks = [ mcNetwork ];
 
-      DIFFICULTY = "hard";
-      GAMEMODE = "survival";
-      MOTD = "A Second Place for Gemstones to Chill";
+      ports = [ "127.0.0.1:25576:25575" ];
 
-      # Vanilla defaults this to 16, which stops NON-OPS breaking any block
-      # within 16 of world spawn — ops are exempt, so the symptom is "you have
-      # to be op to build", not an error message. A whitelisted server has no
-      # griefers to protect spawn from.
-      SPAWN_PROTECTION = "0";
+      volumes = [ "minecraft2_data:/data" ];
 
-      # Auto-selects newest compatible for 1.21.1 Fabric — a DIFFERENT set of
-      # builds from world 1's, which is why this list is its own.
-      MODRINTH_PROJECTS = lib.concatStringsSep "," minecraft2Mods;
+      extraOptions = stopOptions;
     };
 
-    environmentFiles = [ config.sops.templates."minecraft2.env".path ];
+    # Third world: the Vanilla+ modpack on MC 26.2. Unlike worlds 1 and 2 it has
+    # no MODRINTH_PROJECTS list: what it runs is packs/mc3, pinned to exact
+    # versions, and the .mrpack built from it is mounted in for itzg to install.
+    # itzg skips every file the pack marks client-only, and re-syncs the mods to
+    # the pack on every start, so a pack change lands on the next wake. The SAME
+    # file is the players' download (.forgejo/workflows/pages.yml), which is the
+    # point: a mod both sides need cannot be at one version here and another in
+    # the players' pack.
+    #
+    # MAX_MEMORY is 4G, as for world 2: with the cap at 2, the worst pair is still
+    # world 1's 6G plus 4G.
+    minecraft3 = {
+      # java25, the same digest as world 1: 26.x targets Java 25.
+      image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";
 
-    autoStart = false;
-    networks = [ mcNetwork ];
+      environment = {
+        EULA = "TRUE";
+        ENABLE_RCON = "true";
 
-    ports = [ "127.0.0.1:25576:25575" ];
+        # The pack names its own MC and fabric-loader versions, so there is no
+        # VERSION here to disagree with them.
+        TYPE = "MODRINTH";
+        MODRINTH_MODPACK = "/modpack/vanilla-plus.mrpack";
 
-    volumes = [ "minecraft2_data:/data" ];
+        # See world 1 for why these are split.
+        INIT_MEMORY = "1G";
+        MAX_MEMORY = "4G";
+        JVM_XX_OPTS = "-XX:G1PeriodicGCInterval=300000";
 
-    extraOptions = stopOptions;
+        ONLINE_MODE = "TRUE";
+        ENABLE_WHITELIST = "TRUE";
+        ENFORCE_WHITELIST = "TRUE";
+
+        DIFFICULTY = "hard";
+        GAMEMODE = "survival";
+        MOTD = "A Third Place for Gemstones to Chill";
+
+        # See world 2: 16 makes spawn op-only to build in.
+        SPAWN_PROTECTION = "0";
+      };
+
+      environmentFiles = [ config.sops.templates."minecraft3.env".path ];
+
+      autoStart = false;
+      networks = [ mcNetwork ];
+
+      ports = [ "127.0.0.1:25577:25575" ];
+
+      volumes = [
+        "minecraft3_data:/data"
+        # itzg only takes a local pack whose name ends in .mrpack.
+        "${pkgs.callPackage ../../packs/mc3.nix { }}:/modpack/vanilla-plus.mrpack:ro"
+      ];
+
+      extraOptions = stopOptions;
+    };
   };
 
   # The module's default is 120s, which would have systemd kill the unit while

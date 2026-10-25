@@ -7,7 +7,7 @@ flowchart TB
     reg["container images"]
     dumps[("pg_dumpall<br/>/var/backup/postgresql")]
     imgs[("docker save<br/>/var/lib/image-archive")]
-    mc[("minecraft_data<br/>minecraft2_data")]
+    mc[("minecraft_data<br/>minecraft2_data<br/>minecraft3_data")]
 
     daily["restic · daily 00:00–01:00<br/>keep 7d / 4w / 6m"]
     weekly["restic · weekly<br/>servers STOPPED"]

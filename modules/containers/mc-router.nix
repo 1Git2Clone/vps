@@ -76,6 +76,7 @@ in
         "minecraft.${domain}=minecraft:25565"
         "mc.${domain}=minecraft:25565"
         "mc2.${domain}=minecraft2:25565"
+        "mc3.${domain}=minecraft3:25565"
       ];
       # Bare-IP joins land where they always did.
       DEFAULT = "minecraft:25565";

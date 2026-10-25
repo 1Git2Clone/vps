@@ -300,6 +300,10 @@
           (builtins.mapAttrs (_system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib)
           {
             ${system} = {
+              # Every hard dependency in mc3's pack met on both sides. Sandboxed:
+              # the jars are the same pinned fetches the pack is built from.
+              mc3-pack = self.packages.${system}.mc3-mrpack.check;
+
               # Same attribute name deployChecks used, so CI's
               # `nix build .#checks.x86_64-linux.deploy-schema` is unchanged.
               deploy-schema = pkgs.runCommand "deploy-schema" { } ''
@@ -758,6 +762,8 @@
               nixos-rebuild
               opentofu
               deploy-rs.packages.${devSystem}.default
+              # mc3's modpack is a packwiz pack; see packs/mc3.nix.
+              packwiz
               # The hook runner. `pre-commit install` once per clone, after which
               # .pre-commit-config.yaml is enforced on every commit; the same file
               # is what CI runs, so the two cannot drift.
@@ -784,6 +790,7 @@
               git
               gitleaks
               markdownlint-cli2
+              packwiz # the packwiz-refresh hook
               mdbook
               mdbook-mermaid
               # NOT for building anything here — nothing in this repo is a node
@@ -853,6 +860,13 @@
         # with it on any machine with a normal sandbox. Both CI files build it by
         # name instead. See the header of tests/minecraft-mods.nix.
         minecraft-mods = minecraftMods.check;
+
+        # ── mc3's modpack ──────────────────────────────────────────────────────
+        #   nix build .#mc3-mrpack
+        #
+        # The .mrpack mc3's container installs and pages.yml publishes for the
+        # players: one build, both consumers. See packs/mc3.nix.
+        mc3-mrpack = pkgs.callPackage ./packs/mc3.nix { };
       };
 
       apps.${system} = {

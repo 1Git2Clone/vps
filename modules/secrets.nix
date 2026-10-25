@@ -156,13 +156,16 @@
       };
 
       # === Minecraft ===
-      # One per world: the two RCON consoles are separate on purpose, so a
-      # password that leaks reaches one world rather than both.
+      # One per world: the RCON consoles are separate on purpose, so a
+      # password that leaks reaches one world rather than every one.
       minecraft_rcon_password = {
         key = "minecraft/rcon_password";
       };
       minecraft2_rcon_password = {
         key = "minecraft2/rcon_password";
+      };
+      minecraft3_rcon_password = {
+        key = "minecraft3/rcon_password";
       };
 
       # === Navidrome ===

@@ -7,7 +7,7 @@ supports.
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | grafana        | real login from sops; anonymous-Admin off, sign-up off                                                                                             |
 | dozzle         | bcrypt hash from sops, in a `users.yml` copied to a stable path                                                                                    |
-| minecraft RCON | password from sops, loopback only; one password per world (25575 / 25576). `minecraft-scaler` has no password: only mc-router's address reaches it |
+| minecraft RCON | password from sops, loopback only; one password per world (25575-25577). `minecraft-scaler` has no password: only mc-router's address reaches it   |
 | serenity bot   | discord token + AI key + db password, all sops                                                                                                     |
 | **kuma**       | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy.    |
 | syncthing      | GUI password from sops via `guiPasswordFile`, declared rather than inherited                                                                       |
