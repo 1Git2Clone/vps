@@ -77,6 +77,9 @@ jobs:
         run: |
           nix develop .#ci -c mdbook-mermaid install docs
           nix develop .#ci -c mdbook build docs
+          # Per-page descriptions and link previews; mdBook gives every page
+          # the book's one description. See docs/describe.py.
+          nix develop .#ci -c python3 -I docs/describe.py docs/book https://docs.hu-tao.dev
 
       # The staging path is the contract with modules/pages-pull.nix: the
       # artifact's own root becomes <owner>/<repo>, so this directory name is
