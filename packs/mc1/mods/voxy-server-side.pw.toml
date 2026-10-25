@@ -3,11 +3,11 @@ filename = "voxy-server-side-fabric.jar"
 side = "both"
 
 [download]
-url = "https://cdn.modrinth.com/data/84zcagOb/versions/VYtdhfWH/voxy-server-side-fabric.jar"
+url = "https://cdn.modrinth.com/data/84zcagOb/versions/SvDjrd13/voxy-server-side-fabric.jar"
 hash-format = "sha512"
-hash = "bd84b092a77e9d92de3a008a9801ac8f5ae0e3e580767be3d568e416141bc46b99ac8e1dd0d377342d2243cb26647daf10fe373e6adb662e41d80f5dc4b8139b"
+hash = "272726af1238b6a0320af390fb7bbaf7dc4468e27a9cd9e0fe270c39f7c07f805a1a727dc0396cebb1ab33a6b4d0ff1d95e1e5e3cca18cf83229e1f5e2e03fef"
 
 [update]
 [update.modrinth]
 mod-id = "84zcagOb"
-version = "VYtdhfWH"
+version = "SvDjrd13"

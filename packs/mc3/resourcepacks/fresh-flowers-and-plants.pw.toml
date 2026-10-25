@@ -3,11 +3,11 @@ filename = "Fresh Flowers and Plants.zip"
 side = "client"
 
 [download]
-url = "https://cdn.modrinth.com/data/wyzOam9h/versions/MQ2mDJwU/Fresh%20Flowers%20and%20Plants.zip"
+url = "https://cdn.modrinth.com/data/wyzOam9h/versions/VRr8mOt6/Fresh%20Flowers%20and%20Plants.zip"
 hash-format = "sha512"
-hash = "aaab5469d9356c8475339f77051571ab0b49eb17b7a58ccb78033ed9d82b8a8f73f844f41176ae6094f01c1a14de53e74df8fa3aad98e36409f60726bfd4c6c3"
+hash = "bfe7a879cddbf9cc212210910945a3d606a57da37e0fd5198fbf07d1666d36338121e36c8e0640d792d41f20fda1393f783f70c2a213b2a489cc97085fdc96e9"
 
 [update]
 [update.modrinth]
 mod-id = "wyzOam9h"
-version = "MQ2mDJwU"
+version = "VRr8mOt6"

@@ -138,7 +138,7 @@ hash = "cece60604b8de5e978141c981c1ed85227c8f30697a513869012b06dd15fcf02"
 
 [[files]]
 file = "mods/3dskinlayers.pw.toml"
-hash = "d51e28413e05c52dd0fe42da5c3f5beccbd488fa30c214446e63f5d7deddb316"
+hash = "6e9c21a41c740cb7de92084242306a372464da053e7394e480ed1bf016af5375"
 metafile = true
 
 [[files]]
@@ -278,12 +278,12 @@ metafile = true
 
 [[files]]
 file = "mods/fallingtree.pw.toml"
-hash = "d4f6289a84d717157a5fd44fb9c4968f8c34d4430cc7970968b24d3d411998fb"
+hash = "666f1667d0f1eee24ff44cab46c8378734ce8c5385528b9dcb8ac4e97c25a869"
 metafile = true
 
 [[files]]
 file = "mods/farmers-delight-refabricated.pw.toml"
-hash = "01022079a2d7a8224e67b6830ce2ed5b6e7ea6688aec9f1a1faa773fe1517147"
+hash = "c12b94c159caab53bdb7bbed9b7f825cf3902cb01a96f966fef3064fb08c9e6a"
 metafile = true
 
 [[files]]
@@ -553,12 +553,12 @@ metafile = true
 
 [[files]]
 file = "mods/xaeros-minimap.pw.toml"
-hash = "8e6884302fe12243a258c5ac2d5d3ae512bdabd7741d576db3510bb9741a6e36"
+hash = "2ada315533849b19a43e463ee4295cb86ca0bfa6976febb446c94aca9753f367"
 metafile = true
 
 [[files]]
 file = "mods/xaeros-world-map.pw.toml"
-hash = "afb6b412d781cf7acc1009e4e239292e9e3573d1d7b90043cb0efa3eff6a39b7"
+hash = "53136420f7dc97114736da27d70577e47090a153bcd86a1621c6c935ff565b94"
 metafile = true
 
 [[files]]
@@ -622,12 +622,12 @@ metafile = true
 
 [[files]]
 file = "resourcepacks/fresh-animations.pw.toml"
-hash = "213428b7676adfaa1c59fcfe93e6e7f3d0257e236f32a5a245eb0fc966e1b218"
+hash = "435a3f840613486ed00c68c6eea16324083b9a5a745503b22942d6b53c06b5ed"
 metafile = true
 
 [[files]]
 file = "resourcepacks/fresh-flowers-and-plants.pw.toml"
-hash = "c4aad2247e7f622996e8c1edd5827645bb7bc81e4990277362353a60f6424265"
+hash = "31430b782db7dc57387c92d63764e2bc724f965284348710db6cd71960d73877"
 metafile = true
 
 [[files]]
