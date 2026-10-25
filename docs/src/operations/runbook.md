@@ -81,12 +81,23 @@ journalctl -u docker-minecraft2 | grep minecraft-cap   # ...and this says why
 journalctl -u minecraft-scaler -u docker-mc-router     # wake/sleep traffic
 ```
 
-**Adding a friend** is the in-game `/whitelist add <name>`, then
-`sudo systemctl restart docker-mc-router` so they can wake worlds too.
-mc-router reads its allowlist only at start, and the restart drops everyone
-connected, so do it when nobody is on. Until then they can join a world that
-is already up, just not wake one. `journalctl -u docker-mc-router | grep
-allow-deny` prints how many players may wake a world.
+**Any world's console** is `scripts/rcon.sh`, run from your machine with your
+own `SSH_AUTH_SOCK`. It wakes a sleeping world for the command and puts it back
+to sleep after:
+
+```sh
+scripts/rcon.sh mc4 whitelist add <name>    # mc1 to mc4
+scripts/rcon.sh mc1 list
+```
+
+**Adding a friend** is `scripts/rcon.sh <world> whitelist add <name>`. mc-router
+reads who may wake a world only at start, so the script restarts it after a
+whitelist change, but only when nobody is on, because the restart drops
+everyone connected. If someone is, it says so: run
+`sudo systemctl restart docker-mc-router` later. Until then the friend can
+join a world that is already up, just not wake one. `journalctl -u
+docker-mc-router | grep allow-deny` prints how many players may wake a world.
+An in-game `/whitelist add` needs the same restart.
 
 A world started by hand, or one left running by a deploy, has nobody connected
 through mc-router, so it never gets the idle stop. Stop it when you are done.
