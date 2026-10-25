@@ -99,6 +99,11 @@ in
       "--ip=${config.infra.mcRouterAddress}"
       "--security-opt=no-new-privileges:true"
       "--read-only"
+      # mc-router shuts down cleanly on SIGINT only (signal.NotifyContext with
+      # os.Interrupt, still so in v1.49.0). docker stop's SIGTERM reaches a Go
+      # PID 1 that does not handle it, which exits 2, so every restart of this
+      # unit, i.e. every deploy that touches it, alerted as a container death.
+      "--stop-signal=SIGINT"
     ];
   };
 
