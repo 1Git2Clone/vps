@@ -23,11 +23,64 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 
 let
   cfg = config.virtualisation.oci-containers;
+  docker = "${config.virtualisation.docker.package}/bin/docker";
+
+  # Every image a container here names, running or not. Not running matters:
+  # the worlds are deleted when they sleep, so docker sees their images as
+  # unused, and a 1.2G re-pull on wake does not fit mc-router's wake timeout.
+  keptImages = pkgs.writeText "kept-images" (
+    lib.concatMapStrings (c: c.image + "\n") (lib.attrValues cfg.containers)
+  );
+
+  # Superseded versions are tagged, so the dangling-only prune below never
+  # reaches them: every bump left its old image behind (~20G by 2026-10-25).
+  # This removes every image the config does not name, matched by ID because
+  # digest-pinned pulls carry no tag. `image rm` without -f refuses anything a
+  # container still uses, so a deploy racing this costs a re-pull at worst.
+  # Dry-run against the live box on 2026-10-25: all 17 configured images kept,
+  # 43 superseded ones listed for removal.
+  removeUnnamedImages = pkgs.writeShellScript "docker-remove-unnamed-images" ''
+    set -u
+    keep=""
+    while IFS= read -r ref; do
+      keep="$keep $(${docker} image inspect --format '{{.Id}}' "$ref" 2>/dev/null || true)"
+    done < ${keptImages}
+
+    # Something here is always running, so an empty list means docker did not
+    # answer, not that nothing is in use. Removing on it would take everything.
+    if [ -z "''${keep// /}" ]; then
+      echo "docker-prune: no configured image resolved, removing nothing" >&2
+      exit 1
+    fi
+
+    rc=0
+    list() { ${docker} image ls --no-trunc --format '{{.ID}} {{.Repository}}:{{.Tag}}'; }
+    remove() {
+      echo "docker-prune: removing $1"
+      ${docker} image rm "$1" || rc=1
+    }
+
+    # Tags first. Untagged entries can only be named by ID, and removing an ID
+    # that a tag still references fails without -f; once its tags are gone, it
+    # cannot.
+    while read -r id ref; do
+      case " $keep " in *" $id "*) continue ;; esac
+      case "$ref" in *:"<none>") ;; *) remove "$ref" ;; esac
+    done < <(list)
+
+    # Then what is left untagged, from a fresh listing, once per ID.
+    while read -r id; do
+      case " $keep " in *" $id "*) continue ;; esac
+      remove "$id"
+    done < <(list | ${pkgs.gnugrep}/bin/grep ':<none>$' | ${pkgs.coreutils}/bin/cut -d' ' -f1 | ${pkgs.coreutils}/bin/sort -u)
+    exit $rc
+  '';
 
   # Network name -> extra `docker network create` arguments.
   #
@@ -88,11 +141,10 @@ in
     # the forgejo fail2ban jail, which reads the journal.
 
     # `flags` is deliberately empty, so this is a plain `docker system prune`:
-    # DANGLING LAYERS ONLY. It is not `--all`, so a tagged or digest-pinned
-    # image no container currently references is never touched — which matters
-    # now that three images are pinned by digest and modules/image-archive.nix
-    # keeps a saved copy of every one of them. Volumes are never touched
-    # either: without --volumes, prune cannot delete data.
+    # DANGLING LAYERS ONLY. It is not `--all`, which would take the sleeping
+    # worlds' images. Old versions are removed by removeUnnamedImages, which
+    # runs first in the same unit. Volumes are never touched either: without
+    # --volumes, prune cannot delete data.
     #
     # The runner's podman prune IS `--all`, and it eats the locally built job
     # image; see modules/runner/ci-image.nix.
@@ -151,5 +203,9 @@ in
         after = units;
         requires = units;
       }
-    ) cfg.containers;
+    ) cfg.containers
+    // {
+      # First, so the layers it frees are dangling by the time prune runs.
+      docker-prune.serviceConfig.ExecStartPre = [ "${removeUnnamedImages}" ];
+    };
 }

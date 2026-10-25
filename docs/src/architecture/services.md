@@ -154,8 +154,12 @@ bump, so there was nothing to be deliberate _with_, and the content moved on the
 next pull with no PR ever saying so. A digest PR is that missing signal.
 
 `docker.autoPrune` is weekly and its `flags` are empty, so it is a plain
-`docker system prune` — **dangling layers only**, never a tagged or digest-
-referenced image, and never a volume. The runner's podman prune is the one that
+`docker system prune` — **dangling layers only**, and never a volume. Before
+it, in the same unit, `removeUnnamedImages` (`modules/containers/default.nix`)
+removes every image no container in the config names. That is what clears the
+old version every bump leaves behind. It is not `--all`, because `--all`
+would also take the images of the sleeping Minecraft worlds, whose containers
+do not exist while they sleep. The runner's podman prune is the one that
 runs `--all`, and what that costs is covered in
 [CI runner isolation](runner.md#the-garbage-collector-eats-it).
 
