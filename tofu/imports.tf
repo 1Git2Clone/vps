@@ -53,6 +53,7 @@ locals {
     mc        = "8b5b420ea4b1c920e560ae488c7d824e"
     mc2       = "ae7ae954818b8660e32346a2ff864308"
     mc3       = "eba450efe54fdba317b1e4e78ab0edb8"
+    mc4       = "52d4c935274883317d9356aa3774dbd2"
     minecraft = "cc4c0e13050cc0b3fd928f65db032ce9"
     pages     = "0c8b8dbe295b4f125050da6acbe836a6"
     smtp      = "1a8fa2eac6aab44c98e9cb46a39073d5"
