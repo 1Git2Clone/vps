@@ -1,13 +1,13 @@
 name = "VoxelMap-Updated"
-filename = "voxelmap-fabric-26.1-1.16.6.jar"
+filename = "voxelmap-fabric-26.3-1.16.13.jar"
 side = "client"
 
 [download]
-url = "https://cdn.modrinth.com/data/wkzK5379/versions/NfOUNBHc/voxelmap-fabric-26.1-1.16.6.jar"
+url = "https://cdn.modrinth.com/data/wkzK5379/versions/u1l1hMzs/voxelmap-fabric-26.3-1.16.13.jar"
 hash-format = "sha512"
-hash = "833ccec68cdbdfbb6ad449a187771fd5433d5d130932472915eb4c16c5867d8f24a339974e29c4ba894b3de5de3c464b223c762ac033e1fbc704e36cca7f9e04"
+hash = "0b309f5eb63a9199737b527ed98b418bfed884cab1d9d9eeb0e6ae7e7fdac59bc3cbafd11684fa1891ca04e8b2346bbe1060739cac4ba5f38e7d4d532e3b3d49"
 
 [update]
 [update.modrinth]
 mod-id = "wkzK5379"
-version = "NfOUNBHc"
+version = "u1l1hMzs"
