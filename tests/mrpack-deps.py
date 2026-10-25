@@ -13,8 +13,9 @@ import zipfile
 jars_file, minecraft, fabricloader = sys.argv[1:4]
 jars = json.load(open(jars_file))
 
-# Provided by the platform, not by any mod jar.
-BUILTIN = {"minecraft", "java", "fabricloader", "fabric-loader"}
+# Provided by the platform, not by any mod jar. Fabric Loader ships
+# MixinExtras inside its own jar (0.5.5 in loader 0.20.1).
+BUILTIN = {"minecraft", "java", "fabricloader", "fabric-loader", "mixinextras"}
 
 
 def mod_jsons(data):
