@@ -20,11 +20,11 @@ variable "subdomains" {
     routes none of this.
   EOT
   type        = set(string)
-  # "minecraft", "mc", "mc2" and "mc3" are all the same address on 25565. mc-router
+  # "minecraft", "mc" and "mc2" to "mc4" are all the same address on 25565. mc-router
   # tells the worlds apart by the hostname in the client's handshake (see
   # modules/containers/minecraft.nix in the NixOS config), so a world needs
   # only its A record here, no SRV and no port of its own.
-  default = ["mail", "git", "minecraft", "mc", "mc2", "mc3", "status", "smtp", "pages", "crafts", "compress", "docs"]
+  default = ["mail", "git", "minecraft", "mc", "mc2", "mc3", "mc4", "status", "smtp", "pages", "crafts", "compress", "docs"]
 }
 
 variable "tailnet_ipv4" {

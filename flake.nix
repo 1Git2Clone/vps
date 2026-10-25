@@ -100,7 +100,7 @@
         { disko.devices.disk.main.device = "/dev/sda"; }
       ];
 
-      # Every world's modpack, keyed mc1/mc2/mc3. See packs/default.nix.
+      # Every world's modpack, keyed mc1 to mc4. See packs/default.nix.
       mrpacks = import ./packs { inherit (pkgs) callPackage; };
     in
     {
@@ -836,7 +836,7 @@
 
       }
       # ── The worlds' modpacks ─────────────────────────────────────────────────
-      #   nix build .#mc1-mrpack   (mc2-mrpack, mc3-mrpack)
+      #   nix build .#mc1-mrpack   (mc2-, mc3-, mc4-mrpack)
       #
       # The .mrpack each world's container installs and pages.yml publishes for
       # the players: one build, both consumers. See packs/mrpack.nix.

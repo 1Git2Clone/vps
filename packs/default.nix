@@ -14,4 +14,5 @@ in
   mc1 = pack ./mc1 "gemstones";
   mc2 = pack ./mc2 "gemstones-zombies";
   mc3 = pack ./mc3 "vanilla-plus";
+  mc4 = pack ./mc4 "gemstones-lite";
 }

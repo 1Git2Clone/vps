@@ -1,0 +1,13 @@
+name = "Server Sleep"
+filename = "serversleep-3.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/Cw8IlnGM/versions/roog9lKa/serversleep-3.jar"
+hash-format = "sha512"
+hash = "6827bbe54c98d65579fd813ca6b44df7f38cdd9c03468090c57266959329842b0a2d36ae4b31c1a0a7a29a5aeb1483cdcbea90f07d962946be62b82935dc8a2d"
+
+[update]
+[update.modrinth]
+mod-id = "Cw8IlnGM"
+version = "roog9lKa"

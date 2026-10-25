@@ -124,6 +124,7 @@ repos:
           .#checks.x86_64-linux.mc1-pack
           .#checks.x86_64-linux.mc2-pack
           .#checks.x86_64-linux.mc3-pack
+          .#checks.x86_64-linux.mc4-pack
         language: system
         files: ^(packs/|tests/mrpack-deps\.py$)
         pass_filenames: false

@@ -10,7 +10,7 @@ what the server runs and what players install.
 | mc-router        | `modules/containers/mc-router.nix`     | owns 25565, reads the hostname the player typed, routes to that world, wakes it if asleep |
 | minecraft-scaler | `modules/containers/minecraft-cap.nix` | turns mc-router's wake/sleep webhook into `systemctl start`/`stop`; refuses a third world |
 | the worlds       | `modules/containers/minecraft.nix`     | one `itzg/minecraft-server` container each, on its own volume, RCON on loopback only      |
-| the packs        | `packs/mc1`, `packs/mc2`, `packs/mc3`  | each world's mods, pinned, with the side each one runs on                                 |
+| the packs        | `packs/mc1` to `packs/mc4`             | each world's mods, pinned, with the side each one runs on                                 |
 | the pack build   | `packs/mrpack.nix`                     | turns a pack into one `.mrpack`, plus the dependency check                                |
 | the downloads    | `.forgejo/workflows/pages.yml`         | publishes the same `.mrpack` files on pages                                               |
 

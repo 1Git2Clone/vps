@@ -97,11 +97,12 @@ jobs:
       #   https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack
       #   https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies.mrpack
       #   https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack
+      #   https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite.mrpack
       # The file name is the build's own (`<hash>-<name>.mrpack`, minus the
       # hash), so it cannot disagree with packs/default.nix.
       - name: Stage the modpacks
         run: |
-          for pack in mc1 mc2 mc3; do
+          for pack in mc1 mc2 mc3 mc4; do
             out=$(nix build --print-out-paths --no-link ".#$pack-mrpack")
             mkdir -p "_site/$pack"
             cp "$out" "_site/$pack/$(basename "$out" | cut -d- -f2-)"

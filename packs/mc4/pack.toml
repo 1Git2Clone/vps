@@ -1,0 +1,13 @@
+name = "Gemstones Lite (mc4)"
+author = "hutao"
+version = "1.0.0"
+pack-format = "packwiz:1.1.0"
+
+[index]
+file = "index.toml"
+hash-format = "sha256"
+hash = "b36207c24f8f01f1d383ffc015e3a100c22b8d81611557035a10bb143c453a5c"
+
+[versions]
+fabric = "0.19.5"
+minecraft = "26.1.2"
