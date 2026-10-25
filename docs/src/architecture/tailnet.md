@@ -163,11 +163,17 @@ Tailscale, against the real tailnet:
 ```text
 accept  vps:2222 · vps:443 · vps:53 · vps:8080 · tag:friends-ssh:22
 deny    vps:6432 · vps:4317 · tag:friends-ssh:80
+
+from tag:friends-ssh
+deny    vps on every port · tag:friends-ssh:22 · the owner's devices:22
 ```
 
 A rule that stops being true fails the apply. `vps:2222` is there because it is
 the single most load-bearing line in the file, and `tag:friends-ssh:22` because
-it catches exactly the "tidy-up" described above.
+it catches exactly the "tidy-up" described above. The second block is
+[the destination-only rule](#tagfriends-ssh-is-a-destination-and-never-a-source)
+as a test: "never a source" is an absence, and one broad `src` would break it
+without any line looking wrong.
 
 **They run at apply time, not plan time — measured, not assumed.** An earlier
 draft of that comment said plan. A real `tofu plan` then succeeded against a

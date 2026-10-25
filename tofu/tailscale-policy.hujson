@@ -298,5 +298,45 @@
 				"tag:friends-ssh:80",
 			],
 		},
+
+		// FRIENDS' MACHINES CANNOT REACH OUT, to anything on the tailnet. The
+		// acls above get that by never naming tag:friends-ssh as a src, which
+		// is a property of what is ABSENT, and an absence is the easiest thing
+		// for a later "tidy up" to break: one broad src, and a friend's device
+		// can reach the VPS without any line here looking wrong. These turn
+		// that absence into a claim the apply checks.
+		//
+		// Tests need concrete destinations, so "anything" is spelled out: the
+		// VPS on every port its owner may use plus the internal two, the other
+		// friends' machines, and the owner's own devices by the tailnet
+		// addresses nodeAttrs already names. Unlike the deny list above, these
+		// hold whether or not tag:vps is applied: a tagged device is never in
+		// anyone's autogroup:self.
+		{
+			"src": "tag:friends-ssh",
+			"deny": [
+				"vps:22",
+				"vps:53",
+				"vps:80",
+				"vps:443",
+				"vps:465",
+				"vps:587",
+				"vps:993",
+				"vps:2222",
+				"vps:3000",
+				"vps:4317",
+				"vps:6432",
+				"vps:8080",
+				"vps:8384",
+				"vps:8443",
+				"vps:8880",
+				"vps:22000",
+				"tag:friends-ssh:22",
+				"100.108.24.65:22",
+				"100.111.243.14:22",
+				"100.95.190.17:22",
+				"100.90.44.89:22",
+			],
+		},
 	],
 }
