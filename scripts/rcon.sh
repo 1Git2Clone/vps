@@ -21,64 +21,95 @@ if [ "${1:-}" != --remote ]; then
   exec ssh -p 2222 hutao@vps "sudo bash -s -- --remote $(printf '%q ' "$@")" <"$0"
 fi
 
-# Everything below runs on the VPS, as root. It is one function so bash has
-# read all of it before anything runs, and nothing else can eat the script.
-main() {
+# Everything below runs on the VPS, as root. The functions are all defined
+# before main runs, so bash has read the whole script before anything in it
+# could read stdin and eat the rest.
+
+# rcon <world> <command...>
+rcon() { docker exec "$1" rcon-cli "${@:2}" </dev/null; }
+is_up() { [ "$(systemctl show -P ActiveState "docker-$1")" = active ]; }
+
+# mc1 is the container "minecraft", mcN is "minecraftN", anything else is
+# taken as a container name.
+container_for() {
   case $1 in
-    mc1) w=minecraft ;;
-    mc[0-9]*) w=minecraft${1#mc} ;;
-    *) w=$1 ;;
+    mc1) echo minecraft ;;
+    mc[0-9]*) echo "minecraft${1#mc}" ;;
+    *) echo "$1" ;;
   esac
+}
+
+wake() {
+  echo "$world is asleep, waking it" >&2
+  systemctl start "docker-$world"
+  # The cap of two, or a backup in progress, skips the start without failing.
+  if ! is_up "$world"; then
+    echo "$world did not start; journalctl -u docker-$world | grep minecraft-cap says why" >&2
+    exit 1
+  fi
+  # RCON answers once the server is ready; up to three minutes.
+  for _ in $(seq 90); do
+    rcon "$world" list >/dev/null 2>&1 && return
+    sleep 2
+  done
+}
+
+put_back_to_sleep() {
+  systemctl stop "docker-$world"
+  echo "$world is asleep again" >&2
+}
+
+# Players on every world that is up. A world whose count cannot be read
+# counts as one, so an unknown never reads as "nobody is on".
+players_online() {
+  local total=0 unit world
+  for unit in $(systemctl list-units --state=active --plain --no-legend 'docker-minecraft*' | cut -d' ' -f1); do
+    world=${unit#docker-}
+    world=${world%.service}
+    # A regex, not grep | head: under pipefail, head closing early fails the pipe.
+    if [[ $(rcon "$world" list 2>/dev/null) =~ There\ are\ ([0-9]+) ]]; then
+      total=$((total + BASH_REMATCH[1]))
+    else
+      total=$((total + 1))
+    fi
+  done
+  echo "$total"
+}
+
+# mc-router reads who may wake a world only at start. The restart drops
+# everyone connected, so it waits for an empty server.
+reload_allowlist() {
+  if [ "$(players_online)" -gt 0 ]; then
+    echo "someone may be online, so mc-router was not restarted; the change reaches it at its next restart" >&2
+    return
+  fi
+  systemctl restart docker-mc-router
+  journalctl -u docker-mc-router --since -1min --no-pager -o cat | grep allow-deny | tail -1 >&2 || true
+}
+
+main() {
+  world=$(container_for "$1")
   shift
-  if ! systemctl cat "docker-$w.service" >/dev/null 2>&1; then
-    echo "no world called $w" >&2
+  if ! systemctl cat "docker-$world.service" >/dev/null 2>&1; then
+    echo "no world called $world" >&2
     exit 2
   fi
 
-  woke=
-  if [ "$(systemctl show -P ActiveState "docker-$w")" != active ]; then
-    echo "$w is asleep, waking it" >&2
-    systemctl start "docker-$w"
-    # The cap of two, or a backup in progress, skips the start without failing.
-    if [ "$(systemctl show -P ActiveState "docker-$w")" != active ]; then
-      echo "$w did not start; journalctl -u docker-$w | grep minecraft-cap says why" >&2
-      exit 1
-    fi
+  local woke='' status=0
+  if ! is_up "$world"; then
+    wake
     woke=1
-    for _ in $(seq 90); do
-      docker exec "$w" rcon-cli list >/dev/null 2>&1 </dev/null && break
-      sleep 2
-    done
   fi
-
-  status=0
-  docker exec "$w" rcon-cli "$@" </dev/null || status=$?
-
+  rcon "$world" "$@" || status=$?
   if [ -n "$woke" ]; then
-    systemctl stop "docker-$w"
-    echo "$w is asleep again" >&2
+    put_back_to_sleep
   fi
 
   if [ "${1:-}" = whitelist ] && { [ "${2:-}" = add ] || [ "${2:-}" = remove ]; }; then
-    # A world whose count cannot be read counts as someone online.
-    online=0
-    for unit in $(systemctl list-units --state=active --plain --no-legend 'docker-minecraft*' | cut -d' ' -f1); do
-      world=${unit#docker-}
-      # Not grep | head: under pipefail, head closing early fails the pipe.
-      if [[ $(docker exec "${world%.service}" rcon-cli list </dev/null) =~ There\ are\ ([0-9]+) ]]; then
-        online=$((online + BASH_REMATCH[1]))
-      else
-        online=$((online + 1))
-      fi
-    done
-    if [ "$online" -gt 0 ]; then
-      echo "someone may be online, so mc-router was not restarted; the change reaches it at its next restart" >&2
-    else
-      systemctl restart docker-mc-router
-      journalctl -u docker-mc-router --since -1min --no-pager -o cat | grep allow-deny | tail -1 >&2 || true
-    fi
+    reload_allowlist
   fi
   exit "$status"
 }
-shift
+
+shift # --remote
 main "$@"
