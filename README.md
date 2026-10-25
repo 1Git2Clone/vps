@@ -34,7 +34,8 @@ nothing to remember to run.
 ├── .github/workflows/    # CI, run on the GitHub mirror
 ├── docs/                 # the handbook — mdBook source in docs/src/
 ├── runner/               # the CI runner's own configuration.nix
-├── tests/                # VM and network tests behind checks.* and packages.minecraft-mods
+├── tests/                # VM and network tests behind checks.*
+├── packs/                # the Minecraft worlds' modpacks (packwiz), see the handbook
 ├── renovate.json5        # this repo's Renovate config
 ├── modules/
 │   ├── options.nix       # infra.* — domain, tailnet IP, docker networks
@@ -77,9 +78,28 @@ nix run .#docs -- --open   # writes the mermaid assets first, then serves
 | [Deploying](docs/src/operations/deploying.md)                    | the everyday path, and the circuit breaker behind it               |
 | [Failure modes and recovery](docs/src/operations/recovery.md)    | what rolls back on its own and what does not                       |
 | [Runbook](docs/src/operations/runbook.md)                        | the commands, in the order you want them                           |
+| [Working on the packs](docs/src/minecraft/packs.md)              | the Minecraft modpacks: packwiz, sides, the dependency check       |
 
 Those links go to the source, which renders fine in Forgejo — diagrams
 included, since they are mermaid and Forgejo draws them natively.
+
+## Playing Minecraft
+
+Three worlds, one address each. Install the world's modpack in
+[Prism Launcher](https://prismlauncher.org/) (_Add Instance_ → _Import_, paste
+the link) or the [Modrinth App](https://modrinth.com/app), ask to be
+whitelisted, then join.
+
+| World   | Join at          | Minecraft | Pack                                                                                        |
+| ------- | ---------------- | --------- | ------------------------------------------------------------------------------------------- |
+| world 1 | `mc.hu-tao.dev`  | 26.1.2    | [gemstones.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack)                 |
+| world 2 | `mc2.hu-tao.dev` | 1.21.1    | [gemstones-zombies.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies.mrpack) |
+| world 3 | `mc3.hu-tao.dev` | 26.2      | [vanilla-plus.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack)           |
+
+A sleeping world wakes when you join: you are turned away once while it starts,
+so join again a minute later. The full guide, including what to do when the
+game will not start, is
+[Playing](https://docs.hu-tao.dev/minecraft/playing.html) in the handbook.
 
 ## Quick start
 

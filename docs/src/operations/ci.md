@@ -16,7 +16,7 @@ run on git.hu-tao.dev.
 | Check    | What                                                                                                                                                                                                                                         |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | lint     | `pre-commit run --all-files`, then gitleaks across the full history                                                                                                                                                                          |
-| evaluate | evaluates all three `nixosConfigurations`, then `nix flake check --no-build`, then builds `deploy-schema` and its guard, `runner-firewall-ordering`, `runner-has-no-secrets`, `pages-pull-strips-symlinks`, and the `minecraft-mods` package |
+| evaluate | evaluates all three `nixosConfigurations`, then `nix flake check --no-build`, then builds `deploy-schema` and its guard, `runner-firewall-ordering`, `runner-has-no-secrets`, `pages-pull-strips-symlinks`                                   |
 
 **The mirror is push-only.** Commit here and let it flow across; anything
 edited on GitHub is overwritten by the next sync, and CI can lag a push until
@@ -78,7 +78,7 @@ Five checks and one package are built rather than evaluated, and each for a reas
 | `runner-firewall-ordering`   | greps the evaluated nftables ruleset for rule order. A check that is only evaluated never runs its builder, so its failure branch would be inert                                                                                                                                                        |
 | `runner-has-no-secrets`      | same reason — it catches the runner growing a `sops-install-secrets` unit, which a copy-pasted module import would do                                                                                                                                                                                   |
 | `pages-pull-strips-symlinks` | asserts the symlink strip and chmod sit between unzip and copy, then runs those exact lines against a hostile zip — evaluating it would never run the builder                                                                                                                                           |
-| `minecraft-mods`             | **a package, not a check**: it is `__noChroot` because it queries Modrinth, and in `checks` it would fail `nix flake check` on any sandboxed machine. The GitHub job passes `--option sandbox false`; the Forgejo image already has `sandbox = false`                                                   |
+| `mc<N>-pack`                 | every hard dependency in a world's modpack, on both sides. Run by the `lint` job's pre-commit hook rather than named here; it fetches the packs' jars (~300 MB for mc3) into a job container that starts empty                                                                                          |
 
 `runner-firewall` — the real two-node VM test with real packets — is **not** in
 CI. It needs `/dev/kvm`, and these are shared-vCPU Hetzner instances with no

@@ -1,0 +1,51 @@
+# Playing
+
+Three worlds share one address, and each has a modpack you install once. The
+pack is exactly what the server runs, plus the client-side mods that make it
+look and run better, so a pack from here can always join its world.
+
+| World   | Join at          | Minecraft | What it is                                   | Pack                                                                                        |
+| ------- | ---------------- | --------- | -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| world 1 | `mc.hu-tao.dev`  | 26.1.2    | the main survival world                      | [gemstones.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack)                 |
+| world 2 | `mc2.hu-tao.dev` | 1.21.1    | zombies: hordes, mutants, guns, bunkers      | [gemstones-zombies.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies.mrpack) |
+| world 3 | `mc3.hu-tao.dev` | 26.2      | Vanilla+: new biomes, structures and animals | [vanilla-plus.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus.mrpack)           |
+
+`minecraft.hu-tao.dev` and the server's bare IP also reach world 1.
+
+## Installing a pack
+
+A `.mrpack` is a Modrinth modpack: a small file listing the mods, which your
+launcher downloads from Modrinth and checks. Any launcher that imports Modrinth
+packs works; these two are the usual ones.
+
+- **[Prism Launcher](https://prismlauncher.org/)**: _Add Instance_ → _Import_,
+  then paste the pack's link (or pick the downloaded file).
+- **[Modrinth App](https://modrinth.com/app)**: download the pack, then drag it
+  onto the app, or use _Import from file_ when creating an instance.
+
+Modrinth's own guide covers the same steps with screenshots:
+[Modpacks on Modrinth](https://support.modrinth.com/en/articles/8802250-modpacks-on-modrinth).
+
+The links never change. When a pack is updated, the same link serves the new
+version: import it again (or update the instance) and you match the server.
+
+## Joining
+
+You need to be on the world's whitelist; ask for it. Then add the address from
+the table as a server and join.
+
+**Worlds sleep when nobody is on**, to save the server's memory. If the server
+list says _Asleep. Join to wake it up_, join anyway: that wakes it. The first
+attempt is turned away with _Waking up, join again in a minute_; a minute or two
+later, join again. A world goes back to sleep ten minutes after the last player
+leaves. At most two worlds are awake at once, so if two others are busy, the
+third waits its turn.
+
+## Something is wrong
+
+- **The game crashes on launch, or the server says a mod is missing or the
+  wrong version**: your pack is out of date. Import the pack from its link
+  again.
+- **"You are not whitelisted on this server"**: ask to be added.
+- **A world will not wake** while two others are up: that is the limit, not a
+  fault.

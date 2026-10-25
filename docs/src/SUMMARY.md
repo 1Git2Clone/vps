@@ -18,6 +18,12 @@
 - [Secrets](architecture/secrets.md)
 - [Observability](architecture/observability.md)
 
+# Minecraft
+
+- [Playing](minecraft/playing.md)
+- [How the servers are set up](minecraft/servers.md)
+- [Working on the packs](minecraft/packs.md)
+
 # Operations
 
 - [Deploying](operations/deploying.md)

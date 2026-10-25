@@ -151,13 +151,12 @@ containing both an intraword underscore and an emphasis span.
 `docs/superpowers/` is not linted — those are agent-generated plan and spec
 records, kept as history.
 
-## Checking the Minecraft mod lists
+## The Minecraft modpacks
 
 ```sh
-nix run .#minecraft-mod-check
+nix build .#checks.x86_64-linux.mc1-pack -L   # mc2-pack, mc3-pack
 ```
 
-It checks every declared Modrinth slug against the exact Minecraft version and
-loader each world runs, read from the evaluated config rather than a copy of
-it. CI builds the same thing as `.#minecraft-mods`, which needs
-`--option sandbox false` because it uses the network.
+Every hard dependency in a world's pack, met on both sides. It also runs as a
+pre-commit hook when anything under `packs/` changes. Changing a pack is
+[Working on the packs](../minecraft/packs.md).
