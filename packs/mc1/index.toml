@@ -78,7 +78,7 @@ hash = "4d3264b58c502afaeca3f44e8d2db0843c54b8ba957afd21a2d450fe10dafefb"
 
 [[files]]
 file = "config/iris.properties"
-hash = "cc31bf67c55079c724be55e9003b9e3d4f7984997f5bfe3a8d2a886cabeff01c"
+hash = "a5814655541b2192f5607ed3ebe842a69992a025b77cd16044a8cb674a7204fe"
 
 [[files]]
 file = "config/ixeris.toml"

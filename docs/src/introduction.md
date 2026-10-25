@@ -1,7 +1,7 @@
 # Introduction
 
 This is the whole of `hu-tao.dev`: a mail server, a Forgejo instance, a music
-library, a search engine, two Minecraft worlds, a Discord bot, and the CI that
+library, a search engine, three Minecraft worlds, a Discord bot, and the CI that
 builds them — described by one flake, on two machines.
 
 The guiding rule, stated once so the rest follows from it: **there is no state

@@ -114,6 +114,8 @@ curl -s https://pages.hu-tao.dev/hutao/vps/mc1/gemstones.mrpack | sha256sum
 A pack (`packwiz init` in a new `packs/mc<N>`, then add it to
 `packs/default.nix`), a container in `modules/containers/minecraft.nix`, an
 entry in `worlds` there, a MAPPING line in `modules/containers/mc-router.nix`,
-an RCON secret in `modules/secrets.nix` and `secrets.yaml`, the hostname in
+a page in `docs/src/minecraft/worlds/` that includes the generated
+`mc<N>-mods.md`, an RCON secret in `modules/secrets.nix` and `secrets.yaml`,
+the hostname in
 `tofu/modules/cloudflare-dns/variables.tf`, and the pack in the `mrpacks` hook
 and `pages.yml`'s list. The backup, the cap and the scaler follow `worlds`.

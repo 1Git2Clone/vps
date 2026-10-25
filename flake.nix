@@ -780,6 +780,7 @@
               gitleaks
               markdownlint-cli2
               packwiz # the packwiz-refresh hook
+              python3 # the mod-lists hook (packs/mod-list.py)
               mdbook
               mdbook-mermaid
               # NOT for building anything here — nothing in this repo is a node

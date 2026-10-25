@@ -105,6 +105,15 @@ repos:
         files: ^packs/
         pass_filenames: false
 
+      # The handbook's per-world mod lists, written from the packs; see the
+      # header of packs/mod-list.py. A fixer like the one above.
+      - id: mod-lists
+        name: handbook mod lists (packs/mod-list.py)
+        entry: nix develop .#ci -c python3 -I packs/mod-list.py
+        language: system
+        files: ^packs/
+        pass_filenames: false
+
       # Every hard dependency met on both sides, in every pack; see `check` in
       # packs/mrpack.nix. The first run fetches the packs' jars (~300 MB for
       # mc3 alone), then they are cached.
