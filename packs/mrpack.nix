@@ -1,25 +1,33 @@
 # ==============================================================================
-# mc3's modpack — one .mrpack, for the server AND for the players
+# A world's modpack — one .mrpack, for the server AND for the players
 # ==============================================================================
-# ./mc3 is a packwiz pack, and the single list of what mc3 runs. Every entry
-# is pinned to a Modrinth version with its sha512, and carries a side:
+# Each world's directory here (./mc1, ./mc2, ./mc3) is a packwiz pack, and the
+# single list of what that world runs. Every entry is pinned to a Modrinth
+# version with its sha512, and carries a side:
 #
 #   both    on the server and in the players' pack
-#   client  players only (shaders, resource packs, sodium, ...)
-#   server  the server only (servercore, ...)
+#   client  players only (sodium, shaders, resource packs, minimaps, ...)
+#   server  the server only (servercore, dlaw, ...)
 #
-# This builds the .mrpack from it. modules/containers/minecraft.nix mounts it
-# into mc3's container, where itzg installs it and skips every `client` file;
-# .forgejo/workflows/pages.yml publishes the SAME file for players to download.
-# One build, both consumers: the server and the pack cannot drift apart.
+# This builds the .mrpack from one of them. modules/containers/minecraft.nix
+# mounts it into that world's container, where itzg installs it and skips every
+# `client` file; .forgejo/workflows/pages.yml publishes the SAME file for
+# players to download. One build, both consumers: the server and the pack
+# cannot drift apart.
 #
-# Changing the pack is packwiz, run in ./mc3 (it is in the dev shell):
+# Every other file in the directory (options.txt, config/...) goes into the
+# pack's `client-overrides/`, NOT `overrides/`. itzg extracts `overrides/` into
+# the server's /data, so a client's lithium.properties there would quietly
+# reconfigure a live server; `client-overrides/` it never reads. Server config
+# is the server's own.
+#
+# Changing a pack is packwiz, run in its directory (it is in the dev shell):
 #
 #   packwiz mr add <slug>            add a mod, newest build for this version
 #   packwiz update --all             newest builds, same Minecraft version
 #   packwiz migrate minecraft <ver>  move to another Minecraft version
 #
-# then `nix build .#checks.x86_64-linux.mc3-pack` (see `check` below).
+# The pre-commit hooks then refresh packwiz's index and run `check` below.
 #
 # WHY NOT `packwiz modrinth export`. It downloads every file to hash it, and
 # when a download fails it DROPS that file and still exits 0. In the sandbox
@@ -34,12 +42,14 @@
   jq,
   zip,
   python3,
+  # The packwiz directory, and the name of the .mrpack built from it.
+  dir,
+  fileName,
 }:
 
 let
-  dir = ./mc3;
   pack = lib.importTOML (dir + "/pack.toml");
-  metaDirs = [
+  metaDirs = builtins.filter (d: builtins.pathExists (dir + "/${d}")) [
     "mods"
     "resourcepacks"
     "shaderpacks"
@@ -72,17 +82,22 @@ let
     ) (builtins.filter isMeta (builtins.attrNames (builtins.readDir (dir + "/${d}"))))
   ) metaDirs;
 
-  # Everything else in the pack is a config file the pack ships as-is.
-  overrides = lib.fileset.toSource {
-    root = dir;
-    fileset = lib.fileset.difference dir (
-      lib.fileset.unions [
-        (dir + "/pack.toml")
-        (dir + "/index.toml")
-        (lib.fileset.fileFilter (f: isMeta f.name) dir)
-      ]
-    );
-  };
+  # Everything else in the pack is a client config file, shipped as-is.
+  configFiles = lib.fileset.difference dir (
+    lib.fileset.unions [
+      (dir + "/pack.toml")
+      (dir + "/index.toml")
+      (lib.fileset.fileFilter (f: isMeta f.name) dir)
+    ]
+  );
+  clientOverrides =
+    if lib.fileset.toList configFiles == [ ] then
+      null
+    else
+      lib.fileset.toSource {
+        root = dir;
+        fileset = configFiles;
+      };
 
   header = {
     formatVersion = 1;
@@ -95,12 +110,12 @@ let
     };
   };
 
-  entriesTsv = writeText "mc3-entries.tsv" (
+  entriesTsv = writeText "${fileName}-entries.tsv" (
     lib.concatMapStrings (e: "${e.path}\t${e.url}\t${e.side}\t${e.src}\t${e.sha512}\n") entries
   );
 
   mrpack =
-    runCommand "vanilla-plus.mrpack"
+    runCommand "${fileName}.mrpack"
       {
         nativeBuildInputs = [
           jq
@@ -109,8 +124,11 @@ let
         passthru = { inherit check; };
       }
       ''
-        mkdir -p pack/overrides
-        cp -r ${overrides}/. pack/overrides/
+        mkdir -p pack
+        ${lib.optionalString (clientOverrides != null) ''
+          mkdir -p pack/client-overrides
+          cp -r ${clientOverrides}/. pack/client-overrides/
+        ''}
         chmod -R u+w pack
 
         # The mrpack format wants sha1 and the size as well, which packwiz does
@@ -132,13 +150,19 @@ let
 
         n=$(jq '.files | length' pack/modrinth.index.json)
         if [ "$n" -ne ${toString (builtins.length entries)} ]; then
-          echo "mc3 pack: $n files in the index, ${toString (builtins.length entries)} in the pack" >&2
+          echo "${fileName}: $n files in the index, ${toString (builtins.length entries)} in the pack" >&2
           exit 1
         fi
 
+        # Byte-for-byte reproducible, so the players' download and the server's
+        # copy can be compared by hash. `zip -r` takes files in readdir order,
+        # which differs between filesystems: CI's build and a desktop's had
+        # the same files in a different order. So: a sorted list, fixed modes
+        # and times, no extra fields (-X) and no directory entries (-D).
         cd pack
+        find . -type f -exec chmod 0644 {} +
         find . -exec touch -h -d @315532800 {} +
-        zip -qrXD $out modrinth.index.json overrides
+        find . -type f | sed 's|^\./||' | LC_ALL=C sort | zip -qXD $out -@
       '';
 
   # Every hard `depends` in every jar's fabric.mod.json, nested jars included,
@@ -149,7 +173,7 @@ let
   # the server, so both sides are checked. It needs no network: the jars are the
   # same fetchurl outputs the pack is built from.
   check =
-    runCommand "mc3-pack-check"
+    runCommand "${fileName}-check"
       {
         nativeBuildInputs = [ python3 ];
         jars = builtins.toJSON (
@@ -161,7 +185,7 @@ let
         passAsFile = [ "jars" ];
       }
       ''
-        python3 -I ${../tests/mc3-pack-deps.py} "$jarsPath" \
+        python3 -I ${../tests/mrpack-deps.py} "$jarsPath" \
           ${pack.versions.minecraft} ${pack.versions.fabric}
         touch $out
       '';

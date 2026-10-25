@@ -1,0 +1,13 @@
+name = "Mebahel's Zombie Horde"
+filename = "mebahel-zombie-horde-2.0.0-1.21.1.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/qzMgWNlz/versions/YaqA3koo/mebahel-zombie-horde-2.0.0-1.21.1.jar"
+hash-format = "sha512"
+hash = "5c11956c3fdc8cff997021f7963587d40dea65eccff1860dca48f6570ebd744c14cba413c5e1c129fccd50f0883ba7449a540f74d9adb2eff38ea91ea1768717"
+
+[update]
+[update.modrinth]
+mod-id = "qzMgWNlz"
+version = "YaqA3koo"

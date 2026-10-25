@@ -1,9 +1,9 @@
-"""Check every hard `depends` in the mc3 pack against what each side gets.
+"""Check every hard `depends` in a world's pack against what each side gets.
 
-usage: mc3-pack-deps.py <jars.json> <minecraft version> <fabric loader version>
+usage: mrpack-deps.py <jars.json> <minecraft version> <fabric loader version>
 
 jars.json is [{path, side, src}], side being both/client/server. See the
-`check` in packs/mc3.nix for why this exists.
+`check` in packs/mrpack.nix for why this exists.
 """
 import io
 import json
@@ -48,14 +48,14 @@ for side in ("server", "client"):
         for dep, rng in ((jsons[0] if jsons else {}).get("depends") or {}).items():
             if dep not in provided:
                 missing.append(f"{side}: {path} needs {dep} {rng}")
-    print(f"mc3 pack: {side} gets {len(present)} mods")
+    print(f"pack: {side} gets {len(present)} mods")
 
 # Version RANGES are not evaluated: Fabric's semver grammar is not worth a
 # second implementation, and a range mismatch names itself in the server log.
 # A missing mod does not, on the client: it is a crash on every player's launch.
 if missing:
-    print("mc3 pack: unmet hard dependencies", file=sys.stderr)
+    print("pack: unmet hard dependencies", file=sys.stderr)
     for m in missing:
         print("  " + m, file=sys.stderr)
     sys.exit(1)
-print(f"mc3 pack: every hard dependency is met (MC {minecraft}, fabric {fabricloader})")
+print(f"pack: every hard dependency is met (MC {minecraft}, fabric {fabricloader})")

@@ -1,0 +1,136 @@
+hash-format = "sha256"
+
+[[files]]
+file = "mods/cloth-config.pw.toml"
+hash = "446c173c87b7908daee86b0dee89c6b628c77beb7a0bc091ff5252b7c0062080"
+metafile = true
+
+[[files]]
+file = "mods/config-manager.pw.toml"
+hash = "68b5a6e6c9b7b474117e1470e52b18fe351de869067be7d516fb98f426f9ee68"
+metafile = true
+
+[[files]]
+file = "mods/coroutil.pw.toml"
+hash = "363b6a77d7f7802a58aecd51e932745b0ab663a5810a681b654e2f3584ac11b1"
+metafile = true
+
+[[files]]
+file = "mods/entityculling.pw.toml"
+hash = "f23a0d6d48cc27e24e8c4cacf9231fe146f82e9ff27c90b2fd96e1de4482e765"
+metafile = true
+
+[[files]]
+file = "mods/fabric-api.pw.toml"
+hash = "9645e76b2915aa43b0918e1ef20e1c01b64ba9073e35c8bcd70cf34af8ab604e"
+metafile = true
+
+[[files]]
+file = "mods/fabric-language-kotlin.pw.toml"
+hash = "1811d49906aa7a1e7f1230535c6fec91be45129d028f7900cf35571a497e42b3"
+metafile = true
+
+[[files]]
+file = "mods/fabric-permissions-api.pw.toml"
+hash = "4f7bf8d60ef81f12471455f634bde52cc5a8c845250845b4519ad44ea46e61a6"
+metafile = true
+
+[[files]]
+file = "mods/fallingtree.pw.toml"
+hash = "7d61ad815f97afb27f7e97475e80376aa19fecf25a1b04a500a4c3a6e5055973"
+metafile = true
+
+[[files]]
+file = "mods/ferrite-core.pw.toml"
+hash = "1d5799cd3b6ea714602c18546b99ba894e7511835b77803304792468fb7ee187"
+metafile = true
+
+[[files]]
+file = "mods/forge-config-api-port.pw.toml"
+hash = "238b3ceb4214a682480ce00eefae5d34efa299ff6ff667e4b2f2ed503c6e76ee"
+metafile = true
+
+[[files]]
+file = "mods/geckolib.pw.toml"
+hash = "5f62f54e16fdc97a0fb21b63a563583f85d141772f6aa99f68d40cd654b7dc35"
+metafile = true
+
+[[files]]
+file = "mods/immediatelyfast.pw.toml"
+hash = "10930324bc5d409d8d557b003a1b7eaf1af00dc336db8f7aea877335f0748aa1"
+metafile = true
+
+[[files]]
+file = "mods/krypton.pw.toml"
+hash = "870adc39cf8d9941b7f3b832ea2603e8ed238db625d12b824b74d5028c5d6fc0"
+metafile = true
+
+[[files]]
+file = "mods/lithium.pw.toml"
+hash = "e10e639f71700a67d7f9b9d747e1685f838d703dadd432464b54e31b26f4742b"
+metafile = true
+
+[[files]]
+file = "mods/mebahels-zombie-horde.pw.toml"
+hash = "5a001fcc6309e2c5321bd382ccd7fac0c4c9a1393ec256f367102a4ec9808206"
+metafile = true
+
+[[files]]
+file = "mods/modernfix.pw.toml"
+hash = "7dd0decf35cae00480f5344297f378fb60e18f5938a32a143ac801e7c522456e"
+metafile = true
+
+[[files]]
+file = "mods/mutants-and-zombies.pw.toml"
+hash = "8a6f2a93568aa03365e8f67f6f4271cd222ba270d94f7b4a43cf39789cc2bb48"
+metafile = true
+
+[[files]]
+file = "mods/no-chat-reports.pw.toml"
+hash = "f3c5cb21ff2e78c7e8cdbd14d1535e6edd464d5a436dbfa4e60b8ea91374674d"
+metafile = true
+
+[[files]]
+file = "mods/placeholder-api.pw.toml"
+hash = "2e2c1b47b513663871e71c89a699c66ac9fcc97633f007ed064ce4410f220f5a"
+metafile = true
+
+[[files]]
+file = "mods/serversleep.pw.toml"
+hash = "5c5192448bfc8094d1a9a2038b29d9dc6e9e668ff74924c2ea378bc489644f94"
+metafile = true
+
+[[files]]
+file = "mods/sodium.pw.toml"
+hash = "869af67848bf3b9ba4384bc9fb0cbe303d35263bd8de75eeabcba796edf4d7c6"
+metafile = true
+
+[[files]]
+file = "mods/sound-physics-remastered.pw.toml"
+hash = "f58afbe79ea14087160830efff055c08955fc7321fc27137810e5da2f548426c"
+metafile = true
+
+[[files]]
+file = "mods/underground-bunkers.pw.toml"
+hash = "e01e8209863a1fc414e455c0ceb4859635880ddbb50905dc8ca33b2614ae61f8"
+metafile = true
+
+[[files]]
+file = "mods/vics-point-blank.pw.toml"
+hash = "17c90475aaac58155ae27ec6016dd3a56eed56d2b032c46046513743ded7bdfc"
+metafile = true
+
+[[files]]
+file = "mods/voxy-server-side.pw.toml"
+hash = "2a0b655f818d93980382d97f07a94e97bf8e4f8e4d66485de4790894840c3fe0"
+metafile = true
+
+[[files]]
+file = "mods/yacl.pw.toml"
+hash = "af20070dd9497817a83162c17b181a0a44f7213ea302d059a81c5aed02d0c877"
+metafile = true
+
+[[files]]
+file = "mods/zombie-awareness.pw.toml"
+hash = "597a74f79ce4013258c7c45621d63d14c37e89658cd002bcf7193a9beaabb176"
+metafile = true

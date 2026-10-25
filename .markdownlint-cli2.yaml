@@ -35,6 +35,9 @@ ignores:
   # mdBook's render, not its source. docs/src/** IS linted — that is the point
   # of having a book — but docs/book/** is generated output and gitignored.
   - "docs/book/**"
+  # The worlds' modpacks ship mod authors' files byte for byte (NoChatReports
+  # puts a README.md in its config folder); packwiz hashes every one of them.
+  - "packs/mc*/**"
   # Untracked scratch. Never reaches pre-commit, but `markdownlint-cli2` run
   # by hand globs the working tree and would find them.
   - ".remember/**"

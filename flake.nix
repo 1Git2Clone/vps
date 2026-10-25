@@ -100,19 +100,8 @@
         { disko.devices.disk.main.device = "/dev/sda"; }
       ];
 
-      # ── The Minecraft mod compatibility check ──────────────────────────────
-      # Built from the EVALUATED container config, not a restated list, so the
-      # slugs and MC versions it validates are the ones the host actually ships.
-      # See tests/minecraft-mods.nix for the whole rationale, the itzg
-      # `:beta`/`:alpha`/`?` grammar it implements, and why it needs
-      # `sandbox = false` to reach api.modrinth.com.
-      #
-      # vps-hetzner rather than vps: the two share every container, and the
-      # deploy target is the one whose mod lists matter.
-      minecraftMods = import ./tests/minecraft-mods.nix {
-        inherit nixpkgs system;
-        containers = self.nixosConfigurations.vps-hetzner.config.virtualisation.oci-containers.containers;
-      };
+      # Every world's modpack, keyed mc1/mc2/mc3. See packs/default.nix.
+      mrpacks = import ./packs { inherit (pkgs) callPackage; };
     in
     {
       nixosConfigurations = {
@@ -299,443 +288,443 @@
         nixpkgs.lib.recursiveUpdate
           (builtins.mapAttrs (_system: deployLib: deployLib.deployChecks self.deploy) deploy-rs.lib)
           {
-            ${system} = {
-              # Every hard dependency in mc3's pack met on both sides. Sandboxed:
-              # the jars are the same pinned fetches the pack is built from.
-              mc3-pack = self.packages.${system}.mc3-mrpack.check;
-
-              # Same attribute name deployChecks used, so CI's
-              # `nix build .#checks.x86_64-linux.deploy-schema` is unchanged.
-              deploy-schema = pkgs.runCommand "deploy-schema" { } ''
-                ${pkgs.check-jsonschema}/bin/check-jsonschema \
-                  --schemafile ${deploy-rs}/interface.json ${deployJson}
-                touch $out
-              '';
-
-              # The guard on the check above, and the reason it is not redundant:
-              # a validator that silently does nothing passes forever. If the
-              # schemafile path ever goes stale, or check-jsonschema changes how
-              # it takes arguments, `deploy-schema` keeps exiting 0 over a
-              # document it never read — and we would not find out until a broken
-              # deploy.json reached a real deploy.
-              #
-              # So: feed the SAME invocation a node with no `hostname`, which
-              # interface.json marks required, and fail if it is accepted.
-              deploy-schema-rejects-bad-input = pkgs.runCommand "deploy-schema-rejects-bad-input" { } ''
-                if ${pkgs.check-jsonschema}/bin/check-jsonschema \
-                     --schemafile ${deploy-rs}/interface.json \
-                     ${
-                       pkgs.writeText "bad-deploy.json" (builtins.toJSON { nodes.vps.profiles.system.path = "/dev/null"; })
-                     } >/dev/null 2>&1
-                then
-                  echo "schema validation accepted a node with no hostname" >&2
-                  exit 1
-                fi
-                touch $out
-              '';
-
-              # Makes good on the mkRunner comment above ("Task: keep it absent.
-              # checks.runner-has-no-secrets asserts it"). The runner holds no age
-              # key, so a sops-install-secrets unit appearing on it is a build that
-              # must fail, not a build that boots with dead credentials.
-              #
-              # Reads systemd.services on the EVALUATED config, not the built
-              # closure — attribute access is lazy, so this never forces
-              # system.build.toplevel. That distinction is the whole lesson in the
-              # deploy-schema comment above: deploy-schema looked cheap and instead
-              # compiled deploy-rs from source because a context-bearing string
-              # dragged the closure in. `hasSecrets` here is a plain Nix bool with
-              # no derivation attached, so the runCommand below builds nothing but
-              # itself either way.
-              runner-has-no-secrets =
-                let
-                  units = self.nixosConfigurations.runner-hetzner.config.systemd.services;
-                  hasSecrets = builtins.hasAttr "sops-install-secrets" units;
-                  script =
-                    if hasSecrets then
-                      ''
-                        echo "runner-hetzner grew a sops-install-secrets unit; this host holds no age key" >&2
-                        exit 1
-                      ''
-                    else
-                      "touch $out";
-                in
-                pkgs.runCommand "runner-has-no-secrets" { } script;
-
-              # The one-way rule, proven rather than asserted. See the header of
-              # tests/runner-firewall.nix — the property it protects is rule
-              # ORDER in two nftables chains, which review cannot see and which
-              # fails silently.
-              #
-              # HAND-RUN ONLY, NOT IN CI: `nix build
-              # .#checks.x86_64-linux.runner-firewall -L`, and it needs a host
-              # with /dev/kvm. It is not in the build step of
-              # .forgejo/workflows/ci.yml or .github/workflows/ci.yml — that
-              # runner is a shared-vCPU Hetzner box with no nested
-              # virtualisation, so a two-node NixOS VM test there falls back to
-              # qemu's TCG software emulation. Measured locally 2026-09-19:
-              # booting these same two nodes to multi-user (nothing else) took
-              # 20s under KVM and 1m40s under a forced-TCG run — 5x just to
-              # boot, before either behavioural subtest runs a single `nc`.
-              # That is not a per-push cost this repo's CI box should carry.
-              # `runner-firewall-ordering` below is the automated stand-in: it
-              # cannot prove the kernel enforces the order, only that the text
-              # is ordered correctly, which is why this check still exists for
-              # a human to run before trusting a change to firewall.nix.
-              runner-firewall = import ./tests/runner-firewall.nix {
-                inherit nixpkgs system;
-              };
-
-              # Does the nix-node job image actually carry a node? See the
-              # header of tests/ci-image.nix for why nothing cheaper than
-              # running the image answers that — the obvious static checks all
-              # pass vacuously on a broken image.
-              #
-              # HAND-RUN ONLY, NOT IN CI, and for the same reason as
-              # runner-firewall above: `nix build .#checks.x86_64-linux.ci-image
-              # -L` needs /dev/kvm, and this repo's CI box has no nested
-              # virtualisation. There is no static stand-in here because the
-              # one thing a static check could have caught — the label and the
-              # image reference disagreeing — is prevented structurally instead:
-              # modules/runner/identity.nix builds the label from
-              # config.runner.ciImageRef, so there is no second copy to drift.
-              ci-image = import ./tests/ci-image.nix {
-                inherit nixpkgs system;
-              };
-
-              # The Minecraft running-worlds cap and minecraft-scaler, booted
-              # against stand-in worlds. HAND-RUN ONLY, NOT IN CI, for the same
-              # /dev/kvm reason as the two above.
-              minecraft-cap = import ./tests/minecraft-cap.nix {
-                inherit nixpkgs system;
-              };
-
-              # The static, CI-run counterpart to runner-firewall above. It
-              # cannot prove the kernel enforces the one-way rule — only a
-              # booted VM sending real packets can, which is what
-              # runner-firewall is for — but it catches the exact regression
-              # that check exists for (the VPS rules sinking below a broad
-              # accept) by grepping the EVALUATED ruleset for line order, needs
-              # no KVM, and builds in seconds. Wired into
-              # .forgejo/workflows/ci.yml's build step, so a reordering is
-              # caught on every push rather than only when someone remembers
-              # to hand-run the VM test.
-              #
-              # `ruleset` is a plain Nix string built from config values
-              # (infra.publicIPv4, infra.cacheProxyPort, a literal /64) with no
-              # package or derivation spliced in — confirmed with
-              # `builtins.hasContext` returning false — so writing it out with
-              # writeText does not drag in a closure the way deploy.json did
-              # above; nothing here is realised beyond this tiny derivation and
-              # the coreutils/gnugrep already in the closure.
-              #
-              # Anchored on the named counters and the literal accept lines
-              # rather than on infra.publicIPv4's value, so the pattern does
-              # not have to track the real address and stays meaningful against
-              # the test override in tests/runner-firewall.nix too. Every
-              # pattern is required to match EXACTLY ONCE, not just "at
-              # least once" — a rule that was renamed or deleted exits 1
-              # rather than silently comparing nothing, which would otherwise
-              # make "the rules are missing" look identical to "the rules are
-              # correctly ordered".
-              #
-              # Exactly-once is load-bearing, not belt-and-braces: a fix-round
-              # review found `counter name vps_blocked_fwd` also matching
-              # `counter name vps_blocked_fwd6` (same for _out), so deleting
-              # the v4 forward drop rule outright left the pattern satisfied by
-              # its v6 sibling and this check went GREEN over a deleted rule —
-              # the exact vacuous-pass class this check exists to prevent,
-              # relocated from comments (round 1's false positive) to a
-              # same-prefix sibling rule. Fixed two ways: the four
-              # `counter name vps_*` patterns below are anchored with a
-              # trailing space so `vps_blocked_fwd ` cannot match
-              # `vps_blocked_fwd6` (no `6` variant exists for the two
-              # `_allowed_*` counters today, but nothing stops one being added
-              # later, so all four got the anchor rather than only the two
-              # currently ambiguous); and `line()` itself now rejects ANY
-              # pattern matching more than once, so a future ambiguity this
-              # review did not think of fails loudly instead of silently
-              # picking a line.
-              runner-firewall-ordering =
-                let
-                  ruleset = self.nixosConfigurations.runner-hetzner.config.networking.nftables.ruleset;
-                  rulesetFile = pkgs.writeText "runner-nftables-ruleset.nft" ruleset;
-                in
-                pkgs.runCommand "runner-firewall-ordering" { } ''
-                  set -euo pipefail
-
-                  # firewall.nix's ruleset string carries its own `#` nft
-                  # comments (e.g. "`iifname \"podman*\" accept`, for the same
-                  # first-match reason"), and one of them literally quotes a
-                  # pattern this check greps for — a real false-positive found
-                  # while writing this, not a hypothetical. Blank full-line
-                  # comments (keep the line so numbers still line up with the
-                  # original file) before searching, so a comment can never be
-                  # mistaken for the rule it is describing.
-                  clean=$(mktemp)
-                  sed -E 's/^([[:space:]]*)#.*/\1/' ${rulesetFile} > "$clean"
-
-                  # Prints the one matching line number. Fails loudly — never
-                  # silently — both when the pattern is absent (renamed or
-                  # deleted) and when it matches more than once: an ambiguous
-                  # pattern is exactly how a deleted vps_blocked_fwd rule once
-                  # passed this check by having vps_blocked_fwd6 answer for it,
-                  # so "matches something" is not enough, it must match
-                  # exactly the one line it is meant to identify.
-                  line() {
-                    local pattern=$1
-                    local matches count n
-                    matches=$(grep -nF -- "$pattern" "$clean") || true
-                    count=$(printf '%s\n' "$matches" | grep -c . || true)
-                    if [ "$count" -eq 0 ]; then
-                      echo "runner-firewall-ordering: pattern not found (renamed or deleted?): $pattern" >&2
-                      exit 1
-                    fi
-                    if [ "$count" -gt 1 ]; then
-                      echo "runner-firewall-ordering: pattern matched $count lines, expected exactly 1 (tighten it so it identifies one rule): $pattern" >&2
-                      echo "$matches" >&2
-                      exit 1
-                    fi
-                    n=$(printf '%s\n' "$matches" | cut -d: -f1)
-                    echo "$n"
-                  }
-
-                  # Trailing space on the four counter-name patterns: without
-                  # it, "vps_blocked_fwd" is a PREFIX of "vps_blocked_fwd6"
-                  # and grep -F matches it there too — see the comment above.
-                  allowed_out=$(line 'counter name vps_allowed_out ')
-                  blocked_out=$(line 'counter name vps_blocked_out ')
-                  podman_out=$(line 'oifname "podman*" accept')
-                  portlist_out=$(line 'tcp dport { 53, 80, 443 }')
-
-                  allowed_fwd=$(line 'counter name vps_allowed_fwd ')
-                  blocked_fwd=$(line 'counter name vps_blocked_fwd ')
-                  podman_fwd=$(line 'iifname "podman*" accept')
-
-                  fail=0
-                  above() {
-                    local vpsLine=$1 broadLine=$2 chain=$3 broadName=$4
-                    if [ "$vpsLine" -ge "$broadLine" ]; then
-                      echo "runner-firewall-ordering: $chain chain: line $vpsLine does not sit above line $broadLine ($broadName) — the VPS rule and $broadName are in the wrong order" >&2
-                      fail=1
-                    fi
-                  }
-
-                  above "$allowed_out" "$podman_out" output 'oifname "podman*" accept'
-                  above "$blocked_out" "$podman_out" output 'oifname "podman*" accept'
-                  above "$allowed_out" "$portlist_out" output 'the port allow-list'
-                  above "$blocked_out" "$portlist_out" output 'the port allow-list'
-                  above "$allowed_fwd" "$podman_fwd" forward 'iifname "podman*" accept'
-                  above "$blocked_fwd" "$podman_fwd" forward 'iifname "podman*" accept'
-
-                  [ "$fail" -eq 0 ] || exit 1
+            ${system} =
+              # mc<N>-pack: every hard dependency in that world's pack met on
+              # both sides. Sandboxed: the jars are the same pinned fetches the
+              # pack is built from.
+              nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-pack" v.check) mrpacks // {
+                # Same attribute name deployChecks used, so CI's
+                # `nix build .#checks.x86_64-linux.deploy-schema` is unchanged.
+                deploy-schema = pkgs.runCommand "deploy-schema" { } ''
+                  ${pkgs.check-jsonschema}/bin/check-jsonschema \
+                    --schemafile ${deploy-rs}/interface.json ${deployJson}
                   touch $out
                 '';
 
-              # The pages artifact is the ONE thing that crosses from the
-              # hostile runner into this host carrying content rather than an
-              # address, and modules/pages-pull.nix strips symlinks out of it
-              # before caddy is ever pointed at the tree. Without that strip,
-              # one `ln -s /etc/caddy/certs/key.pem x` in a published artifact
-              # serves the apex certificate's private key at
-              # https://pages.<domain>/<owner>/<repo>/x — caddy's file_server
-              # follows a symlink out of its root, and modules/acme.nix
-              # group-owns the certificate directory BY caddy on purpose.
-              #
-              # Two halves, and the second is why this is not just another
-              # grep-the-text check:
-              #
-              #   * ORDER — the strip has to sit after the unzip and before the
-              #     `cp -a` that copies the tree out of $tmp, or it runs on the
-              #     wrong side of the thing it protects. Same shape as
-              #     runner-firewall-ordering above, and the same reason: review
-              #     cannot see order, and getting it wrong fails silently with
-              #     every site still publishing correctly.
-              #
-              #   * BEHAVIOUR — the exact line is lifted out of the evaluated
-              #     unit and EVAL'd against a tree unpacked from a hostile zip
-              #     built right here. A retyped copy of the line would prove
-              #     nothing about the one that ships; this way, weakening
-              #     production's `find` (dropping `-type l`, say, or pointing it
-              #     at the wrong directory) fails here.
-              #
-              # `script` is a plain Nix string — it interpolates only `fqdn` and
-              # `pagesRoot`, both ordinary strings — so writing it out drags in
-              # no closure, per the deploy-schema lesson above.
-              # modules/mirror-sync.nix's one promise: upstream main and tags
-              # reach the mirror, and a REWRITTEN upstream main does not. The
-              # script is lifted from the evaluated unit and run against local
-              # repos standing in for GitHub and Forgejo, so loosening the
-              # production push (a `+` or `--force`) fails here.
-              mirror-sync-refuses-rewrites =
-                let
-                  script = self.nixosConfigurations.vps-hetzner.config.systemd.services.mirror-sync.script;
-                  scriptFile = pkgs.writeText "mirror-sync-script.sh" script;
-                in
-                pkgs.runCommand "mirror-sync-refuses-rewrites" { nativeBuildInputs = [ pkgs.git ]; } ''
-                  set -euo pipefail
-                  export HOME=$PWD GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
-                  git config --global init.defaultBranch main
-
-                  git init -q work && cd work
-                  git commit -q --allow-empty -m one && git tag v1
-                  git init -q --bare ../up/owner/app.git
-                  git push -q ../up/owner/app.git main --tags
-                  # The mirror already has upstream's first commit and a branch
-                  # of its own, like a Forgejo repo with `pages`.
-                  git init -q --bare ../dst/app.git
-                  git push -q ../dst/app.git main main:pages
-                  git commit -q --allow-empty -m two && git tag v2
-                  git push -q ../up/owner/app.git main --tags
-                  cd ..
-
-                  mkdir creds state && echo token > creds/token
-                  run() {
-                    MIRRORS=owner/app SRC_BASE=file://$PWD/up DST_BASE=file://$PWD/dst \
-                      CREDENTIALS_DIRECTORY=$PWD/creds STATE_DIRECTORY=$PWD/state \
-                      bash ${scriptFile}
-                  }
-
-                  run
-                  [ "$(git -C dst/app.git rev-parse main)" = "$(git -C up/owner/app.git rev-parse main)" ]
-                  git -C dst/app.git rev-parse -q --verify refs/tags/v2 >/dev/null
-                  [ "$(git -C dst/app.git log -1 --format=%s pages)" = one ]
-
-                  # Upstream throws its history away.
-                  before=$(git -C dst/app.git rev-parse main)
-                  cd work && git checkout -q --orphan wiped && git commit -q --allow-empty -m wiped
-                  git push -q -f ../up/owner/app.git wiped:main && cd ..
-                  if run; then
-                    echo "mirror-sync-refuses-rewrites: a rewritten upstream main was pushed" >&2
+                # The guard on the check above, and the reason it is not redundant:
+                # a validator that silently does nothing passes forever. If the
+                # schemafile path ever goes stale, or check-jsonschema changes how
+                # it takes arguments, `deploy-schema` keeps exiting 0 over a
+                # document it never read — and we would not find out until a broken
+                # deploy.json reached a real deploy.
+                #
+                # So: feed the SAME invocation a node with no `hostname`, which
+                # interface.json marks required, and fail if it is accepted.
+                deploy-schema-rejects-bad-input = pkgs.runCommand "deploy-schema-rejects-bad-input" { } ''
+                  if ${pkgs.check-jsonschema}/bin/check-jsonschema \
+                       --schemafile ${deploy-rs}/interface.json \
+                       ${
+                         pkgs.writeText "bad-deploy.json" (builtins.toJSON { nodes.vps.profiles.system.path = "/dev/null"; })
+                       } >/dev/null 2>&1
+                  then
+                    echo "schema validation accepted a node with no hostname" >&2
                     exit 1
                   fi
-                  [ "$(git -C dst/app.git rev-parse main)" = "$before" ]
                   touch $out
                 '';
 
-              pages-pull-strips-symlinks =
-                let
-                  script = self.nixosConfigurations.vps-hetzner.config.systemd.services.pages-pull.script;
-                  scriptFile = pkgs.writeText "pages-pull-script.sh" script;
-                in
-                pkgs.runCommand "pages-pull-strips-symlinks"
-                  {
-                    nativeBuildInputs = [
-                      pkgs.zip
-                      pkgs.unzip
-                    ];
-                  }
-                  ''
+                # Makes good on the mkRunner comment above ("Task: keep it absent.
+                # checks.runner-has-no-secrets asserts it"). The runner holds no age
+                # key, so a sops-install-secrets unit appearing on it is a build that
+                # must fail, not a build that boots with dead credentials.
+                #
+                # Reads systemd.services on the EVALUATED config, not the built
+                # closure — attribute access is lazy, so this never forces
+                # system.build.toplevel. That distinction is the whole lesson in the
+                # deploy-schema comment above: deploy-schema looked cheap and instead
+                # compiled deploy-rs from source because a context-bearing string
+                # dragged the closure in. `hasSecrets` here is a plain Nix bool with
+                # no derivation attached, so the runCommand below builds nothing but
+                # itself either way.
+                runner-has-no-secrets =
+                  let
+                    units = self.nixosConfigurations.runner-hetzner.config.systemd.services;
+                    hasSecrets = builtins.hasAttr "sops-install-secrets" units;
+                    script =
+                      if hasSecrets then
+                        ''
+                          echo "runner-hetzner grew a sops-install-secrets unit; this host holds no age key" >&2
+                          exit 1
+                        ''
+                      else
+                        "touch $out";
+                  in
+                  pkgs.runCommand "runner-has-no-secrets" { } script;
+
+                # The one-way rule, proven rather than asserted. See the header of
+                # tests/runner-firewall.nix — the property it protects is rule
+                # ORDER in two nftables chains, which review cannot see and which
+                # fails silently.
+                #
+                # HAND-RUN ONLY, NOT IN CI: `nix build
+                # .#checks.x86_64-linux.runner-firewall -L`, and it needs a host
+                # with /dev/kvm. It is not in the build step of
+                # .forgejo/workflows/ci.yml or .github/workflows/ci.yml — that
+                # runner is a shared-vCPU Hetzner box with no nested
+                # virtualisation, so a two-node NixOS VM test there falls back to
+                # qemu's TCG software emulation. Measured locally 2026-09-19:
+                # booting these same two nodes to multi-user (nothing else) took
+                # 20s under KVM and 1m40s under a forced-TCG run — 5x just to
+                # boot, before either behavioural subtest runs a single `nc`.
+                # That is not a per-push cost this repo's CI box should carry.
+                # `runner-firewall-ordering` below is the automated stand-in: it
+                # cannot prove the kernel enforces the order, only that the text
+                # is ordered correctly, which is why this check still exists for
+                # a human to run before trusting a change to firewall.nix.
+                runner-firewall = import ./tests/runner-firewall.nix {
+                  inherit nixpkgs system;
+                };
+
+                # Does the nix-node job image actually carry a node? See the
+                # header of tests/ci-image.nix for why nothing cheaper than
+                # running the image answers that — the obvious static checks all
+                # pass vacuously on a broken image.
+                #
+                # HAND-RUN ONLY, NOT IN CI, and for the same reason as
+                # runner-firewall above: `nix build .#checks.x86_64-linux.ci-image
+                # -L` needs /dev/kvm, and this repo's CI box has no nested
+                # virtualisation. There is no static stand-in here because the
+                # one thing a static check could have caught — the label and the
+                # image reference disagreeing — is prevented structurally instead:
+                # modules/runner/identity.nix builds the label from
+                # config.runner.ciImageRef, so there is no second copy to drift.
+                ci-image = import ./tests/ci-image.nix {
+                  inherit nixpkgs system;
+                };
+
+                # The Minecraft running-worlds cap and minecraft-scaler, booted
+                # against stand-in worlds. HAND-RUN ONLY, NOT IN CI, for the same
+                # /dev/kvm reason as the two above.
+                minecraft-cap = import ./tests/minecraft-cap.nix {
+                  inherit nixpkgs system;
+                };
+
+                # The static, CI-run counterpart to runner-firewall above. It
+                # cannot prove the kernel enforces the one-way rule — only a
+                # booted VM sending real packets can, which is what
+                # runner-firewall is for — but it catches the exact regression
+                # that check exists for (the VPS rules sinking below a broad
+                # accept) by grepping the EVALUATED ruleset for line order, needs
+                # no KVM, and builds in seconds. Wired into
+                # .forgejo/workflows/ci.yml's build step, so a reordering is
+                # caught on every push rather than only when someone remembers
+                # to hand-run the VM test.
+                #
+                # `ruleset` is a plain Nix string built from config values
+                # (infra.publicIPv4, infra.cacheProxyPort, a literal /64) with no
+                # package or derivation spliced in — confirmed with
+                # `builtins.hasContext` returning false — so writing it out with
+                # writeText does not drag in a closure the way deploy.json did
+                # above; nothing here is realised beyond this tiny derivation and
+                # the coreutils/gnugrep already in the closure.
+                #
+                # Anchored on the named counters and the literal accept lines
+                # rather than on infra.publicIPv4's value, so the pattern does
+                # not have to track the real address and stays meaningful against
+                # the test override in tests/runner-firewall.nix too. Every
+                # pattern is required to match EXACTLY ONCE, not just "at
+                # least once" — a rule that was renamed or deleted exits 1
+                # rather than silently comparing nothing, which would otherwise
+                # make "the rules are missing" look identical to "the rules are
+                # correctly ordered".
+                #
+                # Exactly-once is load-bearing, not belt-and-braces: a fix-round
+                # review found `counter name vps_blocked_fwd` also matching
+                # `counter name vps_blocked_fwd6` (same for _out), so deleting
+                # the v4 forward drop rule outright left the pattern satisfied by
+                # its v6 sibling and this check went GREEN over a deleted rule —
+                # the exact vacuous-pass class this check exists to prevent,
+                # relocated from comments (round 1's false positive) to a
+                # same-prefix sibling rule. Fixed two ways: the four
+                # `counter name vps_*` patterns below are anchored with a
+                # trailing space so `vps_blocked_fwd ` cannot match
+                # `vps_blocked_fwd6` (no `6` variant exists for the two
+                # `_allowed_*` counters today, but nothing stops one being added
+                # later, so all four got the anchor rather than only the two
+                # currently ambiguous); and `line()` itself now rejects ANY
+                # pattern matching more than once, so a future ambiguity this
+                # review did not think of fails loudly instead of silently
+                # picking a line.
+                runner-firewall-ordering =
+                  let
+                    ruleset = self.nixosConfigurations.runner-hetzner.config.networking.nftables.ruleset;
+                    rulesetFile = pkgs.writeText "runner-nftables-ruleset.nft" ruleset;
+                  in
+                  pkgs.runCommand "runner-firewall-ordering" { } ''
                     set -euo pipefail
 
-                    # Comments in that script quote the commands below, so blank
-                    # full-line comments before searching — the same
-                    # false-positive runner-firewall-ordering hit.
+                    # firewall.nix's ruleset string carries its own `#` nft
+                    # comments (e.g. "`iifname \"podman*\" accept`, for the same
+                    # first-match reason"), and one of them literally quotes a
+                    # pattern this check greps for — a real false-positive found
+                    # while writing this, not a hypothetical. Blank full-line
+                    # comments (keep the line so numbers still line up with the
+                    # original file) before searching, so a comment can never be
+                    # mistaken for the rule it is describing.
                     clean=$(mktemp)
-                    sed -E 's/^([[:space:]]*)#.*/\1/' ${scriptFile} > "$clean"
+                    sed -E 's/^([[:space:]]*)#.*/\1/' ${rulesetFile} > "$clean"
 
+                    # Prints the one matching line number. Fails loudly — never
+                    # silently — both when the pattern is absent (renamed or
+                    # deleted) and when it matches more than once: an ambiguous
+                    # pattern is exactly how a deleted vps_blocked_fwd rule once
+                    # passed this check by having vps_blocked_fwd6 answer for it,
+                    # so "matches something" is not enough, it must match
+                    # exactly the one line it is meant to identify.
                     line() {
-                      local pattern=$1 matches count
+                      local pattern=$1
+                      local matches count n
                       matches=$(grep -nF -- "$pattern" "$clean") || true
                       count=$(printf '%s\n' "$matches" | grep -c . || true)
-                      if [ "$count" -ne 1 ]; then
-                        echo "pages-pull-strips-symlinks: expected exactly 1 match for: $pattern (got $count)" >&2
+                      if [ "$count" -eq 0 ]; then
+                        echo "runner-firewall-ordering: pattern not found (renamed or deleted?): $pattern" >&2
                         exit 1
                       fi
-                      printf '%s\n' "$matches" | cut -d: -f1
+                      if [ "$count" -gt 1 ]; then
+                        echo "runner-firewall-ordering: pattern matched $count lines, expected exactly 1 (tighten it so it identifies one rule): $pattern" >&2
+                        echo "$matches" >&2
+                        exit 1
+                      fi
+                      n=$(printf '%s\n' "$matches" | cut -d: -f1)
+                      echo "$n"
                     }
 
-                    unzip_at=$(line 'unzip -q "$tmp/pages.zip" -d "$tmp/out"')
-                    strip_at=$(line 'find "$tmp/out" ! -type f ! -type d -delete')
-                    mode_at=$(line 'chmod -R a-s,go-w "$tmp/out"')
-                    copy_at=$(line 'cp -a "$tmp/out" "$staging"')
+                    # Trailing space on the four counter-name patterns: without
+                    # it, "vps_blocked_fwd" is a PREFIX of "vps_blocked_fwd6"
+                    # and grep -F matches it there too — see the comment above.
+                    allowed_out=$(line 'counter name vps_allowed_out ')
+                    blocked_out=$(line 'counter name vps_blocked_out ')
+                    podman_out=$(line 'oifname "podman*" accept')
+                    portlist_out=$(line 'tcp dport { 53, 80, 443 }')
 
-                    if [ "$strip_at" -le "$unzip_at" ] || [ "$strip_at" -ge "$copy_at" ]; then
-                      echo "pages-pull-strips-symlinks: the strip (line $strip_at) must sit between the unzip (line $unzip_at) and the cp (line $copy_at)" >&2
-                      exit 1
-                    fi
+                    allowed_fwd=$(line 'counter name vps_allowed_fwd ')
+                    blocked_fwd=$(line 'counter name vps_blocked_fwd ')
+                    podman_fwd=$(line 'iifname "podman*" accept')
 
-                    # The chmod must come AFTER the strip, or chmod -R walks a
-                    # tree that still contains symlinks and follows one out of
-                    # $tmp — which is the exact escape the strip exists to
-                    # close, reintroduced by the line meant to harden it.
-                    if [ "$mode_at" -le "$strip_at" ] || [ "$mode_at" -ge "$copy_at" ]; then
-                      echo "pages-pull-strips-symlinks: the chmod (line $mode_at) must sit between the strip (line $strip_at) and the cp (line $copy_at)" >&2
-                      exit 1
-                    fi
+                    fail=0
+                    above() {
+                      local vpsLine=$1 broadLine=$2 chain=$3 broadName=$4
+                      if [ "$vpsLine" -ge "$broadLine" ]; then
+                        echo "runner-firewall-ordering: $chain chain: line $vpsLine does not sit above line $broadLine ($broadName) — the VPS rule and $broadName are in the wrong order" >&2
+                        fail=1
+                      fi
+                    }
 
-                    # A hostile artifact, the shape a rooted runner would
-                    # upload: an absolute symlink at the top level, one nested a
-                    # directory down, and a real file that must SURVIVE — a
-                    # "strip" that emptied the tree would otherwise pass.
-                    mkdir -p src/nested
-                    echo '<h1>a real page</h1>' > src/index.html
-                    ln -s /etc/caddy/certs/key.pem src/leak
-                    ln -s / src/nested/slash
-                    ( cd src && zip -qry ../pages.zip . )
+                    above "$allowed_out" "$podman_out" output 'oifname "podman*" accept'
+                    above "$blocked_out" "$podman_out" output 'oifname "podman*" accept'
+                    above "$allowed_out" "$portlist_out" output 'the port allow-list'
+                    above "$blocked_out" "$portlist_out" output 'the port allow-list'
+                    above "$allowed_fwd" "$podman_fwd" forward 'iifname "podman*" accept'
+                    above "$blocked_fwd" "$podman_fwd" forward 'iifname "podman*" accept'
 
-                    tmp=$PWD/work
-                    mkdir -p "$tmp"
-                    unzip -q "$tmp/../pages.zip" -d "$tmp/out"
-
-                    # unzip restores symlinks; that is the whole premise.
-                    # Assert it here so this check cannot quietly become
-                    # vacuous if a future unzip stops doing it — at that point
-                    # the strip may be unnecessary, but that is a decision to
-                    # take deliberately, not to discover by a green check.
-                    test -L "$tmp/out/leak"
-                    test -L "$tmp/out/nested/slash"
-
-                    # The entry types a zip cannot carry but the extracted tree
-                    # can still acquire, planted directly because the point of
-                    # the broadened strip is that it does not enumerate them.
-                    # A fifo is the one that matters: cp -a preserves it and
-                    # caddy's file_server blocks forever on open(2).
-                    mkfifo "$tmp/out/pipe"
-                    # Mode bits DO survive a zip, so this is the realistic half:
-                    # a world-writable page that anyone on the host could rewrite
-                    # after publication, with caddy serving whatever it finds.
-                    #
-                    # NO setuid/setgid FIXTURE, deliberately. The nix build
-                    # sandbox mounts /build nosuid and the kernel refuses both
-                    # bits ("install: cannot change permissions"), so a fixture
-                    # here fails the check for a reason that has nothing to do
-                    # with the code under test. The /6000 assertion below is kept
-                    # anyway — it costs nothing and catches the day one appears.
-                    install -m 0666 /dev/null "$tmp/out/worldwritable"
-
-                    # PRODUCTION'S OWN LINES, not copies of them.
-                    eval "$(sed -n "''${strip_at}p" "$clean")"
-                    eval "$(sed -n "''${mode_at}p" "$clean")"
-
-                    if find "$tmp/out" -type l | grep -q .; then
-                      echo "pages-pull-strips-symlinks: a symlink survived the strip:" >&2
-                      find "$tmp/out" -type l >&2
-                      exit 1
-                    fi
-                    if find "$tmp/out" ! -type f ! -type d | grep -q .; then
-                      echo "pages-pull-strips-symlinks: a non-file non-directory entry survived the strip:" >&2
-                      find "$tmp/out" ! -type f ! -type d >&2
-                      exit 1
-                    fi
-                    if find "$tmp/out" -perm /6000 | grep -q .; then
-                      echo "pages-pull-strips-symlinks: a setuid/setgid bit survived the chmod:" >&2
-                      find "$tmp/out" -perm /6000 >&2
-                      exit 1
-                    fi
-                    if find "$tmp/out" -perm /022 | grep -q .; then
-                      echo "pages-pull-strips-symlinks: a group/other-writable entry survived the chmod:" >&2
-                      find "$tmp/out" -perm /022 >&2
-                      exit 1
-                    fi
-                    if [ ! -f "$tmp/out/index.html" ]; then
-                      echo "pages-pull-strips-symlinks: the strip removed real content, not just symlinks" >&2
-                      exit 1
-                    fi
-
+                    [ "$fail" -eq 0 ] || exit 1
                     touch $out
                   '';
-            };
+
+                # The pages artifact is the ONE thing that crosses from the
+                # hostile runner into this host carrying content rather than an
+                # address, and modules/pages-pull.nix strips symlinks out of it
+                # before caddy is ever pointed at the tree. Without that strip,
+                # one `ln -s /etc/caddy/certs/key.pem x` in a published artifact
+                # serves the apex certificate's private key at
+                # https://pages.<domain>/<owner>/<repo>/x — caddy's file_server
+                # follows a symlink out of its root, and modules/acme.nix
+                # group-owns the certificate directory BY caddy on purpose.
+                #
+                # Two halves, and the second is why this is not just another
+                # grep-the-text check:
+                #
+                #   * ORDER — the strip has to sit after the unzip and before the
+                #     `cp -a` that copies the tree out of $tmp, or it runs on the
+                #     wrong side of the thing it protects. Same shape as
+                #     runner-firewall-ordering above, and the same reason: review
+                #     cannot see order, and getting it wrong fails silently with
+                #     every site still publishing correctly.
+                #
+                #   * BEHAVIOUR — the exact line is lifted out of the evaluated
+                #     unit and EVAL'd against a tree unpacked from a hostile zip
+                #     built right here. A retyped copy of the line would prove
+                #     nothing about the one that ships; this way, weakening
+                #     production's `find` (dropping `-type l`, say, or pointing it
+                #     at the wrong directory) fails here.
+                #
+                # `script` is a plain Nix string — it interpolates only `fqdn` and
+                # `pagesRoot`, both ordinary strings — so writing it out drags in
+                # no closure, per the deploy-schema lesson above.
+                # modules/mirror-sync.nix's one promise: upstream main and tags
+                # reach the mirror, and a REWRITTEN upstream main does not. The
+                # script is lifted from the evaluated unit and run against local
+                # repos standing in for GitHub and Forgejo, so loosening the
+                # production push (a `+` or `--force`) fails here.
+                mirror-sync-refuses-rewrites =
+                  let
+                    script = self.nixosConfigurations.vps-hetzner.config.systemd.services.mirror-sync.script;
+                    scriptFile = pkgs.writeText "mirror-sync-script.sh" script;
+                  in
+                  pkgs.runCommand "mirror-sync-refuses-rewrites" { nativeBuildInputs = [ pkgs.git ]; } ''
+                    set -euo pipefail
+                    export HOME=$PWD GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+                    git config --global init.defaultBranch main
+
+                    git init -q work && cd work
+                    git commit -q --allow-empty -m one && git tag v1
+                    git init -q --bare ../up/owner/app.git
+                    git push -q ../up/owner/app.git main --tags
+                    # The mirror already has upstream's first commit and a branch
+                    # of its own, like a Forgejo repo with `pages`.
+                    git init -q --bare ../dst/app.git
+                    git push -q ../dst/app.git main main:pages
+                    git commit -q --allow-empty -m two && git tag v2
+                    git push -q ../up/owner/app.git main --tags
+                    cd ..
+
+                    mkdir creds state && echo token > creds/token
+                    run() {
+                      MIRRORS=owner/app SRC_BASE=file://$PWD/up DST_BASE=file://$PWD/dst \
+                        CREDENTIALS_DIRECTORY=$PWD/creds STATE_DIRECTORY=$PWD/state \
+                        bash ${scriptFile}
+                    }
+
+                    run
+                    [ "$(git -C dst/app.git rev-parse main)" = "$(git -C up/owner/app.git rev-parse main)" ]
+                    git -C dst/app.git rev-parse -q --verify refs/tags/v2 >/dev/null
+                    [ "$(git -C dst/app.git log -1 --format=%s pages)" = one ]
+
+                    # Upstream throws its history away.
+                    before=$(git -C dst/app.git rev-parse main)
+                    cd work && git checkout -q --orphan wiped && git commit -q --allow-empty -m wiped
+                    git push -q -f ../up/owner/app.git wiped:main && cd ..
+                    if run; then
+                      echo "mirror-sync-refuses-rewrites: a rewritten upstream main was pushed" >&2
+                      exit 1
+                    fi
+                    [ "$(git -C dst/app.git rev-parse main)" = "$before" ]
+                    touch $out
+                  '';
+
+                pages-pull-strips-symlinks =
+                  let
+                    script = self.nixosConfigurations.vps-hetzner.config.systemd.services.pages-pull.script;
+                    scriptFile = pkgs.writeText "pages-pull-script.sh" script;
+                  in
+                  pkgs.runCommand "pages-pull-strips-symlinks"
+                    {
+                      nativeBuildInputs = [
+                        pkgs.zip
+                        pkgs.unzip
+                      ];
+                    }
+                    ''
+                      set -euo pipefail
+
+                      # Comments in that script quote the commands below, so blank
+                      # full-line comments before searching — the same
+                      # false-positive runner-firewall-ordering hit.
+                      clean=$(mktemp)
+                      sed -E 's/^([[:space:]]*)#.*/\1/' ${scriptFile} > "$clean"
+
+                      line() {
+                        local pattern=$1 matches count
+                        matches=$(grep -nF -- "$pattern" "$clean") || true
+                        count=$(printf '%s\n' "$matches" | grep -c . || true)
+                        if [ "$count" -ne 1 ]; then
+                          echo "pages-pull-strips-symlinks: expected exactly 1 match for: $pattern (got $count)" >&2
+                          exit 1
+                        fi
+                        printf '%s\n' "$matches" | cut -d: -f1
+                      }
+
+                      unzip_at=$(line 'unzip -q "$tmp/pages.zip" -d "$tmp/out"')
+                      strip_at=$(line 'find "$tmp/out" ! -type f ! -type d -delete')
+                      mode_at=$(line 'chmod -R a-s,go-w "$tmp/out"')
+                      copy_at=$(line 'cp -a "$tmp/out" "$staging"')
+
+                      if [ "$strip_at" -le "$unzip_at" ] || [ "$strip_at" -ge "$copy_at" ]; then
+                        echo "pages-pull-strips-symlinks: the strip (line $strip_at) must sit between the unzip (line $unzip_at) and the cp (line $copy_at)" >&2
+                        exit 1
+                      fi
+
+                      # The chmod must come AFTER the strip, or chmod -R walks a
+                      # tree that still contains symlinks and follows one out of
+                      # $tmp — which is the exact escape the strip exists to
+                      # close, reintroduced by the line meant to harden it.
+                      if [ "$mode_at" -le "$strip_at" ] || [ "$mode_at" -ge "$copy_at" ]; then
+                        echo "pages-pull-strips-symlinks: the chmod (line $mode_at) must sit between the strip (line $strip_at) and the cp (line $copy_at)" >&2
+                        exit 1
+                      fi
+
+                      # A hostile artifact, the shape a rooted runner would
+                      # upload: an absolute symlink at the top level, one nested a
+                      # directory down, and a real file that must SURVIVE — a
+                      # "strip" that emptied the tree would otherwise pass.
+                      mkdir -p src/nested
+                      echo '<h1>a real page</h1>' > src/index.html
+                      ln -s /etc/caddy/certs/key.pem src/leak
+                      ln -s / src/nested/slash
+                      ( cd src && zip -qry ../pages.zip . )
+
+                      tmp=$PWD/work
+                      mkdir -p "$tmp"
+                      unzip -q "$tmp/../pages.zip" -d "$tmp/out"
+
+                      # unzip restores symlinks; that is the whole premise.
+                      # Assert it here so this check cannot quietly become
+                      # vacuous if a future unzip stops doing it — at that point
+                      # the strip may be unnecessary, but that is a decision to
+                      # take deliberately, not to discover by a green check.
+                      test -L "$tmp/out/leak"
+                      test -L "$tmp/out/nested/slash"
+
+                      # The entry types a zip cannot carry but the extracted tree
+                      # can still acquire, planted directly because the point of
+                      # the broadened strip is that it does not enumerate them.
+                      # A fifo is the one that matters: cp -a preserves it and
+                      # caddy's file_server blocks forever on open(2).
+                      mkfifo "$tmp/out/pipe"
+                      # Mode bits DO survive a zip, so this is the realistic half:
+                      # a world-writable page that anyone on the host could rewrite
+                      # after publication, with caddy serving whatever it finds.
+                      #
+                      # NO setuid/setgid FIXTURE, deliberately. The nix build
+                      # sandbox mounts /build nosuid and the kernel refuses both
+                      # bits ("install: cannot change permissions"), so a fixture
+                      # here fails the check for a reason that has nothing to do
+                      # with the code under test. The /6000 assertion below is kept
+                      # anyway — it costs nothing and catches the day one appears.
+                      install -m 0666 /dev/null "$tmp/out/worldwritable"
+
+                      # PRODUCTION'S OWN LINES, not copies of them.
+                      eval "$(sed -n "''${strip_at}p" "$clean")"
+                      eval "$(sed -n "''${mode_at}p" "$clean")"
+
+                      if find "$tmp/out" -type l | grep -q .; then
+                        echo "pages-pull-strips-symlinks: a symlink survived the strip:" >&2
+                        find "$tmp/out" -type l >&2
+                        exit 1
+                      fi
+                      if find "$tmp/out" ! -type f ! -type d | grep -q .; then
+                        echo "pages-pull-strips-symlinks: a non-file non-directory entry survived the strip:" >&2
+                        find "$tmp/out" ! -type f ! -type d >&2
+                        exit 1
+                      fi
+                      if find "$tmp/out" -perm /6000 | grep -q .; then
+                        echo "pages-pull-strips-symlinks: a setuid/setgid bit survived the chmod:" >&2
+                        find "$tmp/out" -perm /6000 >&2
+                        exit 1
+                      fi
+                      if find "$tmp/out" -perm /022 | grep -q .; then
+                        echo "pages-pull-strips-symlinks: a group/other-writable entry survived the chmod:" >&2
+                        find "$tmp/out" -perm /022 >&2
+                        exit 1
+                      fi
+                      if [ ! -f "$tmp/out/index.html" ]; then
+                        echo "pages-pull-strips-symlinks: the strip removed real content, not just symlinks" >&2
+                        exit 1
+                      fi
+
+                      touch $out
+                    '';
+              };
           };
 
       devShells = nixpkgs.lib.genAttrs devSystems (
@@ -762,7 +751,7 @@
               nixos-rebuild
               opentofu
               deploy-rs.packages.${devSystem}.default
-              # mc3's modpack is a packwiz pack; see packs/mc3.nix.
+              # The worlds' modpacks are packwiz packs; see packs/mrpack.nix.
               packwiz
               # The hook runner. `pre-commit install` once per clone, after which
               # .pre-commit-config.yaml is enforced on every commit; the same file
@@ -844,30 +833,13 @@
       packages.${system} = {
         default = vps.config.system.build.toplevel;
 
-        # ── The Minecraft mod compatibility check ──────────────────────────────
-        #   nix build .#minecraft-mods --option sandbox false
-        #   nix run .#minecraft-mod-check   (no sandbox trick needed)
-        #
-        # Every Modrinth slug the Minecraft containers declare, checked against
-        # api.modrinth.com for the exact MC version + loader each container runs.
-        # The lists come from the evaluated config (see minecraftMods above), so a
-        # world that adds or drops a slug is covered without this file changing.
-        #
-        # A PACKAGE AND NOT A `checks` ENTRY, deliberately: it needs the network,
-        # so it is __noChroot, and Nix refuses to build a __noChroot derivation
-        # while `sandbox = true`. In `checks` that would not fail this output
-        # alone — it fails a plain `nix flake check` and takes every other check
-        # with it on any machine with a normal sandbox. Both CI files build it by
-        # name instead. See the header of tests/minecraft-mods.nix.
-        minecraft-mods = minecraftMods.check;
-
-        # ── mc3's modpack ──────────────────────────────────────────────────────
-        #   nix build .#mc3-mrpack
-        #
-        # The .mrpack mc3's container installs and pages.yml publishes for the
-        # players: one build, both consumers. See packs/mc3.nix.
-        mc3-mrpack = pkgs.callPackage ./packs/mc3.nix { };
-      };
+      }
+      # ── The worlds' modpacks ─────────────────────────────────────────────────
+      #   nix build .#mc1-mrpack   (mc2-mrpack, mc3-mrpack)
+      #
+      # The .mrpack each world's container installs and pages.yml publishes for
+      # the players: one build, both consumers. See packs/mrpack.nix.
+      // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-mrpack" v) mrpacks;
 
       apps.${system} = {
         # ── The handbook, served locally ───────────────────────────────────────
@@ -962,19 +934,6 @@
               '';
             }
           );
-        };
-
-        # ── Minecraft mod compatibility, locally ───────────────────────────────
-        #   nix run .#minecraft-mod-check
-        #
-        # The same script the `minecraft-mods` package runs, but as an ordinary
-        # process rather than a sandboxed build — which is the whole point: it
-        # queries api.modrinth.com, and a workstation's Nix builds in a sandbox
-        # with no network. This builds offline and runs with your shell's
-        # network, so no `--option sandbox false` is needed.
-        minecraft-mod-check = {
-          type = "app";
-          program = nixpkgs.lib.getExe minecraftMods.modCheck;
         };
 
         default = {

@@ -1,0 +1,13 @@
+name = "Tiny Config Manager Lib"
+filename = "config-manager-fabric-6.0.1-beta+mc26.1.2.jar"
+side = "server"
+
+[download]
+url = "https://cdn.modrinth.com/data/wp5JcWwZ/versions/Lgl6UGwE/config-manager-fabric-6.0.1-beta%2Bmc26.1.2.jar"
+hash-format = "sha512"
+hash = "46cb1c1846ee29f3c35d748d905d3dc10636fc87d4fc51d81f6d2cff084d5483dffdb04fc379f0b3b2cb5eb9717b8aece74e1c01e6fefb2c4ffbda65af780e21"
+
+[update]
+[update.modrinth]
+mod-id = "wp5JcWwZ"
+version = "Lgl6UGwE"

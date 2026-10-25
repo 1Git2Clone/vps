@@ -1,0 +1,13 @@
+name = "Gemstones World 2 (mc2)"
+author = "hutao"
+version = "1.0.0"
+pack-format = "packwiz:1.1.0"
+
+[index]
+file = "index.toml"
+hash-format = "sha256"
+hash = "6e762a51d90158f79eaa5e7a4515f9ccead897e52c16c42243e5ba7271546869"
+
+[versions]
+fabric = "0.19.5"
+minecraft = "1.21.1"

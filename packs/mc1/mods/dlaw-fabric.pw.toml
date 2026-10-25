@@ -1,0 +1,13 @@
+name = "Fabric Discord Integration"
+filename = "dlaw-fabric-3.0.1-all.jar"
+side = "server"
+
+[download]
+url = "https://cdn.modrinth.com/data/kOjo0qne/versions/fpaDbnq3/dlaw-fabric-3.0.1-all.jar"
+hash-format = "sha512"
+hash = "4189a8c223f4b79cad4fa498d038eb82db950a06384819c346663a1d46f3b17a2a3f0965e3d4e7a1ecd999c9a7bba4281f989c58f3ef3801f4caa5b48a50bf51"
+
+[update]
+[update.modrinth]
+mod-id = "kOjo0qne"
+version = "fpaDbnq3"
