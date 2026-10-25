@@ -53,6 +53,28 @@ version = "HUacBshD"          # the exact version pinned
 version. Pinning a particular version is the version-page URL,
 `https://modrinth.com/mod/<project>/version/<version id>`.
 
+## Staying current
+
+Renovate cannot see Modrinth, so `.forgejo/workflows/mods.yml` runs
+`packs/outdated.sh` every day at 06:00 UTC. It runs `packwiz update --all` on a
+copy of each pack and fails if any mod has a newer build for that pack's
+Minecraft version, listing each one with its side:
+
+```text
+mc3  both    "FarmersDelight-26.2-3.6.28+refabricated.jar" -> "FarmersDelight-26.2-3.6.30+refabricated.jar"
+```
+
+A red run is answered one of two ways, in a commit:
+
+- **take it:** `packwiz update <name>` (or `--all`), then the usual checks. A
+  `both` or `server` line changes the server, so ship it like any mod change.
+- **hold it back:** `packwiz pin <name>` writes `pin = true` into that mod's
+  `.pw.toml`, and update skips it from then on. `packwiz unpin <name>` lets it
+  move again. Say why in the commit, since the pin itself cannot.
+
+Run it by hand with `nix develop .#ci -c packs/outdated.sh`; it never touches
+the tree.
+
 ## Before committing
 
 The pre-commit hooks do both checks; to run them by hand:

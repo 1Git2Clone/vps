@@ -1,0 +1,38 @@
+# ==============================================================================
+# Mods — fail when a pack's mods have newer builds
+# ==============================================================================
+# Renovate has no Modrinth datasource, so nothing else notices a mod update.
+# packs/outdated.sh runs `packwiz update --all` on a copy of each pack and
+# exits 1 if any mod has a newer build for the pack's own Minecraft version. A
+# red run here is the inbox: update the mod, or `packwiz pin` it to hold it
+# back. The pin lives in the mod's .pw.toml, so the exception is reviewed in
+# git like any other change. See docs/src/minecraft/packs.md.
+#
+# Not on push or pull_request: the answer depends on Modrinth, not on the
+# commit, so a PR would go red for mods it never touched. Forgejo-only, for
+# the same reason the mirror runs no pages job: one red run is enough.
+name: Mods
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  outdated:
+    name: Check for mod updates
+    # The same image and NIX_CONFIG as ci.yml; see the notes there.
+    runs-on: nix
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
+    steps:
+      # ci.yml's checkout, minus the full fetch: nothing here reads history.
+      - name: Checkout
+        run: |
+          git init -q -b main .
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+
+      - name: packwiz update, dry run
+        run: nix develop .#ci -c packs/outdated.sh

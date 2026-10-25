@@ -7,11 +7,14 @@ Forgejo off the GitHub file. Delete it and Forgejo silently starts running a
 workflow written for GitHub, which is how this repo once ended up with a red
 run on git.hu-tao.dev.
 
-| File                           | Runs on                  | Jobs                                         |
-| ------------------------------ | ------------------------ | -------------------------------------------- |
-| `.forgejo/workflows/ci.yml`    | the dedicated runner box | one: `check`                                 |
-| `.forgejo/workflows/pages.yml` | the dedicated runner box | one: `pages` — builds this book, `main` only |
-| `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                   |
+| File                           | Runs on                  | Jobs                                                           |
+| ------------------------------ | ------------------------ | -------------------------------------------------------------- |
+| `.forgejo/workflows/ci.yml`    | the dedicated runner box | one: `check`                                                   |
+| `.forgejo/workflows/pages.yml` | the dedicated runner box | one: `pages` — builds this book, `main` only                   |
+| `.forgejo/workflows/mods.yml`  | the dedicated runner box | one: `outdated` — daily, red when a mod has a newer build [^m] |
+| `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                                     |
+
+[^m]: See [Staying current](../minecraft/packs.md#staying-current).
 
 | Check    | What                                                                                                                                                                                                                                         |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
