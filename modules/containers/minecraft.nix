@@ -58,7 +58,18 @@ let
   # worlds get corrupted. The server saves and exits well inside this.
   stopOptions = [
     "--security-opt=no-new-privileges:true"
-    "--tmpfs=/tmp"
+    # exec: mods unpack their native libraries into /tmp and load them from
+    # there (netty's epoll and tcnative, krypton's compression, voxy's zstd).
+    # Docker's tmpfs default is noexec, and with it every one of those fell
+    # back to slower Java, which the start log says outright ("check volume
+    # for noexec flag"). noexec was no boundary anyway: /data is an ordinary
+    # exec mount, and mod code can write and load a library there just the
+    # same. nosuid and nodev are what matter for escalation, and stay.
+    #
+    # size: the default is half the host's RAM, and a tmpfs's pages are RAM.
+    # A mod filling /tmp could take ~7.6G on a box with no swap that also
+    # runs mail. The natives are a few MB each.
+    "--tmpfs=/tmp:rw,exec,nosuid,nodev,size=512m"
     "--stop-timeout=300"
   ];
 
