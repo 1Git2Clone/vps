@@ -12,7 +12,7 @@
   '';
 
   virtualisation.oci-containers.containers.cloudflared = {
-    image = "cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c";
+    image = "cloudflare/cloudflared:2026.10.4@sha256:c6c7ae1d5dfdcb094ad344ed68ccffc26635c9c6be80965664c33baf064b0515";
 
     # The token is passed by environment rather than on the command line: an
     # argv is readable by every process on the host, an env file is not.
