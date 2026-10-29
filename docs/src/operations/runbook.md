@@ -4,6 +4,25 @@ Commands, in the order you are likely to want them. Everything here runs on the
 VPS over ssh on port 2222 (`ssh -p 2222 hutao@vps`); the runner's equivalents
 are at the bottom, and they are reached differently.
 
+Port 22 is Forgejo's git ssh, with its own host key. A plain `ssh vps` lands
+there and warns that the host identification has changed: that is the missing
+`-p 2222`, not an attack. deploy-rs passes `-p 2222` itself.
+
+## Did the deploy ship
+
+deploy-rs's "Deployment confirmed" means the box came back, not that a
+container picked the change up. Ask the container:
+
+```sh
+sudo docker inspect mc-router --format '{{.Config.Image}} {{.State.StartedAt}}'
+sudo docker inspect mc-router --format '{{range .Config.Env}}{{println .}}{{end}}'
+journalctl -u docker-mc-router --since '10 min ago'
+```
+
+The image tag and the start time should be the new ones, and an `environment`
+change shows in the env list. `hutao` is not in the docker group, so it is
+`sudo docker`.
+
 ## Is anything broken
 
 ```sh
