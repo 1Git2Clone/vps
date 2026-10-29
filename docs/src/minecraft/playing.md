@@ -38,10 +38,10 @@ the table as a server and join.
 
 **Worlds sleep when nobody is on**, to save the server's memory. If the server
 list says _Asleep. Join to wake it up_, join anyway: that wakes it. The first
-attempt is turned away with _Waking up, join again in a minute_; a minute or two
-later, join again. A world goes back to sleep ten minutes after the last player
-leaves. At most two worlds are awake at once, so if two others are busy, the
-third waits its turn.
+attempt is turned away with _This world is waking up, not a problem with your
+connection_; a minute or two later, join again. A world goes back to sleep ten
+minutes after the last player leaves. At most two worlds are awake at once, so
+if two others are busy, the third waits its turn.
 
 ## Something is wrong
 

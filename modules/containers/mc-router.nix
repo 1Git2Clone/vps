@@ -69,7 +69,7 @@ let
 in
 {
   virtualisation.oci-containers.containers.mc-router = {
-    image = "itzg/mc-router:1.48.0@sha256:3a9ece070b97c8c55666810fc81cb209e1dd775fce792187e296626b786859cc";
+    image = "itzg/mc-router:1.50.1@sha256:bef025ca5123871598761a678701f706fcef3b7ee6721fc5e308a23f3b832d19";
 
     environment = {
       MAPPING = lib.concatStringsSep "," [
@@ -88,6 +88,9 @@ in
       AUTO_SCALE_WEBHOOK_WAKE_TIMEOUT = "3m";
       AUTO_SCALE_ASLEEP_MOTD = "Asleep. Join to wake it up";
       AUTO_SCALE_LOADING_MOTD = "Waking up, join again in a minute";
+      # Without it the login is held until the world is up, and the client gives
+      # up after ~30s with a bare "Disconnected" that reads like a network fault.
+      AUTO_SCALE_WAKE_KICK_MESSAGE = "This world is waking up, not a problem with your connection. Join again in a minute!";
       AUTO_SCALE_ALLOW_DENY = "/config/allow-deny.json";
     };
 
