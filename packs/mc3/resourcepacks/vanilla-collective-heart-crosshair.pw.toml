@@ -1,0 +1,13 @@
+name = "Crosshair (Heart)"
+filename = "crosshair_heart-1.0.1-mc26.2.zip"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/35jpoK6b/versions/tp6Voxif/crosshair_heart-1.0.1-mc26.2.zip"
+hash-format = "sha512"
+hash = "d26615fd2e4f18c4013e1be5a51179d49ad7dd3e56fee3e77d94e0e0d8c5429254faa604e3c6d21ac75051835541830967ae47dfac5d5c37fad94bb049dae5b0"
+
+[update]
+[update.modrinth]
+mod-id = "35jpoK6b"
+version = "tp6Voxif"

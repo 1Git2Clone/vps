@@ -568,7 +568,7 @@ metafile = true
 
 [[files]]
 file = "options.txt"
-hash = "52c3b3fabb8fe597326b7db211c09f54483ce415dc5ebbcb47e3df67d52d944c"
+hash = "5306bb6640bfa8bb40a88651d7ef106cea917c84843764874f643ec992ab9e76"
 
 [[files]]
 file = "resourcepacks/3d-ladders.pw.toml"
@@ -668,6 +668,11 @@ metafile = true
 [[files]]
 file = "resourcepacks/simple-grass-flowers.pw.toml"
 hash = "6576e0f2a199e626872973b61fa925d6055c90442901e88e705815d1ef48888d"
+metafile = true
+
+[[files]]
+file = "resourcepacks/vanilla-collective-heart-crosshair.pw.toml"
+hash = "9ec84613e8ec9671c3b5563cef0109245974b454e1d2bf83ee72e5d4187e2eff"
 metafile = true
 
 [[files]]
