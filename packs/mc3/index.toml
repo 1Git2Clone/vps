@@ -307,11 +307,6 @@ hash = "d4148f0bde3f2fde4c254d34223531aa2253c5c89174df92b1ed83b2f138b7d7"
 metafile = true
 
 [[files]]
-file = "mods/friends-and-foes.pw.toml"
-hash = "5eed1129ddef553c4be65750cba7f5d88c03940350f1c25443652627397deb5c"
-metafile = true
-
-[[files]]
 file = "mods/immediatelyfast.pw.toml"
 hash = "fcd0dedf8a47b5e5e298cb9e26fe8f9bb3be8ac892e7ad238f8f781c0faaf2bd"
 metafile = true
@@ -548,12 +543,20 @@ metafile = true
 
 [[files]]
 file = "options.txt"
-hash = "abf75efa1c4ed1282376d3c30152e46c5aa48910d2645dfa0c62845e2bf1db39"
+hash = "e9e92b529d355e6091e45b319ba2abf855b2a369a841c9894c7f6af4db4dd683"
 
 [[files]]
 file = "resourcepacks/3d-ladders.pw.toml"
 hash = "474fdbbee2f98c0272715a197e39537110f83d04060d462c8b28799e37a5c1ba"
 metafile = true
+
+[[files]]
+file = "resourcepacks/appleskin-saturation/assets/appleskin/textures/icons.png"
+hash = "6301a0b572f0e4bf84b5ac82ee83352e2e6f953397f8ab487c6a5268fac9bd3d"
+
+[[files]]
+file = "resourcepacks/appleskin-saturation/pack.mcmeta"
+hash = "8a977be60af3b445466f03895d54d1e2e917176be22c2c886c33af8655d2173c"
 
 [[files]]
 file = "resourcepacks/better-lanterns.pw.toml"

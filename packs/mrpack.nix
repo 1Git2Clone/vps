@@ -202,7 +202,9 @@ let
         # options.txt turns resource packs on by file name, and Minecraft
         # silently drops a name it cannot find. See tests/mrpack-options.py.
         + lib.optionalString (builtins.pathExists (dir + "/options.txt")) ''
-          python3 -I ${../tests/mrpack-options.py} "$filesPath" ${dir + "/options.txt"}
+          python3 -I ${../tests/mrpack-options.py} "$filesPath" ${dir + "/options.txt"} ${
+            lib.optionalString (builtins.pathExists (dir + "/resourcepacks")) "${dir + "/resourcepacks"}"
+          }
         ''
         + "touch $out"
       );

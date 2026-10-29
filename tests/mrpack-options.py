@@ -1,20 +1,22 @@
 """Check that options.txt only enables resource packs the pack really ships.
 
-usage: mrpack-options.py <entries.json> <options.txt>
+usage: mrpack-options.py <entries.json> <options.txt> [<resourcepacks dir>]
 
 entries.json is [{path, src}] for every file in the pack. Minecraft drops an
 entry it cannot find without a word, so a mod update that renames a zip (as
 Fresh Animations 1.10.5 -> 1.11.1 did) silently turns that pack off for every
 player. A pack made for another version is dropped too unless it is also in
-incompatibleResourcePacks.
+incompatibleResourcePacks. A folder pack in the pack's own resourcepacks/
+ships as a client override, so it counts too.
 """
 import io
 import json
+import os
 import re
 import sys
 import zipfile
 
-entries_file, options_file = sys.argv[1:3]
+entries_file, options_file, *packs_dir = sys.argv[1:]
 entries = json.load(open(entries_file))
 options = open(options_file, encoding="utf-8").read()
 
@@ -25,6 +27,8 @@ def option(key):
 
 
 files = {e["path"].removeprefix("resourcepacks/") for e in entries if e["path"].startswith("resourcepacks/")}
+for d in packs_dir:
+    files.update(n for n in os.listdir(d) if os.path.isdir(os.path.join(d, n)))
 
 
 def builtin_packs(data):

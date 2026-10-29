@@ -31,8 +31,6 @@ kept on the server, not deleted.
   Repurposed Structures add villages, ships, dungeons, taverns and variants of
   vanilla structures; Sparse Structures spreads them out so they stay special.
   Explorer's Compass and Nature's Compass point you at structures and biomes.
-- **More life**: [Friends&Foes](https://modrinth.com/mod/friends-and-foes)
-  brings in the mob-vote losers.
 - **Things to do**:
   - [Farmer's Delight](https://modrinth.com/mod/farmers-delight-refabricated):
     cooking and farming.
@@ -45,7 +43,8 @@ kept on the server, not deleted.
   - [Comforts](https://modrinth.com/mod/comforts): sleeping bags and hammocks.
 - **Conveniences**:
   - FallingTree fells whole trees.
-  - Ore Vein Miner mines a connected vein at once.
+  - Ore Vein Miner mines a connected vein of ore at once: sneak while you
+    break one with a pickaxe.
   - Dynamic Lights makes held torches light the area.
   - Clumps merges XP orbs.
   - Half the players can skip the night.
@@ -60,7 +59,9 @@ kept on the server, not deleted.
 - **Interface**:
   - Xaero's Minimap and World Map.
   - Jade (what you are looking at), AppleSkin, Shulker Box Tooltip, Mouse
-    Tweaks.
+    Tweaks. AppleSkin's saturation outline is gold: Overgrown Flowery GUI
+    turns it the same blue as its hunger droplets, so the pack's own
+    `appleskin-saturation` resource pack puts the gold back over it.
   - Ok Zoomer, Freecam, Chat Heads, Mod Menu.
 - **Visuals and sound**:
   - Two shader packs: MiniatureXL, which is **on by default**, and
