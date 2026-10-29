@@ -552,11 +552,11 @@ metafile = true
 
 [[files]]
 file = "resourcepacks/appleskin-saturation/assets/appleskin/textures/icons.png"
-hash = "6301a0b572f0e4bf84b5ac82ee83352e2e6f953397f8ab487c6a5268fac9bd3d"
+hash = "0f39e7c9422a1ecd5630d30bbbd4cb09f257879ecb2f389bc44b3b0064776f08"
 
 [[files]]
 file = "resourcepacks/appleskin-saturation/pack.mcmeta"
-hash = "8a977be60af3b445466f03895d54d1e2e917176be22c2c886c33af8655d2173c"
+hash = "79ff556ce29d429f3c5e1027b9f02c5e2b4cbcd0c6f350e6b7e4366515da8a77"
 
 [[files]]
 file = "resourcepacks/better-lanterns.pw.toml"

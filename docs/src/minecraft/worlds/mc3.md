@@ -60,8 +60,8 @@ kept on the server, not deleted.
   - Xaero's Minimap and World Map.
   - Jade (what you are looking at), AppleSkin, Shulker Box Tooltip, Mouse
     Tweaks. AppleSkin's saturation outline is gold: Overgrown Flowery GUI
-    turns it the same blue as its hunger droplets, so the pack's own
-    `appleskin-saturation` resource pack puts the gold back over it.
+    draws it in the same blue as its hunger droplets, so the pack's own
+    `appleskin-saturation` resource pack recolours its droplet outlines.
   - Ok Zoomer, Freecam, Chat Heads, Mod Menu.
 - **Visuals and sound**:
   - Two shader packs: MiniatureXL, which is **on by default**, and
