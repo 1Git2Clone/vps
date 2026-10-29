@@ -48,6 +48,10 @@ kept on the server, not deleted.
   - Dynamic Lights makes held torches light the area.
   - Clumps merges XP orbs.
   - Half the players can skip the night.
+  - Unloaded Activity catches up crops, furnaces and the like in chunks
+    nobody was near, so a base keeps going while you explore. It counts
+    server time only: an asleep world has no time passing, so after the
+    last player leaves it covers the 20 minutes before the world sleeps.
 - **Distant terrain**: Voxy draws far-away land from what the server sends.
 - **The server** runs a stack of performance mods (C2ME, Lithium, ScalableLux,
   ServerCore, Krypton, Alternate Current for redstone) and spark for profiling.

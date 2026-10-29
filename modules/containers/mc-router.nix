@@ -6,7 +6,7 @@
 # ./minecraft.nix, and the cap on how many run at once in ./minecraft-cap.nix.
 #
 # A login to a sleeping world POSTs {"action":"up"} to minecraft-scaler and
-# holds the player until the world's port answers; 10 minutes after the last
+# holds the player until the world's port answers; 20 minutes after the last
 # player leaves it POSTs {"action":"down"}. Only logins wake a world or reset
 # that timer, not server-list pings (1.48.0+), so scanners cannot keep one
 # awake.
@@ -83,7 +83,7 @@ in
       DEFAULT = "minecraft:25565";
 
       AUTO_SCALE_WEBHOOK_URL = "http://${config.infra.mcGateway}:${toString config.infra.mcScalerPort}/scale";
-      AUTO_SCALE_DOWN_AFTER = "10m";
+      AUTO_SCALE_DOWN_AFTER = "20m";
       # A modded world takes well over the 60s default to boot.
       AUTO_SCALE_WEBHOOK_WAKE_TIMEOUT = "3m";
       AUTO_SCALE_ASLEEP_MOTD = "Asleep. Join to wake it up";

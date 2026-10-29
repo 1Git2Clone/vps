@@ -512,6 +512,11 @@ hash = "7131a5f35b0223048093ae2fa41dc93fc9c0843ce3d874d4502c6da2377ca063"
 metafile = true
 
 [[files]]
+file = "mods/unloaded-activity.pw.toml"
+hash = "0aac970ea1cccd8cdf7ae9931469cd4e97f7ce2d80fcf8036c722ca312817b1b"
+metafile = true
+
+[[files]]
 file = "mods/voxy-server-side.pw.toml"
 hash = "49f24e6735b87e4aac0cbef1caeca528442d25a961949de76495882153b0826d"
 metafile = true
