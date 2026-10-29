@@ -38,11 +38,10 @@ the table as a server and join.
 
 **Worlds sleep when nobody is on**, to save the server's memory. If the server
 list says _Asleep. Join to wake it up_, join anyway: that wakes it. The first
-attempt times out after about 30 seconds, which is the world starting, not your
-connection; a try while it is still starting says so. A minute or two later,
-join again. A world goes back to sleep ten minutes after the last player
-leaves. At most two worlds are awake at once, so
-if two others are busy, the third waits its turn.
+attempt may time out after about 30 seconds: that is the world starting, not
+your connection. A minute or two later, join again. A world goes back to sleep
+ten minutes after the last player leaves. At most two worlds are awake at once,
+so if two others are busy, the third waits its turn.
 
 ## Something is wrong
 

@@ -88,10 +88,10 @@ in
       AUTO_SCALE_WEBHOOK_WAKE_TIMEOUT = "3m";
       AUTO_SCALE_ASLEEP_MOTD = "Asleep. Join to wake it up";
       AUTO_SCALE_LOADING_MOTD = "Waking up, join again in a minute";
-      # Only for a login while a wake is already in progress: with a static
-      # MAPPING the first login still waits for the wake (connector.go:632 in
-      # 1.50.1) and the client times out after ~30s.
-      AUTO_SCALE_WAKE_KICK_MESSAGE = "This world is waking up, not a problem with your connection. Join again in a minute!";
+      # No AUTO_SCALE_WAKE_KICK_MESSAGE. With a static MAPPING it only fires for
+      # a login while a wake is already running (connector.go:632 in 1.50.1),
+      # so every retry during the wake got kicked at once. Holding the login is
+      # gentler: the worst case is one "Timed out", and the next try gets in.
       AUTO_SCALE_ALLOW_DENY = "/config/allow-deny.json";
     };
 
