@@ -522,6 +522,11 @@ hash = "0aac970ea1cccd8cdf7ae9931469cd4e97f7ce2d80fcf8036c722ca312817b1b"
 metafile = true
 
 [[files]]
+file = "mods/villager-in-a-bucket.pw.toml"
+hash = "3c203061bdf6d864c85adc36bf8c1497559f94ca215307c59fcb779d18a5a88a"
+metafile = true
+
+[[files]]
 file = "mods/voxy-server-side.pw.toml"
 hash = "49f24e6735b87e4aac0cbef1caeca528442d25a961949de76495882153b0826d"
 metafile = true
