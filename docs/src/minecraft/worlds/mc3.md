@@ -43,6 +43,8 @@ kept on the server, not deleted.
   - [Comforts](https://modrinth.com/mod/comforts): sleeping bags and hammocks.
 - **Conveniences**:
   - FallingTree fells whole trees.
+  - Carry On: sneak and right-click with an empty hand to pick up a mob
+    (villagers and zombies too) or a chest with its contents, and carry it.
   - Ore Vein Miner mines a connected vein of ore at once: sneak while you
     break one with a pickaxe.
   - Dynamic Lights makes held torches light the area.
