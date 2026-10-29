@@ -312,11 +312,6 @@ hash = "5eed1129ddef553c4be65750cba7f5d88c03940350f1c25443652627397deb5c"
 metafile = true
 
 [[files]]
-file = "mods/frozenlib.pw.toml"
-hash = "1fafbfff1e6c31c4f2a9eb3d0dfa512ce15bd40b8c7065a0412f608cfd6267b7"
-metafile = true
-
-[[files]]
 file = "mods/immediatelyfast.pw.toml"
 hash = "fcd0dedf8a47b5e5e298cb9e26fe8f9bb3be8ac892e7ad238f8f781c0faaf2bd"
 metafile = true
@@ -379,11 +374,6 @@ metafile = true
 [[files]]
 file = "mods/mouse-tweaks.pw.toml"
 hash = "e37b46af7cfa8f24e9895c37789b43d80d8abe519becf4f08d9e1ea1529fc126"
-metafile = true
-
-[[files]]
-file = "mods/naturalist.pw.toml"
-hash = "6427077ffad4e50054d9c3e887c5ee1e4a00fbb5f76a295edb9fac5c26c989b8"
 metafile = true
 
 [[files]]
@@ -502,11 +492,6 @@ hash = "b4b8e0c60faf3d9794c99f32623a7dc43f6768d79532ca076157e0a92803778c"
 metafile = true
 
 [[files]]
-file = "mods/streams-reflowing.pw.toml"
-hash = "a8790b598a9bfabd89488767c017da58e7caebf9d9d36cfe47b8fb5b21e86940"
-metafile = true
-
-[[files]]
 file = "mods/tectonic.pw.toml"
 hash = "70e40513d7eba0e7ad0897bdadc9b203febfb3b43662342bf5ca06e2c8be3c74"
 metafile = true
@@ -547,11 +532,6 @@ hash = "d3a6b73a875a61d827f974af2426cce0762bdf1625d1b0d9ad0ac56112d34e4c"
 metafile = true
 
 [[files]]
-file = "mods/wilder-wild.pw.toml"
-hash = "b1336429a72f8307bc86272ab110bd7bcc6705f2c6099e291637fca560fe97d1"
-metafile = true
-
-[[files]]
 file = "mods/xaeros-minimap.pw.toml"
 hash = "2ada315533849b19a43e463ee4295cb86ca0bfa6976febb446c94aca9753f367"
 metafile = true
@@ -568,7 +548,7 @@ metafile = true
 
 [[files]]
 file = "options.txt"
-hash = "5306bb6640bfa8bb40a88651d7ef106cea917c84843764874f643ec992ab9e76"
+hash = "abf75efa1c4ed1282376d3c30152e46c5aa48910d2645dfa0c62845e2bf1db39"
 
 [[files]]
 file = "resourcepacks/3d-ladders.pw.toml"
