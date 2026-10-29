@@ -88,8 +88,9 @@ in
       AUTO_SCALE_WEBHOOK_WAKE_TIMEOUT = "3m";
       AUTO_SCALE_ASLEEP_MOTD = "Asleep. Join to wake it up";
       AUTO_SCALE_LOADING_MOTD = "Waking up, join again in a minute";
-      # Without it the login is held until the world is up, and the client gives
-      # up after ~30s with a bare "Disconnected" that reads like a network fault.
+      # Only for a login while a wake is already in progress: with a static
+      # MAPPING the first login still waits for the wake (connector.go:632 in
+      # 1.50.1) and the client times out after ~30s.
       AUTO_SCALE_WAKE_KICK_MESSAGE = "This world is waking up, not a problem with your connection. Join again in a minute!";
       AUTO_SCALE_ALLOW_DENY = "/config/allow-deny.json";
     };
