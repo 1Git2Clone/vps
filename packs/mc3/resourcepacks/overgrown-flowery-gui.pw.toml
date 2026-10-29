@@ -1,0 +1,13 @@
+name = "Overgrown Flowery GUI"
+filename = "Overgrown Flowery GUI.zip"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/IUJGdLaw/versions/b6DHho30/Overgrown%20Flowery%20GUI.zip"
+hash-format = "sha512"
+hash = "d9894ceb437a80bce49da3c1d6a1fc2dab25d4041ae43e303fb7a0a956d39f192dc2ce02fb482a5f22f53522c4941e05b6792841510727e2250eb7e7d7ca6d1f"
+
+[update]
+[update.modrinth]
+mod-id = "IUJGdLaw"
+version = "b6DHho30"

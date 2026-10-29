@@ -1,0 +1,13 @@
+name = "Extra Flowery GUI"
+filename = "Extra Flowery GUI.zip"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/UYeecoyN/versions/bjbD34o6/Extra%20Flowery%20GUI.zip"
+hash-format = "sha512"
+hash = "283c30a605abad099c6947d7b9357743680e8af0d2424182a91f74ed51a57377dbedd3a699c0c04aa93269ce8ab5f2fc0d558d88b56148fb5054f2028e7cb520"
+
+[update]
+[update.modrinth]
+mod-id = "UYeecoyN"
+version = "bjbD34o6"

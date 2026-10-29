@@ -568,7 +568,7 @@ metafile = true
 
 [[files]]
 file = "options.txt"
-hash = "14763d17b86f74d389272ab61269625a3d812926e499bdb98ecc676825c9cabd"
+hash = "a8fae6f629ea5443efab9926133e4e8796d634c1825010353f7c28a35af00f44"
 
 [[files]]
 file = "resourcepacks/3d-ladders.pw.toml"
@@ -598,6 +598,11 @@ metafile = true
 [[files]]
 file = "resourcepacks/enchant-icons-countxd.pw.toml"
 hash = "d5683729a4b1cbca16caeda182433ab3fed68b002d82d3fbfa673367175db6e6"
+metafile = true
+
+[[files]]
+file = "resourcepacks/extra-flowery-gui.pw.toml"
+hash = "96d222c9937194d24deea39fea72746eebc6c9498f9bb018e6fd39f8cc039652"
 metafile = true
 
 [[files]]
@@ -631,6 +636,11 @@ hash = "31430b782db7dc57387c92d63764e2bc724f965284348710db6cd71960d73877"
 metafile = true
 
 [[files]]
+file = "resourcepacks/icons.pw.toml"
+hash = "ebba2a571a5a4a50341b0c6aab8a4b8a84a1fc68a7d5aa6ddaf4f85a0c91eb5b"
+metafile = true
+
+[[files]]
 file = "resourcepacks/low-fire-pack.pw.toml"
 hash = "6dcbbe81d63d48dff72d1b00de22fff82e01250513a84c7a94533703620a2a8f"
 metafile = true
@@ -641,18 +651,23 @@ hash = "45d877b4fd11283006837870bf22515488305137c2155f292dd45e01feb3cd48"
 metafile = true
 
 [[files]]
+file = "resourcepacks/overgrown-flowery-gui.pw.toml"
+hash = "76b5c834341c1fecf6129e769c198e214fff25802cf3876fec640476b9af4884"
+metafile = true
+
+[[files]]
 file = "resourcepacks/redstone-tweaks.pw.toml"
 hash = "784770b9d54a6ab880c0b3905c64ccff0adfa07a7b152fc1a057bfdcfaad706a"
 metafile = true
 
 [[files]]
-file = "resourcepacks/simple-grass-flowers.pw.toml"
-hash = "6576e0f2a199e626872973b61fa925d6055c90442901e88e705815d1ef48888d"
+file = "resourcepacks/serified-font.pw.toml"
+hash = "f0c8256be8502a337263dc0463e3dd95bfb82957c88e58c59647dbe42afcaf6b"
 metafile = true
 
 [[files]]
-file = "resourcepacks/unique-dark.pw.toml"
-hash = "ef29ab42be9a4f9090fe0589045d479dd02c05d54f5540d95166f9dc9dbba3df"
+file = "resourcepacks/simple-grass-flowers.pw.toml"
+hash = "6576e0f2a199e626872973b61fa925d6055c90442901e88e705815d1ef48888d"
 metafile = true
 
 [[files]]
