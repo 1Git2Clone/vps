@@ -183,12 +183,28 @@ let
             src = "${e.src}";
           }) (builtins.filter (e: lib.hasPrefix "mods/" e.path) entries)
         );
-        passAsFile = [ "jars" ];
+        files = builtins.toJSON (
+          map (e: {
+            inherit (e) path;
+            src = "${e.src}";
+          }) entries
+        );
+        passAsFile = [
+          "jars"
+          "files"
+        ];
       }
-      ''
-        python3 -I ${../tests/mrpack-deps.py} "$jarsPath" \
-          ${pack.versions.minecraft} ${pack.versions.fabric}
-        touch $out
-      '';
+      (
+        ''
+          python3 -I ${../tests/mrpack-deps.py} "$jarsPath" \
+            ${pack.versions.minecraft} ${pack.versions.fabric}
+        ''
+        # options.txt turns resource packs on by file name, and Minecraft
+        # silently drops a name it cannot find. See tests/mrpack-options.py.
+        + lib.optionalString (builtins.pathExists (dir + "/options.txt")) ''
+          python3 -I ${../tests/mrpack-options.py} "$filesPath" ${dir + "/options.txt"}
+        ''
+        + "touch $out"
+      );
 in
 mrpack

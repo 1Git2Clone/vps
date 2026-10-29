@@ -96,6 +96,20 @@ Terralith need it on the client too, so `packs/mc3/mods/lithostitched.pw.toml`
 says `side = "both"`. An update can reset a side you set by hand; the check is
 what catches it.
 
+A pack with an `options.txt` is also checked for the resource packs it turns
+on. Minecraft drops a `resourcePacks` entry it cannot find without a word, so
+an update that renames a zip turns that pack off for every player:
+
+```text
+resourcePacks: file/FreshAnimations_v1.10.5.zip is not a file in resourcepacks/
+```
+
+Write the entry as `file/` plus the `filename` from its `.pw.toml`, or
+`<mod id>:<folder>` for a mod's built-in pack (`punchy:punchy`). A pack made
+for another Minecraft version also has to be listed in
+`incompatibleResourcePacks`, or the game drops it as well; the check cannot
+see that one, so look in the game log for "no longer compatible".
+
 ## Changing a live world's mods
 
 A pack change reaches the server on the world's next start: itzg re-syncs the
