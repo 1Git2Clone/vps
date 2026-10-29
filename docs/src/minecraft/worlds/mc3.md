@@ -17,22 +17,22 @@ farming, storage, backpacks and fast travel.
 **You need the pack to join**: the world has blocks, items and mobs a vanilla
 client does not know.
 
+**Reset on 2026-10-29.** Wilder Wild, Naturalist and Streams Reflowing left
+the pack that day, and the world started over without them. The first world is
+kept on the server, not deleted.
+
 ## What changes for everyone
 
 - **The world itself**:
   - [Terralith](https://modrinth.com/mod/terralith) and
     [Tectonic](https://modrinth.com/mod/tectonic): nearly 100 new biomes and
     much grander terrain.
-  - [Wilder Wild](https://modrinth.com/mod/wilder-wild) and
-    [Streams Reflowing](https://modrinth.com/mod/streams-reflowing): reworked
-    biomes, new trees, and flowing streams.
 - **More to find**: Dungeons and Taverns, Towns and Towers, Explorify and
   Repurposed Structures add villages, ships, dungeons, taverns and variants of
   vanilla structures; Sparse Structures spreads them out so they stay special.
   Explorer's Compass and Nature's Compass point you at structures and biomes.
-- **More life**: [Naturalist](https://modrinth.com/mod/naturalist) adds dozens
-  of animals; [Friends&Foes](https://modrinth.com/mod/friends-and-foes) brings
-  in the mob-vote losers.
+- **More life**: [Friends&Foes](https://modrinth.com/mod/friends-and-foes)
+  brings in the mob-vote losers.
 - **Things to do**:
   - [Farmer's Delight](https://modrinth.com/mod/farmers-delight-refabricated):
     cooking and farming.

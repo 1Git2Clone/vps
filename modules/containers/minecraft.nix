@@ -85,6 +85,10 @@ let
       rconPort,
       maxMemory,
       motd,
+      # The world folder in /data. Unset is itzg's "world". A new name starts a
+      # fresh world and leaves the old folder on the volume, untouched: the
+      # reset is undone by putting the old name back.
+      level ? null,
     }:
     {
       inherit image;
@@ -121,7 +125,8 @@ let
         # have to be op to build", not an error message. A whitelisted server
         # has no griefers to protect spawn from.
         SPAWN_PROTECTION = "0";
-      };
+      }
+      // lib.optionalAttrs (level != null) { LEVEL = level; };
 
       environmentFiles = [ config.sops.templates."${name}.env".path ];
 
@@ -212,6 +217,10 @@ in
       rconPort = 25577;
       maxMemory = "4G";
       motd = "A Third Place for Gemstones to Chill";
+      # Reset on 2026-10-29, when Wilder Wild, Naturalist and Streams
+      # Reflowing left the pack: their blocks were all through the old terrain.
+      # The first world is still in this volume as `world`.
+      level = "world-2026-10-29";
     };
 
     # Fourth world: mc1's pack, lightened for players on integrated graphics,
