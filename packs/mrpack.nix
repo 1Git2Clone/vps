@@ -171,8 +171,8 @@ let
             mkdir -p "$out/mods"
             ${lib.concatMapStrings (e: ''
               ${lib.optionalString (lib.hasPrefix "mods/" e.path && e.side != "client") ''
-                mkdir -p "$out/${builtins.dirOf e.path}"
-                ln -s ${lib.escapeShellArg "${e.src}"} ${lib.escapeShellArg "$out/${e.path}"}
+                mkdir -p "$out/"${lib.escapeShellArg (builtins.dirOf e.path)}
+                ln -s ${lib.escapeShellArg "${e.src}"} "$out/"${lib.escapeShellArg e.path}
               ''}
             '') entries}
           '';
