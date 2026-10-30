@@ -771,6 +771,8 @@
           # nixos-anywhere, nixos-rebuild, opentofu and deploy-rs, none of which a
           # formatting check needs, and all of which CI would download every run.
           ci = pkgs.mkShell {
+            MC_JAVA_21 = "${pkgs.jdk21_headless}/bin/java";
+            MC_JAVA_25 = "${pkgs.jdk25_headless}/bin/java";
             buildInputs = with pkgs; [
               pre-commit
               nixfmt-rfc-style
@@ -781,6 +783,8 @@
               markdownlint-cli2
               packwiz # the packwiz-refresh hook
               python3 # the mod-lists hook (packs/mod-list.py)
+              jdk21_headless
+              jdk25_headless
               mdbook
               mdbook-mermaid
               # NOT for building anything here — nothing in this repo is a node
@@ -841,6 +845,7 @@
       # The .mrpack each world's container installs and pages.yml publishes for
       # the players: one build, both consumers. See packs/mrpack.nix.
       // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-mrpack" v) mrpacks
+      // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-server-mods" v.serverMods) mrpacks
       # The same packs with packs/options laid over them, for players who want
       # those settings to start from:  nix build .#mc1-mrpack-with-options
       # Built by .forgejo/workflows/option-packs.yml, published by pages.yml.

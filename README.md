@@ -76,6 +76,7 @@ nix run .#docs -- --open   # writes the mermaid assets first, then serves
 | [CI runner isolation](docs/src/architecture/runner.md)           | the seven layers, the one-way rule, the six-path allow-list        |
 | [The service stack](docs/src/architecture/services.md)           | what runs, and how each thing is reached                           |
 | [Deploying](docs/src/operations/deploying.md)                    | the everyday path, and the circuit breaker behind it               |
+| [CI and validation](docs/src/operations/ci.md)                   | what each forge checks and how to run the Minecraft startup test   |
 | [Failure modes and recovery](docs/src/operations/recovery.md)    | what rolls back on its own and what does not                       |
 | [Runbook](docs/src/operations/runbook.md)                        | the commands, in the order you want them                           |
 | [Working on the packs](docs/src/minecraft/packs.md)              | the Minecraft modpacks: packwiz, sides, the dependency check       |

@@ -102,6 +102,13 @@ whose required library is missing on a side, for example:
 client: mods/tectonic-3.0.28-fabric-26.2.jar needs lithostitched *
 ```
 
+CI also boots each world once with its exact server-side mods and Fabric loader,
+then waits for Minecraft's `Done` line. This catches startup crashes from mod
+interactions that a dependency graph cannot detect. See
+[CI and validation](../operations/ci.md) for what the check covers, how to run
+a single world, and what it does not exercise. The all-world command is
+`nix develop .#ci -c packs/startup.sh`.
+
 That one was real: Modrinth marks lithostitched server-only, but tectonic and
 Terralith need it on the client too, so `packs/mc3/mods/lithostitched.pw.toml`
 says `side = "both"`. An update can reset a side you set by hand; the check is

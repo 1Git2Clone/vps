@@ -98,6 +98,17 @@
   // The `Bump with: curl ...` comments next to each image stay. They are the
   // manual path for the times this job is not the one doing it.
   customManagers: [
+    // The startup smoke test uses Fabric's installer. Its version is pinned
+    // in the script, and Maven metadata is the right place to update it from.
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^(?:packs\\/startup\\.py)$/"],
+      matchStrings: ['INSTALLER_VERSION = "(?<currentValue>[^"\\s]+)"'],
+      depNameTemplate: "net.fabricmc:fabric-installer",
+      datasourceTemplate: "maven",
+      registryUrlTemplate: "https://maven.fabricmc.net",
+      versioningTemplate: "maven",
+    },
     {
       customType: "regex",
       managerFilePatterns: ["/^modules/containers/.*\\.nix$/"],

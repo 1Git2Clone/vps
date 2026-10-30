@@ -14,6 +14,81 @@ run on git.hu-tao.dev.
 | `.forgejo/workflows/mods.yml`  | the dedicated runner box | one: `outdated` — daily, red when a mod has a newer build [^m] |
 | `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                                     |
 
+Both CI workflows also run `packs/startup.sh`: it builds each plain `.mrpack`,
+installs its exact Fabric loader and server-side mods in a temporary directory,
+then waits up to five minutes for Minecraft's `Done` line. It uses the same
+Java major versions as the deployed images (21 for world 2, 25 for the others)
+and stops the server as soon as startup succeeds. This catches mod interactions
+that the dependency checker cannot. It runs the Fabric server directly rather
+than starting the itzg container; the runner intentionally gives jobs no
+container-engine socket.
+
+## What a CI run does
+
+Forgejo is the source of truth. A push or pull request runs its CI first; pushes
+to `main` are mirrored to GitHub, where the GitHub workflow runs the same checks
+with a different job layout.
+
+```mermaid
+flowchart LR
+    change[Change in Forgejo] --> forgejo[Forgejo CI]
+    forgejo -->|push to main| mirror[GitHub mirror]
+    mirror --> github[GitHub CI]
+    forgejo --> verdict[Checks pass or report a failure]
+    github --> verdict
+```
+
+The checks cover different failure classes:
+
+| Check | What it catches |
+| --- | --- |
+| Pre-commit hooks | Formatting, lint, generated mod lists, pack dependency and resource-pack checks |
+| Full-history gitleaks | Secrets accidentally committed in repository history |
+| NixOS evaluation | Invalid options, missing module arguments, and evaluation errors |
+| Explicit Nix checks | Deploy schema, runner firewall ordering, runner secret isolation, and safe artifact extraction |
+| Minecraft startup | Server-side Fabric or mod failures before the server reaches `Done` |
+
+The NixOS systems are evaluated, not built or booted in CI. The Minecraft test
+does boot a server process, but it uses the exact pinned server mod jars from
+the pack build and a temporary flat world. It does not exercise the itzg
+container's pack installation, the live server's configuration and world data,
+or a client joining. Those boundaries are deliberate: CI jobs have no container
+engine socket and must not be able to launch privileged sibling containers.
+
+## Run the Minecraft startup check locally
+
+Run all four worlds with the same command CI uses:
+
+```sh
+nix develop .#ci -c packs/startup.sh
+```
+
+To run one world, first build its pack and the matching server-mod directory,
+then pass both outputs to `packs/startup.py`. Its CLI is:
+
+```text
+python3 -I packs/startup.py [-h] pack server_mods
+```
+
+`pack` is the built `.mrpack`; `server_mods` is its matching Nix output
+directory. `-h` or `--help` prints this usage. The script exits nonzero if
+either input is invalid, Fabric installation fails, the server exits before
+`Done`, or startup exceeds five minutes.
+
+For example, run world 4:
+
+```sh
+nix develop .#ci
+pack=$(nix build --no-link --print-out-paths .#mc4-mrpack)
+mods=$(nix build --no-link --print-out-paths .#mc4-server-mods)
+python3 -I packs/startup.py "$pack" "$mods"
+```
+
+The first run needs network access for the pinned Modrinth jars, Fabric's
+installer, and Minecraft's server files. On success, the log contains
+`gemstones-lite-26.3.mrpack: server reached Done`. A failed startup exits
+nonzero and includes the server log tail when it times out.
+
 [^m]: See [Staying current](../minecraft/packs.md#staying-current).
 
 | Check    | What                                                                                                                                                                                                                                         |
@@ -62,11 +137,14 @@ Not tidiness — each difference is forced.
 warning, which is why the Forgejo file omits it rather than carrying a line
 that does nothing.
 
-## Evaluation, not a build
+## System evaluation and pack startup
 
-Both forges evaluate rather than build. It catches what actually breaks this
-repo — a typo'd option, a missing module argument, an infinite recursion —
-without asking a runner to realise a multi-gigabyte closure.
+Both forges evaluate the NixOS system configurations rather than building
+their multi-gigabyte closures. This catches what actually breaks the configs —
+a typo'd option, a missing module argument, an infinite recursion — without
+asking a runner to realise a whole system closure. The workflows separately
+build the modpacks and boot their Fabric servers, which exercises the real
+server-side mods without building or starting the NixOS hosts.
 
 `--no-build` is load-bearing. deploy-rs's `deploy-activate` check references
 the system closure, so a plain `nix flake check` builds the whole system, and

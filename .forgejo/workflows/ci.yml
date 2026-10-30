@@ -84,6 +84,13 @@ jobs:
       - name: pre-commit
         run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
 
+      # A dependency graph can be complete while a mod still crashes during
+      # startup. Boot the exact server-side mods from each built pack and wait
+      # for Minecraft's Done line. This runs in-process: jobs intentionally
+      # receive no Podman socket, so they cannot launch sibling containers.
+      - name: Boot all Minecraft modpacks
+        run: nix develop .#ci -c packs/startup.sh
+
       # The pre-commit hook scans the STAGED diff, which is empty in CI, so the
       # history scan lives here instead. The full fetch above is what makes it a
       # real scan rather than a scan of one commit.
