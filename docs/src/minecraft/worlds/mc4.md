@@ -10,8 +10,8 @@
 
 [World 1](mc1.md)'s pack, cut down for a PC with integrated graphics and 8 GB of
 RAM, and a version newer: every mod it kept has a 26.3 build. Gameplay is the
-same, plus Carry On and Villager in a Bucket from [world 3](mc3.md); what is
-gone is everything that costs frames without changing how the game plays.
+same, plus a handful of conveniences from [world 3](mc3.md); what is gone is
+everything that costs frames without changing how the game plays.
 
 ## What changes for everyone
 
@@ -32,10 +32,14 @@ gone is everything that costs frames without changing how the game plays.
   again. It counts server time only: an asleep world has no time passing, so
   after the last player leaves it covers the 20 minutes before the world
   sleeps. Server-only; nothing to install.
+- **Ore Vein Miner** mines a connected vein of ore at once: sneak while you
+  break one with a pickaxe.
+- **Clumps** merges XP orbs.
 - **Chat stays unreportable**
   ([No Chat Reports](https://modrinth.com/mod/no-chat-reports)).
-- Under the hood: Lithium, FerriteCore and Krypton make the server itself
-  faster.
+- Under the hood: Lithium, FerriteCore, Krypton, C2ME, ScalableLux,
+  ServerCore, Ksyxis and Alternate Current (for redstone) make the server
+  itself faster, as on world 3.
 
 ## What your pack adds
 
@@ -43,10 +47,12 @@ gone is everything that costs frames without changing how the game plays.
   ImmediatelyFast, Entity Culling, More Culling, ModernFix, FerriteCore,
   BadOptimizations, Better Block Entities and Dynamic FPS, which throttles the
   game while it is in the background.
-- **Interface**: the same as world 1's: VoxelMap, Jade, AppleSkin, Shulker Box
-  Tooltip, Mouse Tweaks, Controlling, Zoomify, uku's Armor HUD, More Chat
-  History, Better Mount HUD and Mod Menu, plus JEI for every item's recipes
-  and uses (R and U on an item).
+- **Interface**: Xaero's Minimap and World Map, Jade, AppleSkin, Shulker Box
+  Tooltip, Mouse Tweaks, Controlling, Ok Zoomer, uku's Armor HUD, Chat Heads,
+  More Chat History, Better Mount HUD and Mod Menu, plus JEI for every item's
+  recipes and uses (R and U on an item).
+- **Conveniences**: Freecam, FastQuit (back to the menu without waiting for
+  the save) and No Telemetry.
 - **Visuals**: only 3D Skin Layers.
 
 ## What is left out, and why

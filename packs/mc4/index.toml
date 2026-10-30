@@ -109,16 +109,13 @@ file = "config/trender.json"
 hash = "0a282f3623f7f9443a1d10b5768865f69e58b74e000dcfb4f40399626b7a6124"
 
 [[files]]
-file = "config/yacl.json5"
-hash = "121b93764159be6fb7dab523b29a844e2bb78400ce8c48f52135a097e9b0006e"
-
-[[files]]
-file = "config/zoomify.json"
-hash = "82caee9b1f532332c798ee216c9a9ba5857c35e58afacba44946d9264fc05b36"
-
-[[files]]
 file = "mods/3dskinlayers.pw.toml"
 hash = "bb194ec7f1affde2fb2d6d052683e96babe72b693e4c3263dfd8245d3941b701"
+metafile = true
+
+[[files]]
+file = "mods/alternate-current.pw.toml"
+hash = "d3f2bc4d5d77f02ae3810f17429f1d2df1258ff415101c9e35650a57eacbc45d"
 metafile = true
 
 [[files]]
@@ -142,13 +139,28 @@ hash = "6e9bddf1d0b01deb875b99fda9395b7bf927ce1a795a70b5a1bd56500e43df03"
 metafile = true
 
 [[files]]
+file = "mods/c2me-fabric.pw.toml"
+hash = "d70fc5809299269a7867133453ab35c186a0eb55a6894ce7b998091e5acd5b3b"
+metafile = true
+
+[[files]]
 file = "mods/carry-on.pw.toml"
 hash = "21e9d2a9919d7208f00fdacb1841e7a671e824f0c735f6fee0b45983aaf3501d"
 metafile = true
 
 [[files]]
+file = "mods/chat-heads.pw.toml"
+hash = "7959f11cce0c14ffae150d4a3126b04b70b0af815d25453110d2a8408011e9cb"
+metafile = true
+
+[[files]]
 file = "mods/cloth-config.pw.toml"
 hash = "2b9727522c90a979eb9671ad7c5421443d91391b0697d1772146e6bfa19cb3c1"
+metafile = true
+
+[[files]]
+file = "mods/clumps.pw.toml"
+hash = "1b69e71b40598ff67a1c2afc5da4ebd02b0caec29a062fa1911b40ae3d868224"
 metafile = true
 
 [[files]]
@@ -172,13 +184,13 @@ hash = "a4c31d16582621909eba9f06a34f03114d212c7e684c8dbc9991fb12a42e043b"
 metafile = true
 
 [[files]]
-file = "mods/fabric-language-kotlin.pw.toml"
-hash = "1811d49906aa7a1e7f1230535c6fec91be45129d028f7900cf35571a497e42b3"
+file = "mods/fallingtree.pw.toml"
+hash = "e9d9e127343361de6b55a0895c9c9601d0a28e316580d7e074a1a6de59da5960"
 metafile = true
 
 [[files]]
-file = "mods/fallingtree.pw.toml"
-hash = "e9d9e127343361de6b55a0895c9c9601d0a28e316580d7e074a1a6de59da5960"
+file = "mods/fastquit.pw.toml"
+hash = "57dcec4d226345a506ebcc889093e37ac6da9b0c94394275d962fb7df1f7f649"
 metafile = true
 
 [[files]]
@@ -189,6 +201,11 @@ metafile = true
 [[files]]
 file = "mods/forge-config-api-port.pw.toml"
 hash = "3eb12471fce0aadbda432f7fd5ba4e2120e0e0ebbb3663eea756a17ec0254407"
+metafile = true
+
+[[files]]
+file = "mods/freecam.pw.toml"
+hash = "956925160888e1f05887dc1a5a97ba91ce0288b967d4d1dc826af52c737b1a29"
 metafile = true
 
 [[files]]
@@ -214,6 +231,11 @@ metafile = true
 [[files]]
 file = "mods/krypton.pw.toml"
 hash = "4d8432eed6984a86acf6c9f056755b3f9082eb8fcb5b3f37e96498e7871e40c9"
+metafile = true
+
+[[files]]
+file = "mods/ksyxis.pw.toml"
+hash = "e98be0d8ab66be0359550a512601d5012d12ed3cf79eeff165cf7b71a9d27aa8"
 metafile = true
 
 [[files]]
@@ -262,6 +284,21 @@ hash = "54019b98e621d0ab792d7a2de0f8f2714660e367790b17ffa0ac902344166396"
 metafile = true
 
 [[files]]
+file = "mods/no-telemetry.pw.toml"
+hash = "c5e7e0a3de03c138f587fc56dca70013978677e0cde2ad19024dc798178a49bd"
+metafile = true
+
+[[files]]
+file = "mods/ok-zoomer.pw.toml"
+hash = "91134324bc8610fd3d7506edc61a4e27a41222a080d2dc8b5073d32f9505376e"
+metafile = true
+
+[[files]]
+file = "mods/ore-vein-miner.pw.toml"
+hash = "d6070b4c832648f4112a44741588d6f92ee708d88ad8cf4cf1a6f5307155984a"
+metafile = true
+
+[[files]]
 file = "mods/placeholder-api.pw.toml"
 hash = "4d3d2ad41a037af6f78e2a6c2908c4098bb0b5c03ad0d2711a0c0c6df5e7a172"
 metafile = true
@@ -277,8 +314,18 @@ hash = "9aff010771d11ec9fe4980ff0d746cbca61854fc638daeef73c057f4fafb39bf"
 metafile = true
 
 [[files]]
+file = "mods/scalablelux.pw.toml"
+hash = "8ab8d9da45456dfc8146a7d4b4b4243c69ba5b4375d086f361bf23df6e14988a"
+metafile = true
+
+[[files]]
 file = "mods/searchables.pw.toml"
 hash = "91f6defb56c64900bd1ad69147acf1c151b5b372b3ec405933d92ef9308617ae"
+metafile = true
+
+[[files]]
+file = "mods/servercore.pw.toml"
+hash = "07e3c8dc0d6b3717b01c91597e6d1a597333a1883731891df3c535164f96f5da"
 metafile = true
 
 [[files]]
@@ -322,16 +369,11 @@ hash = "a6b2f54f2ede82ef5f46b0dff81f4217c9ece84f18e5a135fc9331d264587dba"
 metafile = true
 
 [[files]]
-file = "mods/voxelmap-updated.pw.toml"
-hash = "f630a22f074bc632ff73239e99ea74fcec2aa183703e8f31f2ca990c1357950f"
+file = "mods/xaeros-minimap.pw.toml"
+hash = "14e96b12f10a1f2920cdcec89b4d16e452bec4689e117b38b4c0f759145aaf7f"
 metafile = true
 
 [[files]]
-file = "mods/yacl.pw.toml"
-hash = "7b82bfcde20d2ac0fb158c003caf5288523272ca462f519864ee424912e4e4dd"
-metafile = true
-
-[[files]]
-file = "mods/zoomify.pw.toml"
-hash = "7ac50a41949c05df550b62d54051bc171491644eef010aa19bd8abe3419909b1"
+file = "mods/xaeros-world-map.pw.toml"
+hash = "cbb9808546870ecb0a7befebb14df0a11383b1aeafd175a77a0fc4caee44c6f2"
 metafile = true

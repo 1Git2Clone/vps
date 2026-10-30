@@ -1,0 +1,13 @@
+name = "Ore Vein Miner"
+filename = "ore-vein-miner-3.2.0.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/Xl2GihRU/versions/a5M26JUo/ore-vein-miner-3.2.0.jar"
+hash-format = "sha512"
+hash = "1286c562c909693ababf76f84011c224d69b2223aabb5f0ad5e2957dd0f47ec0e4a5db2fe141a973ed2664872902f69f8561e60f74dddabcb0f6876a55372424"
+
+[update]
+[update.modrinth]
+mod-id = "Xl2GihRU"
+version = "a5M26JUo"
