@@ -116,10 +116,10 @@ repos:
         pass_filenames: false
 
       - id: minecraft-startup-tests
-        name: Minecraft startup output handling
-        entry: nix develop .#ci -c python3 -I -m unittest discover -s packs -p test_startup.py
+        name: Minecraft pack CI tests
+        entry: nix develop .#ci -c python3 -I -m unittest discover -s packs -p 'test_*.py'
         language: system
-        files: ^packs/(startup|test_startup)\.py$
+        files: ^packs/(startup|test_startup|changed_worlds|test_changed_worlds)\.py$
         pass_filenames: false
 
       # Every hard dependency met on both sides, in every pack; see `check` in

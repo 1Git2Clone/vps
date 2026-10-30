@@ -5,7 +5,23 @@ name: Option packs
 on:
   push:
     branches: [main]
+    paths:
+      - 'packs/**'
+      - 'options/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'tests/mrpack-*.py'
+      - '.forgejo/workflows/option-packs.yml'
+      - '.github/workflows/option-packs.yml'
   pull_request:
+    paths:
+      - 'packs/**'
+      - 'options/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'tests/mrpack-*.py'
+      - '.forgejo/workflows/option-packs.yml'
+      - '.github/workflows/option-packs.yml'
   workflow_dispatch:
 
 concurrency:
@@ -21,16 +37,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: cachix/install-nix-action@v31.11.1
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Select affected worlds
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            set -- --pull-request
+          else
+            set --
+          fi
+          worlds=$(nix develop .#ci -c python3 -I packs/changed_worlds.py "$BASE_SHA" "$HEAD_SHA" "$@")
+          printf 'worlds=%s\n' "$worlds" >> "$GITHUB_OUTPUT"
+          printf 'Selected worlds: %s\n' "${worlds:-none}"
+
       - name: Build
+        if: steps.select.outputs.worlds != ''
+        env:
+          WORLDS: ${{ steps.select.outputs.worlds }}
         run: |
           mkdir -p _packs _pack-builds
-          for pack in mc1 mc2 mc3 mc4; do
+          for pack in $WORLDS; do
             out=$(nix build --print-out-paths --out-link "_pack-builds/$pack" ".#$pack-mrpack-with-options")
             nix build --out-link "_pack-builds/$pack-server-mods" ".#$pack-mrpack-with-options.serverMods"
             cp "$out" "_packs/$(basename "$out" | cut -d- -f2-)"
@@ -38,9 +74,13 @@ jobs:
           ls -l _packs
 
       - name: Boot the built options packs
-        run: nix develop .#ci -c packs/startup.sh _pack-builds
+        if: steps.select.outputs.worlds != ''
+        env:
+          WORLDS: ${{ steps.select.outputs.worlds }}
+        run: nix develop .#ci -c packs/startup.sh _pack-builds $WORLDS
 
       - name: Upload
+        if: steps.select.outputs.worlds != ''
         uses: actions/upload-artifact@v7.0.2
         with:
           name: option-packs

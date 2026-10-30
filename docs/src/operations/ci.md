@@ -14,10 +14,10 @@ run on git.hu-tao.dev.
 | `.forgejo/workflows/pages.yml`        | the dedicated runner box | one: `pages` — builds this book, `main` only                   |
 | `.forgejo/workflows/mods.yml`         | the dedicated runner box | one: `outdated` — daily, red when a mod has a newer build [^m] |
 | `.github/workflows/ci.yml`            | the GitHub mirror        | two: `lint` and `evaluate`                                     |
-| `.forgejo/workflows/option-packs.yml` | the dedicated runner box | build, boot, then upload all four options packs                |
-| `.github/workflows/option-packs.yml`  | the GitHub mirror        | build, boot, then upload all four options packs                |
+| `.forgejo/workflows/option-packs.yml` | the dedicated runner box | build, boot, then upload affected options packs                |
+| `.github/workflows/option-packs.yml`  | the GitHub mirror        | build, boot, then upload affected options packs                |
 
-The **Option packs** workflow on each forge builds all four `-with-options`
+The **Option packs** workflow on each forge builds the affected `-with-options`
 packs, then runs **Boot the built options packs** before uploading the
 `option-packs` artifact. `packs/startup.sh` consumes the build step's output
 paths; it does not build another set of packs. It installs each pack's Fabric
@@ -32,9 +32,32 @@ mod waits for a real bot token and a Discord connection during initialization;
 CI has no Discord credential. The rest of mc1's server mods still boot together.
 The options packs contain the plain packs' mods plus client option overrides.
 The server boot exercises those mods; it does not load or validate client settings.
-Both Option packs workflows run on pull requests, pushes to `main`, and manual
-dispatches. Concurrency is scoped to the branch so a pull request cannot cancel
-the main branch's pack build.
+Both Option packs workflows run on relevant pull requests, pushes to `main`,
+and manual dispatches. Concurrency is scoped to the branch so a pull request
+cannot cancel the main branch's pack build.
+
+`packs/changed_worlds.py` selects the worlds from the Git diff:
+
+| Changed paths | Worlds built, booted, and uploaded |
+| --- | --- |
+| `packs/mcN/**` | Only world N; changes to multiple worlds select their union |
+| Shared files under `packs/**`, including all of `packs/options/**` | All four |
+| `options/**`, `flake.nix`, `flake.lock`, `tests/mrpack-*.py`, either options-pack workflow | All four |
+| Unrelated files | None; the workflow's path filters skip the run |
+| Manual run, new branch, or unavailable base commit | All four |
+
+Pushes compare the full before/after range, including every pushed commit.
+Pull requests compare from the merge base, excluding changes made only on the
+target branch. Renames count both the old and new paths, and deletions count
+the removed path. A partial run's `option-packs` artifact contains **only its
+selected worlds**; Pages still builds and publishes the complete set.
+
+For a local comparison:
+
+```sh
+python3 -I packs/changed_worlds.py BASE HEAD
+python3 -I packs/changed_worlds.py BASE HEAD --pull-request
+```
 
 ## What a CI run does
 
@@ -83,9 +106,11 @@ done
 nix develop .#ci -c packs/startup.sh _pack-builds
 ```
 
-`startup.sh BUILD_OUTPUT_DIRECTORY` expects `mc1` through `mc4` pack files or
-symlinks, each paired with an `mc<N>-server-mods` directory or symlink. Missing
-inputs fail the check instead of triggering another build.
+`startup.sh BUILD_OUTPUT_DIRECTORY [WORLD ...]` expects the selected worlds'
+pack files or symlinks, each paired with an `mc<N>-server-mods` directory or
+symlink. Without world arguments it tests all four. For example,
+`packs/startup.sh _pack-builds mc2` tests only world 2. Missing inputs fail
+the check instead of triggering another build.
 
 To run one world, first build its pack and the matching server-mod directory,
 then pass both outputs to `packs/startup.py`. Its CLI is:
@@ -113,12 +138,12 @@ installer, and Minecraft's server files. On success, the log contains
 `server reached Done`, prefixed by the input pack's filename. A failed startup exits
 nonzero and includes the server log tail when it times out.
 
-The output-reader regression tests use small Python child processes and need
-neither Java nor network access. Pre-commit and both CI workflows run them;
-to run them directly:
+The output-reader and world-selection regression tests use small Python child
+processes and temporary Git repositories. They need neither Java nor network
+access. Pre-commit and both CI workflows run them; to run them directly:
 
 ```sh
-python3 -I -m unittest discover -s packs -p test_startup.py
+python3 -I -m unittest discover -s packs -p 'test_*.py'
 ```
 
 [^m]: See [Staying current](../minecraft/packs.md#staying-current).

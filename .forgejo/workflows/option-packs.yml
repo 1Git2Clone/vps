@@ -7,7 +7,7 @@
 # every update; see docs/src/minecraft/packs.md.
 #
 # This is the half a fork needs. Change packs/options, push, and the run's
-# `option-packs` artifact holds your four .mrpacks — no pages setup, no VPS.
+# `option-packs` artifact holds the selected .mrpacks — no pages setup, no VPS.
 #
 # It does NOT publish. pages-pull serves only the newest artifact named
 # `pages`, and replaces the repo's whole site with it, so a second workflow
@@ -20,7 +20,23 @@ name: Option packs
 on:
   push:
     branches: [main]
+    paths:
+      - 'packs/**'
+      - 'options/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'tests/mrpack-*.py'
+      - '.forgejo/workflows/option-packs.yml'
+      - '.github/workflows/option-packs.yml'
   pull_request:
+    paths:
+      - 'packs/**'
+      - 'options/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'tests/mrpack-*.py'
+      - '.forgejo/workflows/option-packs.yml'
+      - '.github/workflows/option-packs.yml'
   workflow_dispatch:
 
 concurrency:
@@ -44,17 +60,35 @@ jobs:
         run: |
           git init -q -b main .
           git remote add origin "${{ github.server_url }}/${{ github.repository }}"
-          git fetch -q --prune --depth=1 origin \
+          git fetch -q --prune origin \
             "+refs/heads/*:refs/remotes/origin/*" \
             "+refs/pull/*:refs/pull/*"
           git checkout -q --detach "$GITHUB_SHA"
 
+      - name: Select affected worlds
+        id: select
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            set -- --pull-request
+          else
+            set --
+          fi
+          worlds=$(nix develop .#ci -c python3 -I packs/changed_worlds.py "$BASE_SHA" "$HEAD_SHA" "$@")
+          printf 'worlds=%s\n' "$worlds" >> "$GITHUB_OUTPUT"
+          printf 'Selected worlds: %s\n' "${worlds:-none}"
+
       # The name is the build's own, minus the store hash:
       # <fileName>-<minecraft>-with-options.mrpack
       - name: Build
+        if: steps.select.outputs.worlds != ''
+        env:
+          WORLDS: ${{ steps.select.outputs.worlds }}
         run: |
           mkdir -p _packs _pack-builds
-          for pack in mc1 mc2 mc3 mc4; do
+          for pack in $WORLDS; do
             out=$(nix build --print-out-paths --out-link "_pack-builds/$pack" ".#$pack-mrpack-with-options")
             nix build --out-link "_pack-builds/$pack-server-mods" ".#$pack-mrpack-with-options.serverMods"
             cp "$out" "_packs/$(basename "$out" | cut -d- -f2-)"
@@ -63,10 +97,14 @@ jobs:
 
       # Consume the outputs above; do not build a second set of plain packs.
       - name: Boot the built options packs
-        run: nix develop .#ci -c packs/startup.sh _pack-builds
+        if: steps.select.outputs.worlds != ''
+        env:
+          WORLDS: ${{ steps.select.outputs.worlds }}
+        run: nix develop .#ci -c packs/startup.sh _pack-builds $WORLDS
 
       # Verbatim from pages.yml: upload-artifact is a JavaScript action.
       - name: Put the dev shell's node on PATH for the upload action
+        if: steps.select.outputs.worlds != ''
         run: |
           node_bin=$(nix develop .#ci -c bash -c 'command -v node')
           if [ -z "$node_bin" ]; then
@@ -77,6 +115,7 @@ jobs:
 
       # forgejo/upload-artifact, not actions/: see pages.yml.
       - name: Upload
+        if: steps.select.outputs.worlds != ''
         uses: forgejo/upload-artifact@v5
         with:
           name: option-packs

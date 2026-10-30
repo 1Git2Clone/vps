@@ -163,9 +163,11 @@ never what an update writes over their own. World 3's resource packs, shader
 choice and shader settings are in `packs/options/mc3`: the plain world 3 pack
 ships those packs but turns none of them on.
 
-`option-packs.yml` on both Forgejo and GitHub builds all four, boots those
-outputs' Fabric servers, then uploads them as the run's `option-packs`
-artifact. A failed boot prevents the upload. That is the fork path: change `packs/options`,
+`option-packs.yml` on both Forgejo and GitHub builds the affected worlds,
+boots those outputs' Fabric servers, then uploads them as the run's `option-packs`
+artifact. A failed boot prevents the upload. Changes under `packs/mcN/` select
+that world; shared pack code or any option override selects all four. The
+artifact contains only the selected worlds. That is the fork path: change `packs/options`,
 push, and download your packs from the run. It does not publish: `pages-pull`
 serves only the newest `pages` artifact, so `pages.yml` stages the same builds
 next to the plain packs. Locally:
