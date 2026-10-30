@@ -46,6 +46,16 @@
   # the -<minecraft version> the build appends.
   dir,
   fileName,
+  # A pack other people play. Prism writes every client-override over the
+  # player's copy on each update, and first DELETES every file the previous
+  # pack shipped, so a bundled sodium-options.json resets their video
+  # settings every time the pack changes. A shared pack ships preferences
+  # under config/yosbr/ instead, which YOSBR copies into place only where
+  # the player has no file yet. What stays a plain override must be listed
+  # in `enforced`: mod internals (mixin toggles) and compatibility fixes,
+  # which should follow the pack. Lost settings on 2026-10-30.
+  shared ? false,
+  enforced ? [ ],
 }:
 
 let
@@ -91,7 +101,22 @@ let
       (lib.fileset.fileFilter (f: isMeta f.name) dir)
     ]
   );
+  configPaths = map (f: lib.removePrefix "${toString dir}/" (toString f)) (
+    lib.fileset.toList configFiles
+  );
+  overriding = builtins.filter (
+    p: !(lib.hasPrefix "config/yosbr/" p) && !(builtins.elem p enforced)
+  ) configPaths;
+  hasDefaults = builtins.any (lib.hasPrefix "config/yosbr/") configPaths;
+
   clientOverrides =
+    assert lib.assertMsg (!shared || overriding == [ ]) ''
+      ${fileName}: a shared pack would overwrite these on every player's update:
+        ${lib.concatStringsSep "\n  " overriding}
+      Move each under config/yosbr/ (a default), or list it in `enforced`.'';
+    assert lib.assertMsg (
+      !hasDefaults || builtins.pathExists (dir + "/mods/yosbr.pw.toml")
+    ) "${fileName}: config/yosbr/ does nothing without the yosbr mod in the pack";
     if lib.fileset.toList configFiles == [ ] then
       null
     else

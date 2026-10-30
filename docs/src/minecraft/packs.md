@@ -37,6 +37,16 @@ version = "HUacBshD"          # the exact version pinned
   never edit it, and the `packwiz-refresh` hook rewrites it on commit.
 - **Everything else** (`options.txt`, `config/...`) is client config, shipped in
   the pack's `client-overrides/` and never applied to the server.
+- **On a shared pack** (worlds 1, 2 and 4, `shared` in `packs/default.nix`),
+  preferences live under `config/yosbr/`, mirroring the game folder:
+  `config/yosbr/config/sodium-options.json` is a player's starting
+  `config/sodium-options.json`. The YOSBR mod copies each into place only
+  when the player has no file of their own. A plain override is different: on
+  every update Prism deletes the files the old pack shipped and writes the new
+  pack's over the player's, so a bundled `sodium-options.json` resets their
+  video settings each time. Only mod internals and compatibility fixes stay
+  plain overrides, listed in `enforced`; the build fails on anything else.
+  World 3 is played by its owner alone and keeps its plain `options.txt`.
 
 ## Everyday changes
 
@@ -115,6 +125,12 @@ see that one, so look in the game log for "no longer compatible".
 A pack change reaches the server on the world's next start: itzg re-syncs the
 mods to the pack, removing what left it. Players have to re-import the pack at
 the same time, so for a mod both sides need, tell them before the deploy.
+
+Prism's update removes every file the previous pack installed, before writing
+the new one. A player whose instance began as their own export (configs,
+`options.txt`, waypoints and screenshots in its overrides) loses all of those
+on the first update. Have them update a fresh import of the published pack,
+or copy those files out first.
 
 - **Server-only or client-only changes** are safe on their own: players are
   unaffected by the first, the server by the second.

@@ -111,7 +111,7 @@ for pack_toml in sorted(root.glob("mc*/pack.toml")):
 # width means re-padding prose tables. Failing names each line to fix instead.
 
 repo = root.parent
-names = dict(re.findall(r'(mc\d+) = pack \./mc\d+ "([^"]+)";', (root / "default.nix").read_text()))
+names = dict(re.findall(r'(mc\d+) = pack \./mc\d+ "([^"]+)"', (root / "default.nix").read_text()))
 mc = {
     p.parent.name: tomllib.loads(p.read_text())["versions"]["minecraft"]
     for p in root.glob("mc*/pack.toml")

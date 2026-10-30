@@ -11,11 +11,33 @@
 { callPackage }:
 
 let
-  pack = dir: fileName: callPackage ./mrpack.nix { inherit dir fileName; };
+  pack =
+    dir: fileName: extra:
+    callPackage ./mrpack.nix ({ inherit dir fileName; } // extra);
+
+  # Mod internals and compatibility fixes: these follow the pack, so they
+  # stay plain overrides on a shared pack. Everything else is a default.
+  enforced = [
+    "config/fabric_loader_dependencies.json"
+    "config/ferritecore.mixin.properties"
+    "config/forgeconfigapiport.toml"
+    "config/lithium.properties"
+    "config/modernfix-mixins.properties"
+    "config/sodium-extra.properties"
+    "config/sodium-mixins.properties"
+  ];
 in
 {
-  mc1 = pack ./mc1 "gemstones";
-  mc2 = pack ./mc2 "gemstones-zombies";
-  mc3 = pack ./mc3 "vanilla-plus";
-  mc4 = pack ./mc4 "gemstones-lite";
+  mc1 = pack ./mc1 "gemstones" {
+    shared = true;
+    enforced = enforced ++ [ "config/iris-excluded.json" ];
+  };
+  mc2 = pack ./mc2 "gemstones-zombies" { shared = true; };
+  # World 3 is played by its owner alone, who keeps the pack's options.txt
+  # and configs as the settings to come back to on every update.
+  mc3 = pack ./mc3 "vanilla-plus" { };
+  mc4 = pack ./mc4 "gemstones-lite" {
+    shared = true;
+    inherit enforced;
+  };
 }
