@@ -837,6 +837,8 @@
 
       packages.${system} = {
         default = vps.config.system.build.toplevel;
+        horizon-server = pkgs.callPackage ./packages/horizon-server.nix { };
+        horizon-image = vps.config.virtualisation.oci-containers.containers.horizon.imageFile;
 
       }
       # ── The worlds' modpacks ─────────────────────────────────────────────────

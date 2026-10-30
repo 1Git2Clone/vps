@@ -49,6 +49,7 @@ locals {
     crafts    = "2eb048966e31e9a4de451d26e43f787c"
     docs      = "935706807c5f76271aa3e4671a9fd3f2"
     git       = "acf3cabcabfb15082fb920c213408b7f"
+    horizon   = "5c0a84a8d123fc7366b25e643218a514"
     mail      = "d95eaec80d7ef0326de086aa2d7dd883"
     mc        = "8b5b420ea4b1c920e560ae488c7d824e"
     mc2       = "ae7ae954818b8660e32346a2ff864308"

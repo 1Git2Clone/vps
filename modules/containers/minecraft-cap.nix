@@ -68,10 +68,15 @@ let
   scaler = pkgs.writers.writePython3 "minecraft-scaler" { flakeIgnore = [ "E501" ]; } ''
     import json
     import subprocess
-    import sys
+    from argparse import ArgumentParser
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    host, port, *worlds = sys.argv[1:]
+    parser = ArgumentParser(description="Start capped worlds or acknowledge always-on routes")
+    parser.add_argument("host")
+    parser.add_argument("port", type=int)
+    parser.add_argument("worlds", nargs="+")
+    parser.add_argument("--always-on", nargs="*", default=[])
+    args = parser.parse_args()
 
 
     class Handler(BaseHTTPRequestHandler):
@@ -87,7 +92,14 @@ let
                 world = req["backend"].rsplit(":", 1)[0]
             except (ValueError, KeyError, TypeError, AttributeError):
                 return self.reply(400)
-            if world not in worlds or action not in ("up", "down"):
+            if action not in ("up", "down"):
+                return self.reply(400)
+            if world in args.always_on:
+                # mc-router sends webhooks for every static route, even one
+                # already running. These routes are managed independently:
+                # never stop them on idle or bypass a backup's hold to start.
+                return self.reply(200)
+            if world not in args.worlds:
                 return self.reply(400)
 
             unit = f"docker-{world}.service"
@@ -107,7 +119,7 @@ let
             self.end_headers()
 
 
-    ThreadingHTTPServer((host, int(port)), Handler).serve_forever()
+    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
   '';
 in
 {
@@ -123,6 +135,12 @@ in
       description = "How many worlds may be up at once.";
     };
 
+    alwaysOnWorlds = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Always-on backend names whose scaler callbacks are acknowledged without starting or stopping them. Excluded from the cap.";
+    };
+
     holdFile = lib.mkOption {
       type = lib.types.str;
       default = "/run/minecraft-hold";
@@ -136,6 +154,12 @@ in
   };
 
   config = {
+    assertions = [
+      {
+        assertion = lib.intersectLists cfg.worlds cfg.alwaysOnWorlds == [ ];
+        message = "An always-on Minecraft route cannot also be a capped world.";
+      }
+    ];
     systemd.services =
       lib.listToAttrs (
         map (w: lib.nameValuePair "docker-${w}" { serviceConfig.ExecCondition = "${guard w}"; }) cfg.worlds
@@ -149,7 +173,11 @@ in
           requires = [ "docker-network-${config.infra.mcNetwork}.service" ];
 
           serviceConfig = {
-            ExecStart = "${scaler} ${config.infra.mcGateway} ${toString config.infra.mcScalerPort} ${lib.escapeShellArgs cfg.worlds}";
+            ExecStart =
+              "${scaler} ${config.infra.mcGateway} ${toString config.infra.mcScalerPort} ${lib.escapeShellArgs cfg.worlds}"
+              + lib.optionalString (
+                cfg.alwaysOnWorlds != [ ]
+              ) " --always-on ${lib.escapeShellArgs cfg.alwaysOnWorlds}";
             Restart = "always";
             RestartSec = 5;
 

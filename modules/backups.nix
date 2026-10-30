@@ -8,8 +8,11 @@
 let
   inherit (config.minecraftCap) worlds holdFile;
   systemctl = "${config.systemd.package}/bin/systemctl";
-  worldVolumes = map (w: "/var/lib/docker/volumes/${w}_data") worlds;
-  worldUnits = lib.escapeShellArgs (map (w: "docker-${w}.service") worlds);
+  # Horizon is always on and outside the Fabric cap, but shares the quiescent
+  # backup window. Its private resources are copied separately into daily B2.
+  backupWorlds = worlds ++ config.minecraftCap.alwaysOnWorlds;
+  worldVolumes = map (w: "/var/lib/docker/volumes/${w}_data") backupWorlds;
+  worldUnits = lib.escapeShellArgs (map (w: "docker-${w}.service") backupWorlds);
 in
 
 {
@@ -51,6 +54,7 @@ in
       "/var/lib/docker/volumes"
       "/var/backup/postgresql"
       "/var/lib/image-archive"
+      "/var/lib/horizon"
     ];
 
     # The minecraft worlds are snapshotted separately, with the servers stopped

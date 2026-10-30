@@ -30,6 +30,7 @@ pkgs.testers.runNixOSTest {
       ];
 
       minecraftCap.worlds = worlds;
+      minecraftCap.alwaysOnWorlds = [ "horizon" ];
 
       environment.systemPackages = [ pkgs.curl ];
 
@@ -44,6 +45,10 @@ pkgs.testers.runNixOSTest {
           };
         })
         // {
+          docker-horizon = {
+            wantedBy = [ "multi-user.target" ];
+            serviceConfig.ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
+          };
           # Stands in for docker creating the bridge: the gateway the scaler
           # binds, mc-router's address, and one more on the same subnet.
           "docker-network-${config.infra.mcNetwork}" = {
@@ -86,8 +91,18 @@ pkgs.testers.runNixOSTest {
 
 
     machine.wait_for_unit("minecraft-scaler.service")
+    machine.wait_for_unit("docker-horizon.service")
     # Not wait_for_open_port: that probes from an address IPAddressDeny drops.
     machine.wait_until_succeeds(f"curl -s --interface 172.31.0.2 -m 2 -o /dev/null {url}")
+
+    with subtest("always-on routes accept callbacks and never stop on idle"):
+        assert scale("up", "horizon") == "200"
+        assert scale("down", "horizon") == "200"
+        assert state("horizon") == "active"
+        machine.succeed("systemctl stop docker-horizon.service")
+        assert scale("up", "horizon") == "200"
+        assert state("horizon") == "inactive"
+        assert scale("up", "unknown-world") == "400"
 
     with subtest("the cap refuses a third world, and answers 409"):
         assert scale("up", "w1") == "200"

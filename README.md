@@ -103,6 +103,10 @@ so join again a minute later. The full guide, including what to do when the
 game will not start, is
 [Playing](https://docs.hu-tao.dev/minecraft/playing.html) in the handbook.
 
+The separate [Horizon trial](docs/src/minecraft/horizon.md) runs the native
+Rust implementation of Java 26.3 at `horizon.hu-tao.dev`. Both client and
+server use pinned upstream binaries; the Fabric packs are separate.
+
 ## Quick start
 
 ```sh

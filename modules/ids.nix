@@ -76,6 +76,7 @@ in
       # gets an id for the same reason caddy does: something on the host has to
       # own that directory, and it must not be root.
       pages-hook = 2;
+      horizon = 3;
     };
 
     infra.serviceId = ids;

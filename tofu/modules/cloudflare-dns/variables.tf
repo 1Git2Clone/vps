@@ -24,7 +24,7 @@ variable "subdomains" {
   # tells the worlds apart by the hostname in the client's handshake (see
   # modules/containers/minecraft.nix in the NixOS config), so a world needs
   # only its A record here, no SRV and no port of its own.
-  default = ["mail", "git", "minecraft", "mc", "mc2", "mc3", "mc4", "status", "smtp", "pages", "crafts", "compress", "docs"]
+  default = ["mail", "git", "minecraft", "mc", "mc2", "mc3", "mc4", "horizon", "status", "smtp", "pages", "crafts", "compress", "docs"]
 }
 
 variable "tailnet_ipv4" {

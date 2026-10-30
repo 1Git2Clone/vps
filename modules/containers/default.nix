@@ -121,6 +121,7 @@ in
     ./dozzle.nix
     ./forgejo.nix
     ./grafana.nix
+    ./horizon.nix
     ./kuma.nix
     ./mailserver.nix
     ./mc-router.nix

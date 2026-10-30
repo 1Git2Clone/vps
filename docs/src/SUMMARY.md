@@ -27,6 +27,7 @@
   - [World 4: Gemstones Lite](minecraft/worlds/mc4.md)
 - [How the servers are set up](minecraft/servers.md)
 - [Working on the packs](minecraft/packs.md)
+- [Horizon trial server](minecraft/horizon.md)
 
 # Operations
 
