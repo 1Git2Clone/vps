@@ -9,9 +9,9 @@
 **Minecraft** 26.3
 
 [World 1](mc1.md)'s pack, cut down for a PC with integrated graphics and 8 GB of
-RAM, and a version newer: every mod it kept has a 26.3 build. Gameplay and
-conveniences are the same; what is gone is everything that costs frames
-without changing how the game plays.
+RAM, and a version newer: every mod it kept has a 26.3 build. Gameplay is the
+same, plus Carry On and Villager in a Bucket from [world 3](mc3.md); what is
+gone is everything that costs frames without changing how the game plays.
 
 ## What changes for everyone
 
@@ -20,6 +20,12 @@ without changing how the game plays.
 - **Half the players can skip the night**
   ([Server Sleep](https://modrinth.com/mod/serversleep)): once 50% are in bed,
   morning comes.
+- **Carry things**: [Carry On](https://modrinth.com/mod/carry-on): sneak and
+  right-click with an empty hand to pick up a mob or a chest with its
+  contents, and carry it.
+  [Villager in a Bucket](https://modrinth.com/mod/villager-in-a-bucket):
+  right-click a villager, wandering trader or zombie villager with an empty
+  bucket to carry it as an item, trades and all.
 - **Chat stays unreportable**
   ([No Chat Reports](https://modrinth.com/mod/no-chat-reports)).
 - Under the hood: Lithium, FerriteCore and Krypton make the server itself
@@ -33,7 +39,8 @@ without changing how the game plays.
   game while it is in the background.
 - **Interface**: the same as world 1's: VoxelMap, Jade, AppleSkin, Shulker Box
   Tooltip, Mouse Tweaks, Controlling, Zoomify, More Chat History, Better Mount
-  HUD and Mod Menu.
+  HUD and Mod Menu, plus JEI for every item's recipes and uses (R and U on an
+  item).
 - **Visuals**: only 3D Skin Layers.
 
 ## What is left out, and why

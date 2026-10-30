@@ -142,6 +142,11 @@ hash = "6e9bddf1d0b01deb875b99fda9395b7bf927ce1a795a70b5a1bd56500e43df03"
 metafile = true
 
 [[files]]
+file = "mods/carry-on.pw.toml"
+hash = "21e9d2a9919d7208f00fdacb1841e7a671e824f0c735f6fee0b45983aaf3501d"
+metafile = true
+
+[[files]]
 file = "mods/cloth-config.pw.toml"
 hash = "2b9727522c90a979eb9671ad7c5421443d91391b0697d1772146e6bfa19cb3c1"
 metafile = true
@@ -202,6 +207,11 @@ hash = "2d47c7f24c1d2585769934d3ccadd240c48fc4c3bb2a878bb0787911e54452a3"
 metafile = true
 
 [[files]]
+file = "mods/jei.pw.toml"
+hash = "2ccb26645ce8f7d3ad858016f4e16b11e5260d18d92b46e9a1cf30345d41cf82"
+metafile = true
+
+[[files]]
 file = "mods/krypton.pw.toml"
 hash = "4d8432eed6984a86acf6c9f056755b3f9082eb8fcb5b3f37e96498e7871e40c9"
 metafile = true
@@ -214,6 +224,11 @@ metafile = true
 [[files]]
 file = "mods/lithium.pw.toml"
 hash = "a39389e4c813b70b984a0c8aed769825b32c321ee0b9aed1151d92cb38f77357"
+metafile = true
+
+[[files]]
+file = "mods/mezzconfig.pw.toml"
+hash = "f0536f9b2cd6854f4f5a168c468ffdc29ac2f4485a04ead07516fd6dac16e84d"
 metafile = true
 
 [[files]]
@@ -284,6 +299,11 @@ metafile = true
 [[files]]
 file = "mods/sodium.pw.toml"
 hash = "0bf314c578473659bd89915114cac8e60994988f405218726a48d35b06e9316c"
+metafile = true
+
+[[files]]
+file = "mods/villager-in-a-bucket.pw.toml"
+hash = "a6b2f54f2ede82ef5f46b0dff81f4217c9ece84f18e5a135fc9331d264587dba"
 metafile = true
 
 [[files]]

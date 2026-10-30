@@ -327,6 +327,11 @@ hash = "427ac639f77e4ed43b801c3597c959f96a054ecb8d531971c11f7d860748d45e"
 metafile = true
 
 [[files]]
+file = "mods/jei.pw.toml"
+hash = "79cba17586f9e61435626c9e50fb3d860f26d31adf08c95511e0f37fe23a06cc"
+metafile = true
+
+[[files]]
 file = "mods/krypton.pw.toml"
 hash = "e922d7300eba8cfbd9aa31ba475cf6fcbcf11d74e89a0314ada18d58f08a2634"
 metafile = true
@@ -354,6 +359,11 @@ metafile = true
 [[files]]
 file = "mods/lithostitched.pw.toml"
 hash = "5a8c222f5bbfcf28e4a7c4a3b49443c9b0412125484057695122dd46590dd813"
+metafile = true
+
+[[files]]
+file = "mods/mezzconfig.pw.toml"
+hash = "59a4d9996eefe9d1b677132d3e8f35969cece8fb70e4bb7f6865c7f0328ad28b"
 metafile = true
 
 [[files]]
