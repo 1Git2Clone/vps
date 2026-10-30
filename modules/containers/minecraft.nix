@@ -89,7 +89,14 @@ let
       # fresh world and leaves the old folder on the volume, untouched: the
       # reset is undone by putting the old name back.
       level ? null,
+      # Edits to the server's own config files, which the pack cannot carry
+      # (see packs/mrpack.nix): itzg's patch ops, applied on every start to the
+      # file the mod generated, so every key not named keeps the mod's default.
+      patches ? [ ],
     }:
+    let
+      patchSet = pkgs.writeText "${name}-patches.json" (builtins.toJSON { inherit patches; });
+    in
     {
       inherit image;
 
@@ -126,7 +133,8 @@ let
         # has no griefers to protect spawn from.
         SPAWN_PROTECTION = "0";
       }
-      // lib.optionalAttrs (level != null) { LEVEL = level; };
+      // lib.optionalAttrs (level != null) { LEVEL = level; }
+      // lib.optionalAttrs (patches != [ ]) { PATCH_DEFINITIONS = "/patches.json"; };
 
       environmentFiles = [ config.sops.templates."${name}.env".path ];
 
@@ -143,7 +151,8 @@ let
         # itzg only takes a local pack whose name ends in .mrpack, which the
         # pack's store name does.
         "${pack}:/modpack/${pack.name}:ro"
-      ];
+      ]
+      ++ lib.optional (patches != [ ]) "${patchSet}:/patches.json:ro";
 
       extraOptions = stopOptions;
     };
@@ -221,6 +230,23 @@ in
       # Reflowing left the pack: their blocks were all through the old terrain.
       # The first world is still in this volume as `world`.
       level = "world-2026-10-29";
+      # Voxy Server Side's default lets each player pull 25 MiB/s of distant
+      # terrain. On 2026-10-30 that filled a player's VPN link (300 MB in nine
+      # minutes, ping +9 s) until the connection reset; the mod's own ping
+      # backstop engaged too late to save it. Raw MiB, before compression.
+      patches = [
+        {
+          file = "/data/config/vss-server-config.yaml";
+          ops = [
+            {
+              "$set" = {
+                path = "$.network.bandwidth.per_player_mib_per_second";
+                value = 4;
+              };
+            }
+          ];
+        }
+      ];
     };
 
     # Fourth world: mc1's pack, lightened for players on integrated graphics,
