@@ -1,0 +1,46 @@
+# hutao's options, merged into every pack's -with-options build. Only the keys
+# set here change; everything else keeps Minecraft's default, or the pack's.
+# Taken from world 3's pack, minus what is world 3's own (its resource packs,
+# in ../mc3/options.txt). See docs/src/minecraft/packs.md.
+
+# Video
+biomeBlendRadius:1
+enableVsync:false
+entityDistanceScaling:0.75
+entityShadows:false
+fov:1.0
+fullscreen:false
+guiScale:2
+maxFps:140
+renderDistance:10
+simulationDistance:6
+
+# Sound
+soundCategory_master:0.08443708609271523
+
+# Input and first run
+touchscreen:false
+tutorialStep:punch_tree
+rawMouseInput:true
+
+# Keys (a key for a mod a pack lacks is ignored)
+key_key.saveToolbarActivator:key.keyboard.unknown
+key_key.punchy.open_main_menu:key.keyboard.f8
+key_key.punchy.inspect:key.keyboard.i
+key_key.toms_storage.open_terminal:key.keyboard.b
+key_key.travelersbackpack.inventory:key.keyboard.b
+key_key.travelersbackpack.sort:key.keyboard.unknown
+key_key.travelersbackpack.ability:key.keyboard.unknown
+key_key.travelersbackpack.cycle_tool:key.keyboard.z
+key_key.travelersbackpack.toggle_upgrade_0:key.keyboard.unknown
+key_key.travelersbackpack.toggle_upgrade_1:key.keyboard.unknown
+key_key.travelersbackpack.toggle_upgrade_2:key.keyboard.unknown
+key_key.travelersbackpack.toggle_upgrade_3:key.keyboard.unknown
+key_gui.xaero_new_waypoint:key.keyboard.left.bracket
+key_iris.keybind.reload:key.keyboard.r
+key_iris.keybind.toggleShaders:key.keyboard.k
+key_iris.keybind.shaderPackSelection:key.keyboard.i
+key_iris.keybind.wireframe:key.keyboard.unknown
+key_key.punchy.triggerable.punchy_sword_inspect_old:key.keyboard.j
+key_key.punchy.triggerable.punchy_sword_inspect_rework:key.keyboard.g
+key_key.aicompanion.radar:key.keyboard.unknown

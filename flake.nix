@@ -840,7 +840,13 @@
       #
       # The .mrpack each world's container installs and pages.yml publishes for
       # the players: one build, both consumers. See packs/mrpack.nix.
-      // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-mrpack" v) mrpacks;
+      // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-mrpack" v) mrpacks
+      # The same packs with packs/options laid over them, for players who want
+      # those settings to start from:  nix build .#mc1-mrpack-with-options
+      # Built by .forgejo/workflows/option-packs.yml, published by pages.yml.
+      // nixpkgs.lib.mapAttrs' (
+        k: v: nixpkgs.lib.nameValuePair "${k}-mrpack-with-options" v.withOptions
+      ) mrpacks;
 
       apps.${system} = {
         # ── The handbook, served locally ───────────────────────────────────────

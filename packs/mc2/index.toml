@@ -141,6 +141,11 @@ hash = "af20070dd9497817a83162c17b181a0a44f7213ea302d059a81c5aed02d0c877"
 metafile = true
 
 [[files]]
+file = "mods/yosbr.pw.toml"
+hash = "649c259a4777ba1b544b69d04a79f2b1b0e1a3c520033cc86a3c14d5fa53564a"
+metafile = true
+
+[[files]]
 file = "mods/zombie-awareness.pw.toml"
 hash = "597a74f79ce4013258c7c45621d63d14c37e89658cd002bcf7193a9beaabb176"
 metafile = true

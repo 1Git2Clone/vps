@@ -101,12 +101,17 @@ jobs:
       # The file name is the build's own (`<hash>-<name>.mrpack`, minus the
       # hash), so it cannot disagree with packs/default.nix; the handbook's
       # links are checked against it by packs/mod-list.py.
+      #
+      # Beside each, its -with-options build (packs/options laid over it). The
+      # same build option-packs.yml uploads for forks; it is staged here
+      # because only this workflow's `pages` artifact is served.
       - name: Stage the modpacks
         run: |
           for pack in mc1 mc2 mc3 mc4; do
-            out=$(nix build --print-out-paths --no-link ".#$pack-mrpack")
             mkdir -p "_site/$pack"
-            cp "$out" "_site/$pack/$(basename "$out" | cut -d- -f2-)"
+            for out in $(nix build --print-out-paths --no-link ".#$pack-mrpack" ".#$pack-mrpack-with-options"); do
+              cp "$out" "_site/$pack/$(basename "$out" | cut -d- -f2-)"
+            done
           done
 
       # upload-artifact is a JavaScript action and this job runs on the `nix`

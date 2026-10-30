@@ -1,22 +1,6 @@
 hash-format = "sha256"
 
 [[files]]
-file = "config/MouseTweaks.cfg"
-hash = "4069ce1a439d8c37453c1b1e9f2037e0942674c7e48723a39b37eab245792ad4"
-
-[[files]]
-file = "config/capes.json5"
-hash = "affbf096bc7768bd508039d381774676bc9bbf463c8332f34cb021b0641041e0"
-
-[[files]]
-file = "config/dynamic_fps.json"
-hash = "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
-
-[[files]]
-file = "config/entityculling.json"
-hash = "4a6d510b7e0157027b1cf2022184567fd5387aa09d08db108cb0369ba371ddbe"
-
-[[files]]
 file = "config/fabric/indigo-renderer.properties"
 hash = "7c5af263684ff12c8c1a3db4a85f116594552ccd8940650c31c0a23ef2aceec5"
 
@@ -25,116 +9,16 @@ file = "config/ferritecore.mixin.properties"
 hash = "fddb9f45485b7ae24191e3d94aa6e94a31016a8d4938d970d7f9877c79235732"
 
 [[files]]
-file = "config/immediatelyfast.json"
-hash = "9a1ae7577440d36732b4d34885195b37423a3e8b906ff8602220bc0447969d15"
-
-[[files]]
 file = "config/iris-excluded.json"
 hash = "4d3264b58c502afaeca3f44e8d2db0843c54b8ba957afd21a2d450fe10dafefb"
-
-[[files]]
-file = "config/iris.properties"
-hash = "35ee736cbfa4fd0e956cc2d8bf4ad14e09539091837b83c8931b4108832586e0"
 
 [[files]]
 file = "config/lithium.properties"
 hash = "6cf6f83720071fd1657c8e79b357caf68d40f410ae123e5f922483eb1d1d25be"
 
 [[files]]
-file = "config/modmenu.json"
-hash = "16d20c40cc6c114faff5493b561873fe160a65047720bc19fb3a3dd64aa67f3b"
-
-[[files]]
-file = "config/moreculling.toml"
-hash = "7325630da370b45c609cb4cae759338c2b9e5959d2e203dcef638319b95564bb"
-
-[[files]]
 file = "config/sodium-mixins.properties"
 hash = "b627c4456e6fa0bc4b5f85e2f1cd949faedae3cb9afdaf2a5f52e6f3b6ae1f01"
-
-[[files]]
-file = "config/sodium-options.json"
-hash = "edc4b8a2e4aa7bac58270e89b4c5e54cb35c054f9cba6439951e4c89e66b915e"
-
-[[files]]
-file = "config/transition.json"
-hash = "60420a41571a4658b91babfa2b47d6fefb7c1766eeea969f51ff98ab34c2431c"
-
-[[files]]
-file = "config/trender.json"
-hash = "0a282f3623f7f9443a1d10b5768865f69e58b74e000dcfb4f40399626b7a6124"
-
-[[files]]
-file = "config/voxy-config.json"
-hash = "be0ee4e091f960efe85a215f8ef8088378be55020fbbe65f1a8e8f72b09bd18a"
-
-[[files]]
-file = "config/xaero/lib/client.cfg"
-hash = "43ed9dbfa5b4d6f0f3d2e8c2ced17ad298164b22c68ff11d415257a39b074336"
-
-[[files]]
-file = "config/xaero/lib/common.cfg"
-hash = "98f698d96a6d21d830a455b4ad045b70516fa63c298021742d8499e7f0366cd2"
-
-[[files]]
-file = "config/xaero/lib/profiles/default.cfg"
-hash = "34ae854b17d896d7cb853bdc28c27231a3947e91cb9f0991f372846ee3c2a907"
-
-[[files]]
-file = "config/xaero/lib/server_profiles/default.cfg"
-hash = "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a"
-
-[[files]]
-file = "config/xaero/minimap/client.cfg"
-hash = "c0915eff5d1a7905cd1038d646eb9086fd1a29e2f637d53535e4da161de17b9f"
-
-[[files]]
-file = "config/xaero/minimap/common.cfg"
-hash = "2b49df024c03a369c62a303c72755e7fedeb4f4653ff53a12fd37bd83ccd4ed0"
-
-[[files]]
-file = "config/xaero/minimap/default_radar_categories_client.json"
-hash = "3c888b22cba252e8f0a974f8c1604bc05109affbf4354ad3b16e71778c4b9774"
-
-[[files]]
-file = "config/xaero/minimap/default_radar_categories_server.json"
-hash = "a4c652cafa7dea324e5f5cf3b1df46a84e54b6d4f877195857bce55a559c1cfd"
-
-[[files]]
-file = "config/xaero/minimap/profiles/default.cfg"
-hash = "5a5c0a25fb3cca39c8b36704edbb4902ea2459d495af906eea447f6b7ccdab5c"
-
-[[files]]
-file = "config/xaero/minimap/profiles/entity_radar_categories/default.cfg.json"
-hash = "a4c13e76500473fe8d555225022542d0ef89708c3d885e233dca15f91e437774"
-
-[[files]]
-file = "config/xaero/minimap/profiles/info_display_config/default.cfg.txt"
-hash = "05d24621fd7f44a1dbad786638e78d467655c4bc63924dc33e7fbef0aa27cb1e"
-
-[[files]]
-file = "config/xaero/minimap/server_profiles/default.cfg"
-hash = "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a"
-
-[[files]]
-file = "config/xaero/world-map/client.cfg"
-hash = "d0f079a8df083f6f60a0e0c1316a25fc841755a91bdcb2f86c66ead8e7d4d13d"
-
-[[files]]
-file = "config/xaero/world-map/common.cfg"
-hash = "0c229eb0daf85bd09af51f21eeeb99497a3bd50a825d5ab1ca695fb21bf6cf9d"
-
-[[files]]
-file = "config/xaero/world-map/profiles/default.cfg"
-hash = "5422abf9c83fedef6509144293fad20f588d4bb6ce0cf1af78cbcd2bcd0d2ccf"
-
-[[files]]
-file = "config/xaero/world-map/server_profiles/default.cfg"
-hash = "d438aea41ca41e93697e059f523686935c0add482f6abe96b532bbf10c6ed80a"
-
-[[files]]
-file = "config/xaerohud.txt"
-hash = "cece60604b8de5e978141c981c1ed85227c8f30697a513869012b06dd15fcf02"
 
 [[files]]
 file = "mods/3dskinlayers.pw.toml"
@@ -577,8 +461,9 @@ hash = "ced90938fd1163665019ffdc09a3c44f1b2b0eef963ac1e8abac5ee410978612"
 metafile = true
 
 [[files]]
-file = "options.txt"
-hash = "e9e92b529d355e6091e45b319ba2abf855b2a369a841c9894c7f6af4db4dd683"
+file = "mods/yosbr.pw.toml"
+hash = "649c259a4777ba1b544b69d04a79f2b1b0e1a3c520033cc86a3c14d5fa53564a"
+metafile = true
 
 [[files]]
 file = "resourcepacks/3d-ladders.pw.toml"
@@ -692,14 +577,6 @@ metafile = true
 file = "resourcepacks/vanilla-collective-heart-crosshair.pw.toml"
 hash = "9ec84613e8ec9671c3b5563cef0109245974b454e1d2bf83ee72e5d4187e2eff"
 metafile = true
-
-[[files]]
-file = "shaderpacks/ComplementaryReimagined_r5.9.3.zip.txt"
-hash = "5c7e0c2678dc8cc182e51fee9c10e36d12c87c5f8e77a74d11c574100da98d95"
-
-[[files]]
-file = "shaderpacks/MiniatureXL 1.0.zip.txt"
-hash = "9b742f8b1df247c10746714b7c3b4f33cc34ddd00482dc0f9be94219814033ba"
 
 [[files]]
 file = "shaderpacks/complementary-reimagined.pw.toml"

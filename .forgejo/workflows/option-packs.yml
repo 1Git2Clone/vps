@@ -1,0 +1,76 @@
+# ==============================================================================
+# Option packs — every world's modpack with packs/options laid over it
+# ==============================================================================
+# The -with-options builds (packs/default.nix): each world's pack plus the
+# options in packs/options, so a fresh import starts with those settings. On
+# a shared pack they are YOSBR defaults, so a player's own changes survive
+# every update; see docs/src/minecraft/packs.md.
+#
+# This is the half a fork needs. Change packs/options, push, and the run's
+# `option-packs` artifact holds your four .mrpacks — no pages setup, no VPS.
+#
+# It does NOT publish. pages-pull serves only the newest artifact named
+# `pages`, and replaces the repo's whole site with it, so a second workflow
+# uploading `pages` would wipe the handbook. pages.yml stages these same
+# builds into the site; both read the flake's mcN-mrpack-with-options, so the
+# two cannot disagree.
+name: Option packs
+
+# Same triggers as pages.yml, for the same reasons: main only, no paths filter.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: option-packs
+  cancel-in-progress: true
+
+jobs:
+  option-packs:
+    name: Build the packs with options
+    # `nix`, as in pages.yml: the flake builds the packs, and node for the
+    # upload comes from its dev shell.
+    runs-on: nix
+
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
+
+    steps:
+      # pages.yml's hand-written checkout: nixos/nix has no node for
+      # actions/checkout.
+      - name: Checkout
+        run: |
+          git init -q -b main .
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git fetch -q --prune --depth=1 origin "+refs/heads/*:refs/remotes/origin/*"
+          git checkout -q --detach "$GITHUB_SHA"
+
+      # The name is the build's own, minus the store hash:
+      # <fileName>-<minecraft>-with-options.mrpack
+      - name: Build
+        run: |
+          mkdir -p _packs
+          for pack in mc1 mc2 mc3 mc4; do
+            out=$(nix build --print-out-paths --no-link ".#$pack-mrpack-with-options")
+            cp "$out" "_packs/$(basename "$out" | cut -d- -f2-)"
+          done
+          ls -l _packs
+
+      # Verbatim from pages.yml: upload-artifact is a JavaScript action.
+      - name: Put the dev shell's node on PATH for the upload action
+        run: |
+          node_bin=$(nix develop .#ci -c bash -c 'command -v node')
+          if [ -z "$node_bin" ]; then
+            echo "no node in the dev shell — upload-artifact cannot run" >&2
+            exit 1
+          fi
+          dirname "$node_bin" >> "$GITHUB_PATH"
+
+      # forgejo/upload-artifact, not actions/: see pages.yml.
+      - name: Upload
+        uses: forgejo/upload-artifact@v5
+        with:
+          name: option-packs
+          path: _packs/
+          if-no-files-found: error

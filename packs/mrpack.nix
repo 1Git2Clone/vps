@@ -56,6 +56,14 @@
   # which should follow the pack. Lost settings on 2026-10-30.
   shared ? false,
   enforced ? [ ],
+  # Option overrides: directories mirroring the game folder, which the
+  # -with-options build (withOptions) lays over the pack's client files in
+  # order, by packs/options.py. On a shared pack they land under
+  # config/yosbr/ like every other preference. Both builds take them, so the
+  # plain build's check covers the options too; only withOptions applies
+  # them, and it adds -with-options to the file name.
+  options ? [ ],
+  withOptions ? false,
 }:
 
 let
@@ -104,9 +112,18 @@ let
   configPaths = map (f: lib.removePrefix "${toString dir}/" (toString f)) (
     lib.fileset.toList configFiles
   );
+  # resourcepacks/ is content the pack ships (a folder pack), not settings.
   overriding = builtins.filter (
-    p: !(lib.hasPrefix "config/yosbr/" p) && !(builtins.elem p enforced)
+    p:
+    !(lib.hasPrefix "config/yosbr/" p)
+    && !(lib.hasPrefix "resourcepacks/" p)
+    && !(builtins.elem p enforced)
   ) configPaths;
+  applied = if withOptions then options else [ ];
+  suffix = lib.optionalString withOptions "-with-options";
+  optionFiles = builtins.filter builtins.pathExists (
+    [ (dir + "/options.txt") ] ++ map (d: d + "/options.txt") options
+  );
   hasDefaults = builtins.any (lib.hasPrefix "config/yosbr/") configPaths;
 
   clientOverrides =
@@ -115,7 +132,7 @@ let
         ${lib.concatStringsSep "\n  " overriding}
       Move each under config/yosbr/ (a default), or list it in `enforced`.'';
     assert lib.assertMsg (
-      !hasDefaults || builtins.pathExists (dir + "/mods/yosbr.pw.toml")
+      !(hasDefaults || (shared && applied != [ ])) || builtins.pathExists (dir + "/mods/yosbr.pw.toml")
     ) "${fileName}: config/yosbr/ does nothing without the yosbr mod in the pack";
     if lib.fileset.toList configFiles == [ ] then
       null
@@ -141,21 +158,27 @@ let
   );
 
   mrpack =
-    runCommand "${fileName}-${pack.versions.minecraft}.mrpack"
+    runCommand "${fileName}-${pack.versions.minecraft}${suffix}.mrpack"
       {
         nativeBuildInputs = [
           jq
           zip
+          python3
         ];
         passthru = { inherit check; };
       }
       ''
-        mkdir -p pack
+        mkdir -p pack/client-overrides
         ${lib.optionalString (clientOverrides != null) ''
-          mkdir -p pack/client-overrides
           cp -r ${clientOverrides}/. pack/client-overrides/
         ''}
         chmod -R u+w pack
+        ${lib.optionalString (applied != [ ]) ''
+          python3 -I ${./options.py} pack/client-overrides ${lib.escapeShellArg (lib.optionalString shared "config/yosbr/")} ${
+            lib.escapeShellArgs (map (d: "${d}") applied)
+          }
+        ''}
+        rmdir --ignore-fail-on-non-empty pack/client-overrides
 
         # The mrpack format wants sha1 and the size as well, which packwiz does
         # not record; the fetched file is right here to take them from.
@@ -226,11 +249,12 @@ let
         ''
         # options.txt turns resource packs on by file name, and Minecraft
         # silently drops a name it cannot find. See tests/mrpack-options.py.
-        + lib.optionalString (builtins.pathExists (dir + "/options.txt")) ''
-          python3 -I ${../tests/mrpack-options.py} "$filesPath" ${dir + "/options.txt"} ${
+        # The pack's own options.txt and every options dir's are checked.
+        + lib.concatMapStrings (f: ''
+          python3 -I ${../tests/mrpack-options.py} "$filesPath" ${f} ${
             lib.optionalString (builtins.pathExists (dir + "/resourcepacks")) "${dir + "/resourcepacks"}"
           }
-        ''
+        '') optionFiles
         + "touch $out"
       );
 in

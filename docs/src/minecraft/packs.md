@@ -37,7 +37,7 @@ version = "HUacBshD"          # the exact version pinned
   never edit it, and the `packwiz-refresh` hook rewrites it on commit.
 - **Everything else** (`options.txt`, `config/...`) is client config, shipped in
   the pack's `client-overrides/` and never applied to the server.
-- **On a shared pack** (worlds 1, 2 and 4, `shared` in `packs/default.nix`),
+- **Every pack is shared** (`shared` in `packs/default.nix`), so
   preferences live under `config/yosbr/`, mirroring the game folder:
   `config/yosbr/config/sodium-options.json` is a player's starting
   `config/sodium-options.json`. The YOSBR mod copies each into place only
@@ -46,7 +46,8 @@ version = "HUacBshD"          # the exact version pinned
   pack's over the player's, so a bundled `sodium-options.json` resets their
   video settings each time. Only mod internals and compatibility fixes stay
   plain overrides, listed in `enforced`; the build fails on anything else.
-  World 3 is played by its owner alone and keeps its plain `options.txt`.
+  A pack ships no `options.txt` of its own: settings belong in
+  `packs/options`, which only the `-with-options` builds carry.
 
 ## Everyday changes
 
@@ -119,6 +120,49 @@ Write the entry as `file/` plus the `filename` from its `.pw.toml`, or
 for another Minecraft version also has to be listed in
 `incompatibleResourcePacks`, or the game drops it as well; the check cannot
 see that one, so look in the game log for "no longer compatible".
+
+## Packs with options
+
+Every pack has a second build, `<pack>-<minecraft>-with-options.mrpack`: the
+same mods with the settings in `packs/options` laid over it, so a fresh import
+starts with those. They are hutao's, and preferences rather than anything a
+world needs, so the plain pack stays the default and the world pages link
+both.
+
+```text
+packs/options/
+  all/options.txt     every pack: only the keys you set
+  all/config/...      every pack: whole mod config files
+  mc4/options.txt     one pack, applied after all/
+  mc4/config/...
+```
+
+`packs/options.py` applies them, `all/` first and then the pack's own folder,
+the later winning:
+
+- **`options.txt` merges key by key**, over the pack's own `options.txt` if it
+  ships one. A key you leave out keeps Minecraft's default or the pack's, and a
+  key a pack's mods do not know is ignored, so one file serves every pack.
+  Lines without a `:` are comments.
+- **Every other file replaces the pack's whole.** Mod configs are JSON, TOML
+  and `.properties` that change shape between mod versions; a key merge of
+  those is guesswork, a replacement is what you wrote. To change one setting
+  for one pack, copy the file into that pack's folder and edit it there.
+
+The result goes under `config/yosbr/`, so it is where a player starts and
+never what an update writes over their own. World 3's resource packs, shader
+choice and shader settings are in `packs/options/mc3`: the plain world 3 pack
+ships those packs but turns none of them on.
+
+`.forgejo/workflows/option-packs.yml` builds all four and uploads them as the
+run's `option-packs` artifact. That is the fork path: change `packs/options`,
+push, and download your packs from the run. It does not publish: `pages-pull`
+serves only the newest `pages` artifact, so `pages.yml` stages the same builds
+next to the plain packs. Locally:
+
+```sh
+nix build .#mc4-mrpack-with-options
+```
 
 ## Changing a live world's mods
 

@@ -14,6 +14,12 @@ look and run better, so a pack from here can always join its world.
 `minecraft.hu-tao.dev` and the server's bare IP also reach world 1. Each
 world's page says what its mods do and lists every one of them.
 
+Each world's page also links a **with options** build: the same pack with
+hutao's settings to start from (video, sound, key bindings), from
+[`packs/options`](https://git.hu-tao.dev/hutao/vps/src/branch/main/packs/options).
+They are only a starting point: change anything in game and the pack's
+updates leave it alone.
+
 ## Installing a pack
 
 A `.mrpack` is a Modrinth modpack: a small file listing the mods, which your

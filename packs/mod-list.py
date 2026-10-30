@@ -111,7 +111,7 @@ for pack_toml in sorted(root.glob("mc*/pack.toml")):
 # width means re-padding prose tables. Failing names each line to fix instead.
 
 repo = root.parent
-names = dict(re.findall(r'(mc\d+) = pack \./mc\d+ "([^"]+)"', (root / "default.nix").read_text()))
+names = dict(re.findall(r'(mc\d+) = pack "mc\d+" "([^"]+)"', (root / "default.nix").read_text()))
 mc = {
     p.parent.name: tomllib.loads(p.read_text())["versions"]["minecraft"]
     for p in root.glob("mc*/pack.toml")
@@ -125,9 +125,11 @@ for page in pages:
     where = page.relative_to(repo)
     for n, line in enumerate(page.read_text().splitlines(), 1):
         for text, key, path in link.findall(line):
+            # Either build of the pack: plain, or -with-options.
             want = f"{names[key]}-{mc[key]}.mrpack"
-            if text != want or path != want:
-                stale.append(f"{where}:{n}: {key}'s pack is {want}")
+            wanted = (want, want.replace(".mrpack", "-with-options.mrpack"))
+            if text != path or text not in wanted:
+                stale.append(f"{where}:{n}: {key}'s packs are {' and '.join(wanted)}")
             # A world table's row carries the version in a cell of its own.
             if line.startswith("|") and f"| {mc[key]} " not in line:
                 stale.append(f"{where}:{n}: {key} is on Minecraft {mc[key]}")

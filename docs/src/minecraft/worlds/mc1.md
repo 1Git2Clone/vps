@@ -7,6 +7,7 @@
 
 **Join at** `mc.hu-tao.dev` (also `minecraft.hu-tao.dev` or the bare IP)
 **Pack** [gemstones-26.1.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones-26.1.2.mrpack)
+**With options** [gemstones-26.1.2-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones-26.1.2-with-options.mrpack)
 **Minecraft** 26.1.2
 
 The main survival world, on hard. Gameplay stays close to vanilla: the server

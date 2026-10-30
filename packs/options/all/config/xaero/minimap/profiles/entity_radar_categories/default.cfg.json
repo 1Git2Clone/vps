@@ -3,10 +3,29 @@
   "includeList": [],
   "includeListInSuperCategory": true,
   "excludeMode": "ONLY",
-  "excludeList": [],
+  "excludeList": [
+    "minecraft:glow_item_frame",
+    "minecraft:item_frame"
+  ],
   "name": "gui.xaero_entity_category_root",
   "protection": true,
-  "settingOverrides": {},
+  "settingOverrides": {
+    "displayHeight": 0.0,
+    "displayed": true,
+    "heightBasedFade": true,
+    "renderOrder": 0.0,
+    "color": 13.0,
+    "displayNameWhenIconFails": true,
+    "entityNumber": 1000.0,
+    "alwaysDisplayNametags": false,
+    "startFadingAt": 0.0,
+    "dotSize": 2.0,
+    "renderOverMinimapFrame": 1.0,
+    "icons": 1.0,
+    "names": 0.0,
+    "heightLimit": 20.0,
+    "iconScale": 1.0
+  },
   "subCategories": [
     {
       "hardInclude": "living",
@@ -18,7 +37,10 @@
       ],
       "name": "gui.xaero_entity_category_living",
       "protection": true,
-      "settingOverrides": {},
+      "settingOverrides": {
+        "renderOrder": 2.0,
+        "color": 14.0
+      },
       "subCategories": [
         {
           "hardInclude": "players",
@@ -28,7 +50,11 @@
           "excludeList": [],
           "name": "gui.xaero_entity_category_players",
           "protection": true,
-          "settingOverrides": {},
+          "settingOverrides": {
+            "renderOrder": 6.0,
+            "heightLimit": 2050.0,
+            "color": 15.0
+          },
           "subCategories": [
             {
               "hardInclude": "nothing",
@@ -49,7 +75,9 @@
               "excludeList": [],
               "name": "gui.xaero_entity_category_tracked",
               "protection": true,
-              "settingOverrides": {},
+              "settingOverrides": {
+                "icons": 2.0
+              },
               "subCategories": []
             },
             {
@@ -71,7 +99,9 @@
               "excludeList": [],
               "name": "gui.xaero_entity_category_other_teams",
               "protection": true,
-              "settingOverrides": {},
+              "settingOverrides": {
+                "renderOrder": 7.0
+              },
               "subCategories": []
             }
           ]
@@ -84,7 +114,9 @@
           "excludeList": [],
           "name": "gui.xaero_entity_category_hostile",
           "protection": true,
-          "settingOverrides": {},
+          "settingOverrides": {
+            "renderOrder": 3.0
+          },
           "subCategories": [
             {
               "hardInclude": "tamed",
@@ -94,7 +126,9 @@
               "excludeList": [],
               "name": "gui.xaero_entity_category_hostile_tamed",
               "protection": true,
-              "settingOverrides": {},
+              "settingOverrides": {
+                "renderOrder": 5.0
+              },
               "subCategories": []
             }
           ]
@@ -117,7 +151,9 @@
               "excludeList": [],
               "name": "gui.xaero_entity_category_friendly_tamed",
               "protection": true,
-              "settingOverrides": {},
+              "settingOverrides": {
+                "renderOrder": 4.0
+              },
               "subCategories": []
             }
           ]
@@ -132,7 +168,10 @@
       "excludeList": [],
       "name": "gui.xaero_entity_category_items",
       "protection": true,
-      "settingOverrides": {},
+      "settingOverrides": {
+        "renderOrder": 1.0,
+        "color": 12.0
+      },
       "subCategories": []
     },
     {
@@ -143,7 +182,9 @@
       "excludeList": [],
       "name": "gui.xaero_entity_category_other_entities",
       "protection": true,
-      "settingOverrides": {},
+      "settingOverrides": {
+        "color": 5.0
+      },
       "subCategories": []
     }
   ]

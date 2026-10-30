@@ -7,6 +7,7 @@
 
 **Join at** `mc2.hu-tao.dev`
 **Pack** [gemstones-zombies-1.21.1.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies-1.21.1.mrpack)
+**With options** [gemstones-zombies-1.21.1-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies-1.21.1-with-options.mrpack)
 **Minecraft** 1.21.1
 
 A zombie survival world, on hard. Nights are dangerous, zombies hunt you by

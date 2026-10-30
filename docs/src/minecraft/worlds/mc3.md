@@ -7,6 +7,7 @@
 
 **Join at** `mc3.hu-tao.dev`
 **Pack** [vanilla-plus-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus-26.2.mrpack)
+**With options** [vanilla-plus-26.2-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus-26.2-with-options.mrpack)
 **Minecraft** 26.2
 
 The biggest of the three: a new world built on the Vanilla+ modpack, which
@@ -75,19 +76,22 @@ kept on the server, not deleted.
   - uku's Armor HUD: your armor and its durability, next to the hotbar.
   - Ok Zoomer, Freecam, Chat Heads, Mod Menu.
 - **Visuals and sound**:
-  - Two shader packs: MiniatureXL, which is **on by default**, and
-    Complementary Reimagined. Switch between them, or off, in _Video Settings_
-    → _Shader Packs_.
+  - Two shader packs: MiniatureXL and Complementary Reimagined. Switch
+    between them, or off, in _Video Settings_ → _Shader Packs_. The
+    with-options pack starts with MiniatureXL on.
   - Fresh Animations and its extensions, Not Enough Animations and Punchy for
     livelier mobs and players.
   - 3D Skin Layers, Falling Leaves, Particle Rain, AmbientSounds.
   - A set of vanilla-style resource packs (3D ladders, lanterns and flowers,
-    connected glass and paths, dark GUI, lower fire and shield).
+    connected glass and paths, dark GUI, lower fire and shield). The
+    with-options pack turns them all on; with the plain pack, turn on the ones
+    you want in _Options_ → _Resource Packs_.
 
 ## Tips
 
-- Shaders are heavy, and one is on from the start. If the game stutters, turn
-  shaders off first; Complementary is the one to try on a strong GPU.
+- Shaders are heavy, and the with-options pack starts with one on. If the game
+  stutters, turn shaders off first; Complementary is the one to try on a
+  strong GPU.
 - Waystones are the way around a big world: activate every one you pass.
 - The compasses are crafted; check a recipe in your inventory's recipe book.
 
