@@ -26,6 +26,12 @@ gone is everything that costs frames without changing how the game plays.
   [Villager in a Bucket](https://modrinth.com/mod/villager-in-a-bucket):
   right-click a villager, wandering trader or zombie villager with an empty
   bucket to carry it as an item, trades and all.
+- **Bases keep going while you are away**
+  ([Unloaded Activity](https://modrinth.com/mod/unloaded-activity)): crops,
+  furnaces and the like in chunks nobody was near catch up when they load
+  again. It counts server time only: an asleep world has no time passing, so
+  after the last player leaves it covers the 20 minutes before the world
+  sleeps. Server-only; nothing to install.
 - **Chat stays unreportable**
   ([No Chat Reports](https://modrinth.com/mod/no-chat-reports)).
 - Under the hood: Lithium, FerriteCore and Krypton make the server itself

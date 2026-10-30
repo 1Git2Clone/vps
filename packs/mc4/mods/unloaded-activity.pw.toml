@@ -1,0 +1,13 @@
+name = "Unloaded Activity"
+filename = "unloadedactivity-0.7.3+mc26.3.jar"
+side = "server"
+
+[download]
+url = "https://cdn.modrinth.com/data/Oo4rJCDP/versions/Altq0dVG/unloadedactivity-0.7.3%2Bmc26.3.jar"
+hash-format = "sha512"
+hash = "7d3e95f88503063e149081b316c5b7acea462d91c21926c99e16f8e1ff12d6e33f191559e21945d946c3c39fc7290e04d10a2148b2914674e0bb3814ca8bba57"
+
+[update]
+[update.modrinth]
+mod-id = "Oo4rJCDP"
+version = "Altq0dVG"
