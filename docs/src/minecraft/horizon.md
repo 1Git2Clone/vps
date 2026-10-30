@@ -21,9 +21,13 @@ does not update itself: rebuild the image and deploy the reviewed change.
 
 The server uses **online mode, a whitelist, and an enforced whitelist**.
 Minecraft account authentication happens at Horizon, after mc-router forwards
-the connection. Its initial whitelist and operators come from world 1's live
-files, copied privately on the first start. Names, UUIDs and game-derived
-resources stay out of the public repository and Nix store.
+the connection. **Only the owner's account is allowed and is an operator.**
+The private policy files under `/var/lib/horizon/access` are authoritative:
+`whitelist.json` and `ops.json` must each contain exactly one entry with the
+same account UUID. They are validated and copied into the data volume on
+every start. No access list is inherited from another world, including during
+recovery. Names, UUIDs and game-derived resources stay out of the public
+repository and Nix store.
 
 The server is always on and outside the two-Fabric-world cap. A local native
 smoke test on 2026-10-31 settled at roughly 290 MiB engine RSS with no players;
@@ -64,13 +68,14 @@ the Horizon A record, not a server replacement or a primary-IP change.
 
 World data and configuration live in the named Docker volume `horizon_data`.
 The module rewrites `server.toml` at each start, so persistent server settings
-belong in Nix. The whitelist and operators are seeded only once and remain
-editable through Horizon's CLI:
+belong in Nix. The whitelist and operators come from the private owner-only
+policy above. CLI access-list changes last until the next restart; permanent
+changes require editing the private policy, which is backed up daily:
 
 ```sh
 ssh -p 2222 hutao@vps 'sudo docker logs --tail 100 horizon'
 ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server status --json'
-ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server whitelist add PLAYER'
+ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server whitelist list'
 ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server cmd list'
 ssh -p 2222 hutao@vps 'sudo docker stats --no-stream horizon'
 ```

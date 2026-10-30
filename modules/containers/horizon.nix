@@ -70,6 +70,7 @@ in
   systemd.tmpfiles.rules = [
     "d /var/lib/horizon 0750 root horizon -"
     "d /var/lib/horizon/resources 0750 root horizon -"
+    "d /var/lib/horizon/access 0750 root horizon -"
   ];
 
   virtualisation.oci-containers.containers.horizon = {
@@ -98,18 +99,26 @@ in
     preStart = lib.mkBefore ''
       test -s /var/lib/horizon/resources/registries.json
       test -s /var/lib/horizon/resources/commands.json
+      # Horizon is owner-only. These private policy files are authoritative;
+      # never inherit another world's players or operators, even on recovery.
+      for file in whitelist.json ops.json; do
+        ${pkgs.jq}/bin/jq -e '
+          type == "array" and length == 1 and
+          all(.[]; (.name | type == "string") and (.uuid | type == "string"))
+        ' /var/lib/horizon/access/"$file" > /dev/null
+      done
+      ${pkgs.jq}/bin/jq -se '.[0][0].uuid == .[1][0].uuid' \
+        /var/lib/horizon/access/whitelist.json /var/lib/horizon/access/ops.json > /dev/null
       ${config.virtualisation.docker.package}/bin/docker volume create horizon_data > /dev/null
       install -d -m0750 -o ${id} -g ${id} ${volume}
       install -m0640 -o ${id} -g ${id} ${settings} ${volume}/server.toml
       printf 'eula=true\n' > ${volume}/eula.txt
       chown ${id}:${id} ${volume}/eula.txt
-      # Seed the existing authenticated players and operators once, privately.
-      # Later changes are made through Horizon's own CLI and survive deploys.
+      # Restore the owner-only policy on every start. A missing or malformed
+      # policy fails closed instead of creating an unrestricted server.
       for file in whitelist.json ops.json; do
-        if [ ! -e ${volume}/"$file" ]; then
-          install -m0640 -o ${id} -g ${id} \
-            /var/lib/docker/volumes/minecraft_data/_data/"$file" ${volume}/"$file"
-        fi
+        install -m0640 -o ${id} -g ${id} \
+          /var/lib/horizon/access/"$file" ${volume}/"$file"
       done
     '';
   };
