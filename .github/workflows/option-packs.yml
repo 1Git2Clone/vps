@@ -1,0 +1,48 @@
+# GitHub mirror of .forgejo/workflows/option-packs.yml: build once, boot those
+# outputs, then upload the packs. Forgejo remains the source of truth.
+name: Option packs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: option-packs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  option-packs:
+    name: Build and boot the packs with options
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: cachix/install-nix-action@v31.11.1
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build
+        run: |
+          mkdir -p _packs _pack-builds
+          for pack in mc1 mc2 mc3 mc4; do
+            out=$(nix build --print-out-paths --out-link "_pack-builds/$pack" ".#$pack-mrpack-with-options")
+            nix build --out-link "_pack-builds/$pack-server-mods" ".#$pack-mrpack-with-options.serverMods"
+            cp "$out" "_packs/$(basename "$out" | cut -d- -f2-)"
+          done
+          ls -l _packs
+
+      - name: Boot the built options packs
+        run: nix develop .#ci -c packs/startup.sh _pack-builds
+
+      - name: Upload
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: option-packs
+          path: _packs/
+          if-no-files-found: error

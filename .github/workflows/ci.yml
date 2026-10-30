@@ -56,11 +56,6 @@ jobs:
       - name: pre-commit
         run: nix develop .#ci -c pre-commit run --all-files --show-diff-on-failure
 
-      # Same boot check as Forgejo: exercise each pack's server-side mods
-      # through Fabric and require Minecraft's Ready line.
-      - name: Boot all Minecraft modpacks
-        run: nix develop .#ci -c packs/startup.sh
-
       # The pre-commit hook scans the STAGED diff, which is empty in CI, so the
       # history scan lives here instead. fetch-depth 0 above is what makes it a
       # real scan rather than a scan of one commit.

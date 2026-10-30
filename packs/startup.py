@@ -22,16 +22,16 @@ that mod requires a real bot token and waits for Discord during initialization.
 from __future__ import annotations
 
 from argparse import ArgumentParser
+from asyncio import create_subprocess_exec, run as run_async, timeout, wait_for
+from asyncio.subprocess import Process
 from collections import deque
 from hashlib import file_digest
 from json import loads
 from os import environ
 from pathlib import Path, PurePosixPath
-from selectors import EVENT_READ, DefaultSelector
 from shutil import copyfile, copyfileobj
-from subprocess import PIPE, STDOUT, Popen, TimeoutExpired, run
+from subprocess import PIPE, STDOUT, run
 from tempfile import TemporaryDirectory
-from time import monotonic
 from typing import Literal, TypedDict
 from urllib.request import Request, urlopen
 from zipfile import ZipFile
@@ -149,58 +149,56 @@ def write_server_settings(server_root: Path) -> None:
     )
 
 
-def wait_for_server(java: str, server_root: Path, pack_name: str) -> None:
-    process = Popen(
-        [java, "-Xms512M", f"-Xmx{JAVA_HEAP}", "-jar", "fabric-server-launch.jar", "nogui"],
+async def wait_for_server(java: str, server_root: Path, pack_name: str) -> None:
+    process = await create_subprocess_exec(
+        java,
+        "-Xms512M",
+        f"-Xmx{JAVA_HEAP}",
+        "-jar",
+        "fabric-server-launch.jar",
+        "nogui",
         cwd=server_root,
         stdout=PIPE,
         stderr=STDOUT,
-        text=True,
-        bufsize=1,
     )
     if process.stdout is None:
         raise RuntimeError("failed to capture Minecraft server output")
 
     output_tail: deque[str] = deque(maxlen=100)
-    deadline = monotonic() + STARTUP_TIMEOUT_SECONDS
-    with DefaultSelector() as selector:
-        selector.register(process.stdout, EVENT_READ)
-        try:
-            while monotonic() < deadline:
-                events = selector.select(timeout=min(1, deadline - monotonic()))
-                if not events:
-                    if process.poll() is not None:
-                        raise RuntimeError(
-                            f"server exited before Done (exit {process.returncode})"
-                        )
-                    continue
-
-                line = process.stdout.readline()
-                if not line:
-                    continue
+    try:
+        # StreamReader handles buffered lines; the timeout also interrupts a
+        # read waiting for a newline or EOF.
+        async with timeout(STARTUP_TIMEOUT_SECONDS):
+            while True:
+                output = await process.stdout.readline()
+                if not output:
+                    exit_code = await process.wait()
+                    raise RuntimeError(f"server exited before Done (exit {exit_code})")
+                line = output.decode("utf-8", errors="replace")
                 output_tail.append(line.rstrip())
                 print(line, end="", flush=True)
                 if "Done (" in line:
                     print(f"{pack_name}: server reached Done", flush=True)
                     return
+    except TimeoutError as error:
+        tail = "\n".join(output_tail)
+        raise TimeoutError(
+            f"server did not reach Done within {STARTUP_TIMEOUT_SECONDS} seconds\n{tail}"
+        ) from error
+    finally:
+        await stop_server(process)
 
-            tail = "\n".join(output_tail)
-            raise TimeoutError(
-                f"server did not reach Done within {STARTUP_TIMEOUT_SECONDS} seconds\n{tail}"
-            )
-        finally:
-            stop_server(process)
 
-
-def stop_server(process: Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-    process.terminate()
+async def stop_server(process: Process) -> None:
+    if process.returncode is None:
+        process.terminate()
     try:
-        process.wait(timeout=15)
-    except TimeoutExpired:
-        process.kill()
-        process.wait()
+        # Drain shutdown output too, so a full pipe cannot block termination.
+        await wait_for(process.communicate(), timeout=15)
+    except TimeoutError:
+        if process.returncode is None:
+            process.kill()
+        await process.communicate()
 
 
 def boot_pack(pack_path: Path, mods_source: Path) -> None:
@@ -214,7 +212,7 @@ def boot_pack(pack_path: Path, mods_source: Path) -> None:
         verify_server_mods(index, mods_source, server_root)
         install_fabric_server(java, server_root, minecraft_version, loader_version)
         write_server_settings(server_root)
-        wait_for_server(java, server_root, pack_path.name)
+        run_async(wait_for_server(java, server_root, pack_path.name))
 
 
 def main() -> int:

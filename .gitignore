@@ -1,4 +1,7 @@
 result
+_packs/
+_pack-builds/
+__pycache__/
 nixos-efi-vars.fd
 
 # OpenTofu: state holds every value tofu has ever read, secrets included.

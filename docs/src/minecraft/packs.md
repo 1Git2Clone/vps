@@ -102,14 +102,14 @@ whose required library is missing on a side, for example:
 client: mods/tectonic-3.0.28-fabric-26.2.jar needs lithostitched *
 ```
 
-CI also boots each world with its pinned server-side mods and Fabric loader,
+The Option packs workflow boots each built options pack with its pinned
+server-side mods and Fabric loader,
 then waits for Minecraft's `Done` line. The startup test skips mc1's Dlaw
 Discord integration because it needs a real bot token and waits for Discord;
 all other server mods are loaded together. This catches startup crashes from
 mod interactions that a dependency graph cannot detect. See
 [CI and validation](../operations/ci.md) for what the check covers, how to run
-a single world, and what it does not exercise. The all-world command is
-`nix develop .#ci -c packs/startup.sh`.
+a single world, and the build and boot commands for all four worlds.
 
 That one was real: Modrinth marks lithostitched server-only, but tectonic and
 Terralith need it on the client too, so `packs/mc3/mods/lithostitched.pw.toml`
@@ -163,8 +163,9 @@ never what an update writes over their own. World 3's resource packs, shader
 choice and shader settings are in `packs/options/mc3`: the plain world 3 pack
 ships those packs but turns none of them on.
 
-`.forgejo/workflows/option-packs.yml` builds all four and uploads them as the
-run's `option-packs` artifact. That is the fork path: change `packs/options`,
+`option-packs.yml` on both Forgejo and GitHub builds all four, boots those
+outputs' Fabric servers, then uploads them as the run's `option-packs`
+artifact. A failed boot prevents the upload. That is the fork path: change `packs/options`,
 push, and download your packs from the run. It does not publish: `pages-pull`
 serves only the newest `pages` artifact, so `pages.yml` stages the same builds
 next to the plain packs. Locally:

@@ -31,7 +31,7 @@ nothing to remember to run.
 ├── .pre-commit-config.yaml  # the checks, shared by the commit hook and CI
 ├── .markdownlint-cli2.yaml  # what the markdown linter checks, and what it skips
 ├── .forgejo/workflows/   # CI and pages, run on the dedicated runner box
-├── .github/workflows/    # CI, run on the GitHub mirror
+├── .github/workflows/    # CI and option packs, run on the GitHub mirror
 ├── docs/                 # the handbook — mdBook source in docs/src/
 ├── runner/               # the CI runner's own configuration.nix
 ├── tests/                # VM and network tests behind checks.*

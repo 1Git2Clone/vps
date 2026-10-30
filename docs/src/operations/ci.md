@@ -1,21 +1,27 @@
 # CI
 
-Two workflows, one per forge. **Forgejo reads `.forgejo/workflows` and falls
+CI and option-pack workflows have a copy on each forge.
+**Forgejo reads `.forgejo/workflows` and falls
 back to `.github/workflows` only when that directory is absent** — a fallback,
 not a union — so the presence of `.forgejo/workflows/ci.yml` is what keeps
 Forgejo off the GitHub file. Delete it and Forgejo silently starts running a
 workflow written for GitHub, which is how this repo once ended up with a red
 run on git.hu-tao.dev.
 
-| File                           | Runs on                  | Jobs                                                           |
-| ------------------------------ | ------------------------ | -------------------------------------------------------------- |
-| `.forgejo/workflows/ci.yml`    | the dedicated runner box | one: `check`                                                   |
-| `.forgejo/workflows/pages.yml` | the dedicated runner box | one: `pages` — builds this book, `main` only                   |
-| `.forgejo/workflows/mods.yml`  | the dedicated runner box | one: `outdated` — daily, red when a mod has a newer build [^m] |
-| `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                                     |
+| File                                  | Runs on                  | Jobs                                                           |
+| ------------------------------------- | ------------------------ | -------------------------------------------------------------- |
+| `.forgejo/workflows/ci.yml`           | the dedicated runner box | one: `check`                                                   |
+| `.forgejo/workflows/pages.yml`        | the dedicated runner box | one: `pages` — builds this book, `main` only                   |
+| `.forgejo/workflows/mods.yml`         | the dedicated runner box | one: `outdated` — daily, red when a mod has a newer build [^m] |
+| `.github/workflows/ci.yml`            | the GitHub mirror        | two: `lint` and `evaluate`                                     |
+| `.forgejo/workflows/option-packs.yml` | the dedicated runner box | build, boot, then upload all four options packs                |
+| `.github/workflows/option-packs.yml`  | the GitHub mirror        | build, boot, then upload all four options packs                |
 
-Both CI workflows also run `packs/startup.sh`: it builds each plain `.mrpack`,
-installs its Fabric loader and server-side mods in a temporary directory,
+The **Option packs** workflow on each forge builds all four `-with-options`
+packs, then runs **Boot the built options packs** before uploading the
+`option-packs` artifact. `packs/startup.sh` consumes the build step's output
+paths; it does not build another set of packs. It installs each pack's Fabric
+loader and server-side mods in a temporary directory,
 then waits up to five minutes for Minecraft's `Done` line. It uses the same
 Java major versions as the deployed images (21 for world 2, 25 for the others)
 and stops the server as soon as startup succeeds. This catches mod interactions
@@ -24,6 +30,11 @@ than starting the itzg container; the runner intentionally gives jobs no
 container-engine socket. It skips mc1's Dlaw Discord integration because that
 mod waits for a real bot token and a Discord connection during initialization;
 CI has no Discord credential. The rest of mc1's server mods still boot together.
+The options packs contain the plain packs' mods plus client option overrides.
+The server boot exercises those mods; it does not load or validate client settings.
+Both Option packs workflows run on pull requests, pushes to `main`, and manual
+dispatches. Concurrency is scoped to the branch so a pull request cannot cancel
+the main branch's pack build.
 
 ## What a CI run does
 
@@ -48,7 +59,7 @@ The checks cover different failure classes:
 | Full-history gitleaks | Secrets accidentally committed in repository history |
 | NixOS evaluation | Invalid options, missing module arguments, and evaluation errors |
 | Explicit Nix checks | Deploy schema, runner firewall ordering, runner secret isolation, and safe artifact extraction |
-| Minecraft startup | Server-side Fabric or mod failures before the server reaches `Done` |
+| Minecraft startup (Option packs workflow) | Server-side Fabric or mod failures before the server reaches `Done` |
 
 The NixOS systems are evaluated, not built or booted in CI. The Minecraft test
 does boot a server process, but it uses the pinned server mod jars from the pack
@@ -60,11 +71,21 @@ launch privileged sibling containers.
 
 ## Run the Minecraft startup check locally
 
-Run all four worlds with the same command CI uses:
+Build all four options packs and their matching server-mod outputs, then run
+the same boot command as the Option packs workflow:
 
 ```sh
-nix develop .#ci -c packs/startup.sh
+mkdir -p _pack-builds
+for world in mc1 mc2 mc3 mc4; do
+  nix build --out-link "_pack-builds/$world" ".#$world-mrpack-with-options"
+  nix build --out-link "_pack-builds/$world-server-mods" ".#$world-mrpack-with-options.serverMods"
+done
+nix develop .#ci -c packs/startup.sh _pack-builds
 ```
+
+`startup.sh BUILD_OUTPUT_DIRECTORY` expects `mc1` through `mc4` pack files or
+symlinks, each paired with an `mc<N>-server-mods` directory or symlink. Missing
+inputs fail the check instead of triggering another build.
 
 To run one world, first build its pack and the matching server-mod directory,
 then pass both outputs to `packs/startup.py`. Its CLI is:
@@ -82,15 +103,23 @@ For example, run world 4:
 
 ```sh
 nix develop .#ci
-pack=$(nix build --no-link --print-out-paths .#mc4-mrpack)
-mods=$(nix build --no-link --print-out-paths .#mc4-server-mods)
+pack=$(nix build --no-link --print-out-paths .#mc4-mrpack-with-options)
+mods=$(nix build --no-link --print-out-paths .#mc4-mrpack-with-options.serverMods)
 python3 -I packs/startup.py "$pack" "$mods"
 ```
 
 The first run needs network access for the pinned Modrinth jars, Fabric's
 installer, and Minecraft's server files. On success, the log contains
-`gemstones-lite-26.3.mrpack: server reached Done`. A failed startup exits
+`server reached Done`, prefixed by the input pack's filename. A failed startup exits
 nonzero and includes the server log tail when it times out.
+
+The output-reader regression tests use small Python child processes and need
+neither Java nor network access. Pre-commit and both CI workflows run them;
+to run them directly:
+
+```sh
+python3 -I -m unittest discover -s packs -p test_startup.py
+```
 
 [^m]: See [Staying current](../minecraft/packs.md#staying-current).
 
@@ -145,7 +174,7 @@ that does nothing.
 Both forges evaluate the NixOS system configurations rather than building
 their multi-gigabyte closures. This catches what actually breaks the configs —
 a typo'd option, a missing module argument, an infinite recursion — without
-asking a runner to realise a whole system closure. The workflows separately
+asking a runner to realise a whole system closure. The Option packs workflows
 build the modpacks and boot their Fabric servers, which exercises the real
 server-side mods without building or starting the NixOS hosts.
 

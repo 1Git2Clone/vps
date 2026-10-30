@@ -115,6 +115,13 @@ repos:
         files: ^(packs/|docs/src/|README\.md$)
         pass_filenames: false
 
+      - id: minecraft-startup-tests
+        name: Minecraft startup output handling
+        entry: nix develop .#ci -c python3 -I -m unittest discover -s packs -p test_startup.py
+        language: system
+        files: ^packs/(startup|test_startup)\.py$
+        pass_filenames: false
+
       # Every hard dependency met on both sides, in every pack; see `check` in
       # packs/mrpack.nix. The first run fetches the packs' jars (~300 MB for
       # mc3 alone), then they are cached.
