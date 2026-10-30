@@ -15,13 +15,15 @@ run on git.hu-tao.dev.
 | `.github/workflows/ci.yml`     | the GitHub mirror        | two: `lint` and `evaluate`                                     |
 
 Both CI workflows also run `packs/startup.sh`: it builds each plain `.mrpack`,
-installs its exact Fabric loader and server-side mods in a temporary directory,
+installs its Fabric loader and server-side mods in a temporary directory,
 then waits up to five minutes for Minecraft's `Done` line. It uses the same
 Java major versions as the deployed images (21 for world 2, 25 for the others)
 and stops the server as soon as startup succeeds. This catches mod interactions
 that the dependency checker cannot. It runs the Fabric server directly rather
 than starting the itzg container; the runner intentionally gives jobs no
-container-engine socket.
+container-engine socket. It skips mc1's Dlaw Discord integration because that
+mod waits for a real bot token and a Discord connection during initialization;
+CI has no Discord credential. The rest of mc1's server mods still boot together.
 
 ## What a CI run does
 
@@ -49,11 +51,12 @@ The checks cover different failure classes:
 | Minecraft startup | Server-side Fabric or mod failures before the server reaches `Done` |
 
 The NixOS systems are evaluated, not built or booted in CI. The Minecraft test
-does boot a server process, but it uses the exact pinned server mod jars from
-the pack build and a temporary flat world. It does not exercise the itzg
-container's pack installation, the live server's configuration and world data,
-or a client joining. Those boundaries are deliberate: CI jobs have no container
-engine socket and must not be able to launch privileged sibling containers.
+does boot a server process, but it uses the pinned server mod jars from the pack
+build (apart from the Dlaw exclusion above) and a temporary flat world. It does
+not exercise the itzg container's pack installation, the live server's
+configuration and world data, or a client joining. Those boundaries are
+deliberate: CI jobs have no container engine socket and must not be able to
+launch privileged sibling containers.
 
 ## Run the Minecraft startup check locally
 

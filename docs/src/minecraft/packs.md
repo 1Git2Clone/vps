@@ -102,9 +102,11 @@ whose required library is missing on a side, for example:
 client: mods/tectonic-3.0.28-fabric-26.2.jar needs lithostitched *
 ```
 
-CI also boots each world once with its exact server-side mods and Fabric loader,
-then waits for Minecraft's `Done` line. This catches startup crashes from mod
-interactions that a dependency graph cannot detect. See
+CI also boots each world with its pinned server-side mods and Fabric loader,
+then waits for Minecraft's `Done` line. The startup test skips mc1's Dlaw
+Discord integration because it needs a real bot token and waits for Discord;
+all other server mods are loaded together. This catches startup crashes from
+mod interactions that a dependency graph cannot detect. See
 [CI and validation](../operations/ci.md) for what the check covers, how to run
 a single world, and what it does not exercise. The all-world command is
 `nix develop .#ci -c packs/startup.sh`.

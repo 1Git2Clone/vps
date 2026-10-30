@@ -15,7 +15,8 @@ exit.
 The first run needs network access to download Fabric's installer and the
 Minecraft server files. CI supplies Java 21 for Minecraft 1.21.x and Java 25
 for Minecraft 26.x. This test does not start the itzg container or load a
-world's live server data.
+world's live server data. It omits mc1's Dlaw Discord integration because
+that mod requires a real bot token and waits for Discord during initialization.
 """
 
 from __future__ import annotations
@@ -52,6 +53,11 @@ STARTUP_TIMEOUT_SECONDS = 300
 DOWNLOAD_TIMEOUT_SECONDS = 300
 INSTALL_TIMEOUT_SECONDS = 300
 JAVA_HEAP = "2G"
+STARTUP_EXCLUSIONS: dict[str, str] = {
+    "mods/dlaw-fabric-3.0.1-all.jar": (
+        "Dlaw needs a valid Discord bot token and waits for Discord at startup"
+    ),
+}
 
 
 def download(url: str, destination: Path) -> None:
@@ -73,6 +79,12 @@ def verify_server_mods(
     for entry in index["files"]:
         relative_path = PurePosixPath(entry["path"])
         if relative_path.parts[:1] != ("mods",) or entry["env"]["server"] != "required":
+            continue
+        if entry["path"] in STARTUP_EXCLUSIONS:
+            print(
+                f"Skipping {entry['path']}: {STARTUP_EXCLUSIONS[entry['path']]}",
+                flush=True,
+            )
             continue
 
         source = mods_source.joinpath(*relative_path.parts)
