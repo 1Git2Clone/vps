@@ -111,6 +111,16 @@ hash = "f58afbe79ea14087160830efff055c08955fc7321fc27137810e5da2f548426c"
 metafile = true
 
 [[files]]
+file = "mods/ukulib.pw.toml"
+hash = "0ad3398b60b0347aff8d4fcffddb069ea4b5b42d30d555eb65b06ebfca5a493b"
+metafile = true
+
+[[files]]
+file = "mods/ukus-armor-hud.pw.toml"
+hash = "f65f8fa74155a174ca9cca89346421ae1f462fda12a7789df9aa02228ccff0f8"
+metafile = true
+
+[[files]]
 file = "mods/underground-bunkers.pw.toml"
 hash = "e01e8209863a1fc414e455c0ceb4859635880ddbb50905dc8ca33b2614ae61f8"
 metafile = true

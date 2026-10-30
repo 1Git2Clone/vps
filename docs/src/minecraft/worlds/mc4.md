@@ -38,9 +38,9 @@ gone is everything that costs frames without changing how the game plays.
   BadOptimizations, Better Block Entities and Dynamic FPS, which throttles the
   game while it is in the background.
 - **Interface**: the same as world 1's: VoxelMap, Jade, AppleSkin, Shulker Box
-  Tooltip, Mouse Tweaks, Controlling, Zoomify, More Chat History, Better Mount
-  HUD and Mod Menu, plus JEI for every item's recipes and uses (R and U on an
-  item).
+  Tooltip, Mouse Tweaks, Controlling, Zoomify, uku's Armor HUD, More Chat
+  History, Better Mount HUD and Mod Menu, plus JEI for every item's recipes
+  and uses (R and U on an item).
 - **Visuals**: only 3D Skin Layers.
 
 ## What is left out, and why

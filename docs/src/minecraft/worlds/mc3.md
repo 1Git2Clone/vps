@@ -72,6 +72,7 @@ kept on the server, not deleted.
     `appleskin-saturation` resource pack recolours its droplet outlines.
   - JEI: every item's recipes and uses; press R on an item for its recipes
     and U for what it makes.
+  - uku's Armor HUD: your armor and its durability, next to the hotbar.
   - Ok Zoomer, Freecam, Chat Heads, Mod Menu.
 - **Visuals and sound**:
   - Two shader packs: MiniatureXL, which is **on by default**, and

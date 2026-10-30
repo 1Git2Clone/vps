@@ -527,6 +527,16 @@ hash = "7131a5f35b0223048093ae2fa41dc93fc9c0843ce3d874d4502c6da2377ca063"
 metafile = true
 
 [[files]]
+file = "mods/ukulib.pw.toml"
+hash = "c587d688290148bae9a118ac5f5901d66002056c9e47207acc75b2d7a1dad603"
+metafile = true
+
+[[files]]
+file = "mods/ukus-armor-hud.pw.toml"
+hash = "8de71c1dd06c74a4645a2dbfa8ead390c3598247b2df44211eac645753b3ba78"
+metafile = true
+
+[[files]]
 file = "mods/unloaded-activity.pw.toml"
 hash = "0aac970ea1cccd8cdf7ae9931469cd4e97f7ce2d80fcf8036c722ca312817b1b"
 metafile = true

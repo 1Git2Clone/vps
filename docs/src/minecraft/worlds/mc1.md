@@ -52,6 +52,8 @@ looking better on your machine.
   - [Controlling](https://modrinth.com/mod/controlling): a search box in the
     key bindings.
   - [Zoomify](https://modrinth.com/mod/zoomify): a zoom key.
+  - [uku's Armor HUD](https://modrinth.com/mod/ukus-armor-hud): your armor and
+    its durability, next to the hotbar.
   - More Chat History, Better Mount HUD, Borderless Mining (borderless
     fullscreen), Mod Menu.
 - **Visuals**: LambDynamicLights (a torch in your hand lights the area),

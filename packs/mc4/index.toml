@@ -302,6 +302,16 @@ hash = "0bf314c578473659bd89915114cac8e60994988f405218726a48d35b06e9316c"
 metafile = true
 
 [[files]]
+file = "mods/ukulib.pw.toml"
+hash = "c002bc66b617ce1e5d8c59362744cb24515809ed571415b77906da6d4a8fa32e"
+metafile = true
+
+[[files]]
+file = "mods/ukus-armor-hud.pw.toml"
+hash = "71dfb9088e3dae94817a0af6eb0f518286718ed93036758cdf35b3ca338052cc"
+metafile = true
+
+[[files]]
 file = "mods/villager-in-a-bucket.pw.toml"
 hash = "a6b2f54f2ede82ef5f46b0dff81f4217c9ece84f18e5a135fc9331d264587dba"
 metafile = true

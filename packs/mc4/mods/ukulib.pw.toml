@@ -1,0 +1,13 @@
+name = "ukulib"
+filename = "ukulib-fabric-2.2.1+26.3.jar"
+side = "client"
+
+[download]
+url = "https://cdn.modrinth.com/data/Y8uFrUil/versions/CzNkLp0r/ukulib-fabric-2.2.1%2B26.3.jar"
+hash-format = "sha512"
+hash = "dfbab76c1f42bc16f07d01a0a92a5bc480e70e2d80ed013f1ebf5885609c8b716b2c44830c992b1f74c710d1fa1e2153a54a84c7c94e83c63201bb6031bde10d"
+
+[update]
+[update.modrinth]
+mod-id = "Y8uFrUil"
+version = "CzNkLp0r"

@@ -38,9 +38,10 @@ away.
 
 ## What your pack adds
 
-Only what makes the game run well: Sodium, ImmediatelyFast, Entity Culling and
-ModernFix. Everything else in the pack is something the world needs on your
-side.
+What makes the game run well (Sodium, ImmediatelyFast, Entity Culling and
+ModernFix), and uku's Armor HUD, which shows your armor and its durability
+next to the hotbar. Everything else in the pack is something the world needs
+on your side.
 
 ## Tips
 

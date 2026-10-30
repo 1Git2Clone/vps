@@ -444,6 +444,16 @@ hash = "0a051fe5db98c382c1505cea43839b6950824e6fe5ec1cfd2e24eb0e6bd57932"
 metafile = true
 
 [[files]]
+file = "mods/ukulib.pw.toml"
+hash = "d1bd47052ee27aefea2f0e2ee83787a47172d0350fecb16284fab9a756b1cc19"
+metafile = true
+
+[[files]]
+file = "mods/ukus-armor-hud.pw.toml"
+hash = "58070007ca11dc53d2df67e8d1b2c5a94109810de0a89c1c0cd27f1524ac26a3"
+metafile = true
+
+[[files]]
 file = "mods/voxelmap-updated.pw.toml"
 hash = "f0f0e9d8e791b3ef51245d25e6b613624f914b146e2f862215074482be74a7c1"
 metafile = true
