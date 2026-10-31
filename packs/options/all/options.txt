@@ -18,7 +18,7 @@ fovEffectScale:1.0
 darknessEffectScale:1.0
 glintSpeed:0.5
 glintStrength:0.75
-graphicsPreset:"fancy"
+graphicsPreset:"custom"
 prioritizeChunkUpdates:1
 fullscreen:true
 gamma:0.5
