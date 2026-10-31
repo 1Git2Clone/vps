@@ -105,11 +105,11 @@
         "systems": "systems_2"
       },
       "locked": {
-        "lastModified": 1793463867,
-        "narHash": "sha256-fbdA9eNxK8cDMQ07ZE0T2BmTzVjarpvB39FBusHRgP8=",
+        "lastModified": 1793464952,
+        "narHash": "sha256-7VHRsaoHjads9vwWcKIVJBh8FHlaQepCcp20J3Ad7kc=",
         "ref": "refs/heads/main",
-        "rev": "d723b304508a7ab8f0a93c99ab883c750313a97c",
-        "revCount": 6,
+        "rev": "f6990ee74fb671875dfb56ea3f7abe020a80ea8a",
+        "revCount": 7,
         "type": "git",
         "url": "https://git.hu-tao.dev/hutao/mcopts"
       },
