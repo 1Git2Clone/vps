@@ -99,7 +99,23 @@ let
       patches ? [ ],
     }:
     let
-      patchSet = pkgs.writeText "${name}-patches.json" (builtins.toJSON { inherit patches; });
+      # Every world's: FallingTree fells trees of up to 200 logs, not 100, so
+      # a big spruce or a 2x2 jungle tree comes down in one cut.
+      allPatches = [
+        {
+          file = "/data/config/fallingtree.json";
+          ops = [
+            {
+              "$set" = {
+                path = "$.trees.maxSize";
+                value = 200;
+              };
+            }
+          ];
+        }
+      ]
+      ++ patches;
+      patchSet = pkgs.writeText "${name}-patches.json" (builtins.toJSON { patches = allPatches; });
     in
     {
       inherit image;
@@ -138,7 +154,9 @@ let
         SPAWN_PROTECTION = "0";
       }
       // lib.optionalAttrs (level != null) { LEVEL = level; }
-      // lib.optionalAttrs (patches != [ ]) { PATCH_DEFINITIONS = "/patches.json"; };
+      // {
+        PATCH_DEFINITIONS = "/patches.json";
+      };
 
       environmentFiles = [ config.sops.templates."${name}.env".path ];
 
@@ -156,7 +174,7 @@ let
         # pack's store name does.
         "${pack}:/modpack/${pack.name}:ro"
       ]
-      ++ lib.optional (patches != [ ]) "${patchSet}:/patches.json:ro";
+      ++ [ "${patchSet}:/patches.json:ro" ];
 
       extraOptions = stopOptions;
     };
