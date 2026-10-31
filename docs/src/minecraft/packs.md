@@ -48,7 +48,9 @@ version = "HUacBshD"          # the exact version pinned
   plain overrides, listed in `enforced`; the build fails on anything else.
   A pack ships no `options.txt` of its own: settings belong in
   `packs/options`, which only the `-with-options` builds carry, as plain
-  overrides (see below).
+  overrides (see below). Every build does ship `packs/seed/options.txt` as
+  `config/yosbr/options.txt`: a few tame first-launch defaults (GUI scale 2,
+  no narrator prompt or tutorial toasts) that a player's own file always beats.
 
 ## Everyday changes
 

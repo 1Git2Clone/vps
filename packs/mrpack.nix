@@ -209,6 +209,11 @@ let
           # A bad line makes Minecraft discard the whole file; fail here instead.
           python3 -I ${../tests/options-txt.py} pack/client-overrides/options.txt ${dataVersion}
         ''}
+        ${lib.optionalString (builtins.pathExists (dir + "/mods/yosbr.pw.toml")) ''
+          # First-launch defaults for every player; see packs/seed/options.txt.
+          python3 -I ${./options.py} pack/client-overrides config/yosbr/ ${dataVersion} ${./seed}
+          python3 -I ${../tests/options-txt.py} pack/client-overrides/config/yosbr/options.txt ${dataVersion}
+        ''}
         ${lib.optionalString (withOptions && server != null) ''
           python3 -I ${./servers-dat.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}servers.dat ${
             lib.escapeShellArgs [

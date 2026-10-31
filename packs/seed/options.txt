@@ -1,0 +1,13 @@
+# Every pack's first-launch defaults, shipped as config/yosbr/options.txt:
+# YOSBR copies it into place only where a player has no options.txt yet, so
+# these never override anyone. Keep it tame. version: is written per pack by
+# packs/options.py.
+#
+# GUI scale 2, not auto (4 at 1080p, which is huge).
+guiScale:2
+# Skip the first-launch narrator prompt, the multiplayer warning, the
+# first-server social screen and the movement tutorial toasts.
+onboardAccessibility:false
+skipMultiplayerWarning:true
+joinedFirstServer:true
+tutorialStep:none
