@@ -64,6 +64,10 @@
   # them, and it adds -with-options to the file name.
   options ? [ ],
   withOptions ? false,
+  # The world's address. The -with-options build lists it, and only it, in
+  # the multiplayer menu (a servers.dat beside the options, so on a shared
+  # pack a player's own list is never replaced). See packs/servers-dat.py.
+  server ? null,
 }:
 
 let
@@ -187,6 +191,14 @@ let
         ${lib.optionalString (applied != [ ]) ''
           python3 -I ${./options.py} pack/client-overrides ${lib.escapeShellArg (lib.optionalString shared "config/yosbr/")} ${
             lib.escapeShellArgs (map (d: "${d}") applied)
+          }
+        ''}
+        ${lib.optionalString (withOptions && server != null) ''
+          python3 -I ${./servers-dat.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}servers.dat ${
+            lib.escapeShellArgs [
+              server
+              server
+            ]
           }
         ''}
         rmdir --ignore-fail-on-non-empty pack/client-overrides

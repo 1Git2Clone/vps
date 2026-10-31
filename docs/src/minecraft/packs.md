@@ -216,7 +216,7 @@ leak onto the server.
 
 ```sh
 nix build --print-out-paths .#mc1-mrpack | xargs sha256sum
-curl -s https://pages.hu-tao.dev/hutao/vps/mc1/gemstones-26.1.2.mrpack | sha256sum
+curl -s https://pages.hu-tao.dev/hutao/vps/mc1/mc.hu-tao.dev-26.1.2.mrpack | sha256sum
 ```
 
 ## A new world

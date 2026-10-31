@@ -5,8 +5,8 @@
      Minecraft 26.3, with a pack trimmed to run on integrated graphics. -->
 
 **Join at** `mc4.hu-tao.dev`
-**Pack** [gemstones-lite-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite-26.3.mrpack)
-**With options** [gemstones-lite-26.3-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite-26.3-with-options.mrpack)
+**Pack** [mc4.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3.mrpack)
+**With options** [mc4.hu-tao.dev-26.3-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3-with-options.mrpack)
 **Minecraft** 26.3
 
 [World 1](mc1.md)'s pack, cut down for a PC with integrated graphics and 8 GB of

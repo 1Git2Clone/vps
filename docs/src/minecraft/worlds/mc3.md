@@ -6,8 +6,8 @@
      each mod does, and every mod in it. -->
 
 **Join at** `mc3.hu-tao.dev`
-**Pack** [vanilla-plus-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus-26.2.mrpack)
-**With options** [vanilla-plus-26.2-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus-26.2-with-options.mrpack)
+**Pack** [mc3.hu-tao.dev-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2.mrpack)
+**With options** [mc3.hu-tao.dev-26.2-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2-with-options.mrpack)
 **Minecraft** 26.2
 
 The biggest of the three: a new world built on the Vanilla+ modpack, which

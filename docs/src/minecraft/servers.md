@@ -28,7 +28,7 @@ packs/mc1/                 a packwiz pack: one .pw.toml per mod, each pinning an
   config/...               client config files
       │
       ▼  packs/mrpack.nix
-gemstones-26.1.2.mrpack    named <pack>-<minecraft version>
+mc.hu-tao.dev-26.1.2.mrpack    named <world>.hu-tao.dev-<minecraft version>
       ├──▶ mounted into the world's container; itzg installs it (TYPE=MODRINTH)
       └──▶ published on pages; players import it into their launcher
 ```

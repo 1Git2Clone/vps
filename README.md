@@ -91,12 +91,12 @@ Three worlds, one address each. Install the world's modpack in
 the link) or the [Modrinth App](https://modrinth.com/app), ask to be
 whitelisted, then join.
 
-| World   | Join at          | Minecraft | Pack                                                                                                      |
-| ------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------------- |
-| world 1 | `mc.hu-tao.dev`  | 26.1.2    | [gemstones-26.1.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/gemstones-26.1.2.mrpack)                 |
-| world 2 | `mc2.hu-tao.dev` | 1.21.1    | [gemstones-zombies-1.21.1.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/gemstones-zombies-1.21.1.mrpack) |
-| world 3 | `mc3.hu-tao.dev` | 26.2      | [vanilla-plus-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/vanilla-plus-26.2.mrpack)               |
-| world 4 | `mc4.hu-tao.dev` | 26.3      | [gemstones-lite-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/gemstones-lite-26.3.mrpack)           |
+| World   | Join at          | Minecraft | Pack                                                                                                |
+| ------- | ---------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| world 1 | `mc.hu-tao.dev`  | 26.1.2    | [mc.hu-tao.dev-26.1.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/mc.hu-tao.dev-26.1.2.mrpack)   |
+| world 2 | `mc2.hu-tao.dev` | 1.21.1    | [mc2.hu-tao.dev-1.21.1.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/mc2.hu-tao.dev-1.21.1.mrpack) |
+| world 3 | `mc3.hu-tao.dev` | 26.2      | [mc3.hu-tao.dev-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2.mrpack)     |
+| world 4 | `mc4.hu-tao.dev` | 26.3      | [mc4.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3.mrpack)     |
 
 A sleeping world wakes when you join: you are turned away once while it starts,
 so join again a minute later. The full guide, including what to do when the

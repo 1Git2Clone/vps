@@ -105,13 +105,13 @@ for pack_toml in sorted(root.glob("mc*/pack.toml")):
         print(f"wrote {target.relative_to(root.parent)}")
 
 
-# The download links. Each .mrpack is named after its pack and its Minecraft
+# The download links. Each .mrpack is named after its world and its Minecraft
 # version (packs/default.nix), so a link written by hand goes stale with every
 # version bump. Not rewritten here: the links sit in aligned tables, and a new
 # width means re-padding prose tables. Failing names each line to fix instead.
 
 repo = root.parent
-names = dict(re.findall(r'(mc\d+) = pack "mc\d+" "([^"]+)"', (root / "default.nix").read_text()))
+hosts = dict(re.findall(r'(mc\d+) = pack "mc\d+" "([^"]+)"', (root / "default.nix").read_text()))
 mc = {
     p.parent.name: tomllib.loads(p.read_text())["versions"]["minecraft"]
     for p in root.glob("mc*/pack.toml")
@@ -126,7 +126,7 @@ for page in pages:
     for n, line in enumerate(page.read_text().splitlines(), 1):
         for text, key, path in link.findall(line):
             # Either build of the pack: plain, or -with-options.
-            want = f"{names[key]}-{mc[key]}.mrpack"
+            want = f"{hosts[key]}.hu-tao.dev-{mc[key]}.mrpack"
             wanted = (want, want.replace(".mrpack", "-with-options.mrpack"))
             if text != path or text not in wanted:
                 stale.append(f"{where}:{n}: {key}'s packs are {' and '.join(wanted)}")

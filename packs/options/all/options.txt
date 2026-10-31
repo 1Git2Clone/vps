@@ -20,6 +20,7 @@ soundCategory_master:0.08443708609271523
 
 # Input and first run
 touchscreen:false
+skipMultiplayerWarning:true
 tutorialStep:punch_tree
 rawMouseInput:true
 
