@@ -149,13 +149,15 @@ packs/options/
   mc4/config/...
 ```
 
-`packs/options.py` applies them, `all/` first and then the pack's own folder,
-the later winning:
+[`mcopts apply`](https://git.hu-tao.dev/hutao/mcopts) applies them, `all/`
+first and then the pack's own folder, the later winning:
 
 - **`options.txt` merges key by key**, over the pack's own `options.txt` if it
-  ships one. A key you leave out keeps Minecraft's default or the pack's, and a
-  key a pack's mods do not know is ignored, so one file serves every pack.
-  Lines without a `:` are comments.
+  ships one, and gets the pack's Minecraft version's `version:` line. A key you
+  leave out keeps Minecraft's default or the pack's. An option the pack's
+  Minecraft version lacks is left out, so one file serves every pack; one no
+  supported version takes (a typo) fails the build. Mod keybinds are kept.
+  Lines starting with `#` are comments.
 - **Every other file replaces the pack's whole.** Mod configs are JSON, TOML
   and `.properties` that change shape between mod versions; a key merge of
   those is guesswork, a replacement is what you wrote. To change one setting

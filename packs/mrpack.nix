@@ -42,6 +42,8 @@
   jq,
   zip,
   python3,
+  # Checks and applies options.txt per Minecraft version: hutao/mcopts.
+  mcopts,
   # The packwiz directory, and the name of the .mrpack built from it, before
   # the -<minecraft version> the build appends.
   dir,
@@ -58,7 +60,7 @@
   enforced ? [ ],
   # Option overrides: directories mirroring the game folder, which the
   # -with-options build (withOptions) lays over the pack's client files in
-  # order, by packs/options.py. They are plain overrides even on a shared
+  # order, by `mcopts apply`. They are plain overrides even on a shared
   # pack: -with-options is set-and-forget, so every update writes them over
   # whatever was changed in game; change them here instead. Both builds take
   # them, so the plain build's check covers the options too; only
@@ -125,19 +127,6 @@ let
     && !(builtins.elem p enforced)
   ) configPaths;
   applied = if withOptions then options else [ ];
-  # Each Minecraft version's data version, from its client jar's version.json
-  # (world_version). options.py writes it as options.txt's `version:`; see
-  # there for what a file without one costs. A new version goes here first.
-  dataVersions = {
-    "1.21.1" = 3955;
-    "26.1.2" = 4790;
-    "26.2" = 4903;
-    "26.3" = 5023;
-  };
-  dataVersion =
-    assert lib.assertMsg (dataVersions ? ${pack.versions.minecraft})
-      "${fileName}: add Minecraft ${pack.versions.minecraft}'s data version to dataVersions in packs/mrpack.nix";
-    toString dataVersions.${pack.versions.minecraft};
   suffix = lib.optionalString withOptions "-with-options";
   optionFiles = builtins.filter builtins.pathExists (
     [ (dir + "/options.txt") ] ++ map (d: d + "/options.txt") options
@@ -182,6 +171,7 @@ let
           jq
           zip
           python3
+          mcopts
         ];
         passthru = {
           inherit check;
@@ -203,16 +193,16 @@ let
         ''}
         chmod -R u+w pack
         ${lib.optionalString (applied != [ ]) ''
-          python3 -I ${./options.py} pack/client-overrides "" ${dataVersion} ${
+          # Merges options.txt key by key, stamps this version's version: (without
+          # it Minecraft discards the whole file), and fails on what the game
+          # would drop or refuse; other files replace the pack's whole.
+          mcopts apply -m ${pack.versions.minecraft} pack/client-overrides ${
             lib.escapeShellArgs (map (d: "${d}") applied)
           }
-          # A bad line makes Minecraft discard the whole file; fail here instead.
-          python3 -I ${../tests/options-txt.py} pack/client-overrides/options.txt ${dataVersion}
         ''}
         ${lib.optionalString (builtins.pathExists (dir + "/mods/yosbr.pw.toml")) ''
           # First-launch defaults for every player; see packs/seed/options.txt.
-          python3 -I ${./options.py} pack/client-overrides config/yosbr/ ${dataVersion} ${./seed}
-          python3 -I ${../tests/options-txt.py} pack/client-overrides/config/yosbr/options.txt ${dataVersion}
+          mcopts apply -m ${pack.versions.minecraft} pack/client-overrides/config/yosbr ${./seed}
         ''}
         ${lib.optionalString (withOptions && server != null) ''
           python3 -I ${./servers-dat.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}servers.dat ${

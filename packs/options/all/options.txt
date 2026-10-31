@@ -1,9 +1,9 @@
 # hutao's options: world 3's (the Modrinth vanilla-plus instance), for every
 # pack's -with-options build, which enforces them on every update. version: is
-# written per pack by packs/options.py; world 3's resource packs are in
+# written per pack by mcopts apply; world 3's resource packs are in
 # ../mc3/options.txt. Not world 3's: renderDistance is 16 (10 there), for a
 # wider explored map, and the multiplayer warning is skipped. Keys after
-# world 3's are other packs' (their mods' keybinds). See packs/options.py.
+# world 3's are other packs' (their mods' keybinds). See packs/mrpack.nix.
 ao:true
 biomeBlendRadius:2
 chunkSectionFadeInTime:0.75

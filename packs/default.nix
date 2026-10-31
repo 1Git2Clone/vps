@@ -9,13 +9,13 @@
 # ./options laid over it (./options/all, then ./options/<key> if it exists)
 # and the world's own address as the only multiplayer entry, published beside
 # it as <host>.hu-tao.dev-<minecraft>-with-options.mrpack. Fork the repo and
-# change ./options to build your own. See packs/options.py.
+# change ./options to build your own. See packs/mrpack.nix.
 #
 # The handbook's links to these are checked against it by packs/mod-list.py.
 #
 # Read by modules/containers/minecraft.nix (what each server installs) and by
 # the flake (the checks, and what pages.yml publishes). See ./mrpack.nix.
-{ callPackage }:
+{ callPackage, mcopts }:
 
 let
   pack =
@@ -23,6 +23,7 @@ let
     let
       args = {
         dir = ./. + "/${key}";
+        inherit mcopts;
         fileName = "${host}.hu-tao.dev";
         server = "${host}.hu-tao.dev";
         options = [ ./options/all ] ++ (if builtins.pathExists perPack then [ perPack ] else [ ]);

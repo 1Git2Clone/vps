@@ -1,7 +1,7 @@
 # Every pack's first-launch defaults, shipped as config/yosbr/options.txt:
 # YOSBR copies it into place only where a player has no options.txt yet, so
 # these never override anyone. Keep it tame. version: is written per pack by
-# packs/options.py.
+# mcopts apply.
 #
 # GUI scale 2, not auto (4 at 1080p, which is huge).
 guiScale:2

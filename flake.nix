@@ -14,6 +14,11 @@
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Checks and applies the packs' options.txt. See packs/mrpack.nix.
+    mcopts = {
+      url = "git+https://git.hu-tao.dev/hutao/mcopts";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -23,6 +28,7 @@
       disko,
       sops-nix,
       deploy-rs,
+      mcopts,
       ...
     }:
     let
@@ -101,7 +107,10 @@
       ];
 
       # Every world's modpack, keyed mc1 to mc4. See packs/default.nix.
-      mrpacks = import ./packs { inherit (pkgs) callPackage; };
+      mrpacks = import ./packs {
+        inherit (pkgs) callPackage;
+        mcopts = mcopts.packages.${system}.default;
+      };
     in
     {
       nixosConfigurations = {
@@ -294,7 +303,7 @@
               # pack is built from.
               nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-pack" v.check) mrpacks
               # mc<N>-options: the -with-options build, which fails on an
-              # options.txt Minecraft would throw away (tests/options-txt.py).
+              # options.txt Minecraft would throw away (mcopts check).
               // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-options" v.withOptions) mrpacks
               // {
                 # Same attribute name deployChecks used, so CI's
