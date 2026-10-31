@@ -12,7 +12,7 @@ fov:1.0
 fullscreen:false
 guiScale:2
 maxFps:140
-renderDistance:10
+renderDistance:16
 simulationDistance:6
 
 # Sound
