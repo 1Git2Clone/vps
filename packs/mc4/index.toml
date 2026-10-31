@@ -169,6 +169,11 @@ hash = "2fa46b8df6c6de59e8d793d1f3fe6de20f590ad8711b826a2a981680bc9aceb3"
 metafile = true
 
 [[files]]
+file = "mods/copper-chunk-loader.pw.toml"
+hash = "b89f8514bc8c69df4ccb404cbf7ef4db5e82a0407e915c3ae504d1355d99573d"
+metafile = true
+
+[[files]]
 file = "mods/dynamic-fps.pw.toml"
 hash = "84d6a2b87db74408c8fd2fd15792bad981ffbab43e1ee96b79aabded2604141c"
 metafile = true
