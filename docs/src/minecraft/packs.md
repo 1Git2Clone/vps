@@ -47,7 +47,8 @@ version = "HUacBshD"          # the exact version pinned
   video settings each time. Only mod internals and compatibility fixes stay
   plain overrides, listed in `enforced`; the build fails on anything else.
   A pack ships no `options.txt` of its own: settings belong in
-  `packs/options`, which only the `-with-options` builds carry.
+  `packs/options`, which only the `-with-options` builds carry, as plain
+  overrides (see below).
 
 ## Everyday changes
 
@@ -158,10 +159,16 @@ the later winning:
   those is guesswork, a replacement is what you wrote. To change one setting
   for one pack, copy the file into that pack's folder and edit it there.
 
-The result goes under `config/yosbr/`, so it is where a player starts and
-never what an update writes over their own. World 3's resource packs, shader
-choice and shader settings are in `packs/options/mc3`: the plain world 3 pack
-ships those packs but turns none of them on.
+The result is a plain override, not a `config/yosbr/` default: a
+`-with-options` pack is set-and-forget, so every update writes these over
+whatever was changed in game, and an instance that started on another pack
+still ends up with them. Change a setting here, not in game. The one
+exception is the `servers.dat` holding the world's address, which stays a
+default so a player's own server list survives updates.
+
+World 3's resource packs, shader choice and shader settings are in
+`packs/options/mc3`: the plain world 3 pack ships those packs but turns none
+of them on.
 
 `option-packs.yml` on both Forgejo and GitHub builds the affected worlds,
 boots those outputs' Fabric servers, then uploads them as the run's `option-packs`

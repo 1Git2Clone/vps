@@ -18,9 +18,9 @@ one and runs every options fixer on it; the 1.13 key fixer throws on
 `key.keyboard.b`, and the game then discards the WHOLE file for its defaults.
 Lost every option on mc4 on 2026-10-31.
 
-<prefix> is "config/yosbr/" for a shared pack, so the options are only where
-a player starts (see packs/mrpack.nix), and "" for a pack whose own options
-are plain overrides.
+<prefix> is where under <out> they land: packs/mrpack.nix passes "", so a
+-with-options pack enforces them on every update. "config/yosbr/" would make
+them defaults, applied only where a player has no file yet.
 """
 
 import shutil

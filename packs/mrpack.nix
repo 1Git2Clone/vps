@@ -58,10 +58,11 @@
   enforced ? [ ],
   # Option overrides: directories mirroring the game folder, which the
   # -with-options build (withOptions) lays over the pack's client files in
-  # order, by packs/options.py. On a shared pack they land under
-  # config/yosbr/ like every other preference. Both builds take them, so the
-  # plain build's check covers the options too; only withOptions applies
-  # them, and it adds -with-options to the file name.
+  # order, by packs/options.py. They are plain overrides even on a shared
+  # pack: -with-options is set-and-forget, so every update writes them over
+  # whatever was changed in game; change them here instead. Both builds take
+  # them, so the plain build's check covers the options too; only
+  # withOptions applies them, and it adds -with-options to the file name.
   options ? [ ],
   withOptions ? false,
   # The world's address. The -with-options build lists it, and only it, in
@@ -202,11 +203,11 @@ let
         ''}
         chmod -R u+w pack
         ${lib.optionalString (applied != [ ]) ''
-          python3 -I ${./options.py} pack/client-overrides ${lib.escapeShellArg (lib.optionalString shared "config/yosbr/")} ${dataVersion} ${
+          python3 -I ${./options.py} pack/client-overrides "" ${dataVersion} ${
             lib.escapeShellArgs (map (d: "${d}") applied)
           }
           # A bad line makes Minecraft discard the whole file; fail here instead.
-          python3 -I ${../tests/options-txt.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}options.txt ${dataVersion}
+          python3 -I ${../tests/options-txt.py} pack/client-overrides/options.txt ${dataVersion}
         ''}
         ${lib.optionalString (withOptions && server != null) ''
           python3 -I ${./servers-dat.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}servers.dat ${
