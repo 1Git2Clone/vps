@@ -154,6 +154,11 @@ hash = "7959f11cce0c14ffae150d4a3126b04b70b0af815d25453110d2a8408011e9cb"
 metafile = true
 
 [[files]]
+file = "mods/chunk-loaders.pw.toml"
+hash = "69c7e7aabc56d43c08f178dd759ca5f68bc20621c8cd7ce3c18f0ac387d22fcf"
+metafile = true
+
+[[files]]
 file = "mods/cloth-config.pw.toml"
 hash = "2b9727522c90a979eb9671ad7c5421443d91391b0697d1772146e6bfa19cb3c1"
 metafile = true
@@ -166,11 +171,6 @@ metafile = true
 [[files]]
 file = "mods/controlling.pw.toml"
 hash = "2fa46b8df6c6de59e8d793d1f3fe6de20f590ad8711b826a2a981680bc9aceb3"
-metafile = true
-
-[[files]]
-file = "mods/copper-chunk-loader.pw.toml"
-hash = "fa14beb5eb6d6fe15ca08c5461ef26e6e40b46a1bf93ed06d360e2f7a4f83cf4"
 metafile = true
 
 [[files]]
@@ -356,6 +356,16 @@ metafile = true
 [[files]]
 file = "mods/sodium.pw.toml"
 hash = "0bf314c578473659bd89915114cac8e60994988f405218726a48d35b06e9316c"
+metafile = true
+
+[[files]]
+file = "mods/supermartijn642s-config-lib.pw.toml"
+hash = "30520ec5c59d3dca148a45ffe1e59f2795255b6950bf841f5e56fb836fd196b5"
+metafile = true
+
+[[files]]
+file = "mods/supermartijn642s-core-lib.pw.toml"
+hash = "63d1a46f0deeb755036fe55b93b4569f3874bc19cf5a346e33e9dea0652d9c4d"
 metafile = true
 
 [[files]]
