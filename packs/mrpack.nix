@@ -124,6 +124,19 @@ let
     && !(builtins.elem p enforced)
   ) configPaths;
   applied = if withOptions then options else [ ];
+  # Each Minecraft version's data version, from its client jar's version.json
+  # (world_version). options.py writes it as options.txt's `version:`; see
+  # there for what a file without one costs. A new version goes here first.
+  dataVersions = {
+    "1.21.1" = 3955;
+    "26.1.2" = 4790;
+    "26.2" = 4903;
+    "26.3" = 5023;
+  };
+  dataVersion =
+    assert lib.assertMsg (dataVersions ? ${pack.versions.minecraft})
+      "${fileName}: add Minecraft ${pack.versions.minecraft}'s data version to dataVersions in packs/mrpack.nix";
+    toString dataVersions.${pack.versions.minecraft};
   suffix = lib.optionalString withOptions "-with-options";
   optionFiles = builtins.filter builtins.pathExists (
     [ (dir + "/options.txt") ] ++ map (d: d + "/options.txt") options
@@ -189,9 +202,11 @@ let
         ''}
         chmod -R u+w pack
         ${lib.optionalString (applied != [ ]) ''
-          python3 -I ${./options.py} pack/client-overrides ${lib.escapeShellArg (lib.optionalString shared "config/yosbr/")} ${
+          python3 -I ${./options.py} pack/client-overrides ${lib.escapeShellArg (lib.optionalString shared "config/yosbr/")} ${dataVersion} ${
             lib.escapeShellArgs (map (d: "${d}") applied)
           }
+          # A bad line makes Minecraft discard the whole file; fail here instead.
+          python3 -I ${../tests/options-txt.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}options.txt ${dataVersion}
         ''}
         ${lib.optionalString (withOptions && server != null) ''
           python3 -I ${./servers-dat.py} pack/client-overrides/${lib.optionalString shared "config/yosbr/"}servers.dat ${

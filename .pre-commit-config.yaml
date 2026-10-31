@@ -124,7 +124,8 @@ repos:
 
       # Every hard dependency met on both sides, in every pack; see `check` in
       # packs/mrpack.nix. The first run fetches the packs' jars (~300 MB for
-      # mc3 alone), then they are cached.
+      # mc3 alone), then they are cached. The mcN-options builds fail on an
+      # options.txt Minecraft would discard whole (tests/options-txt.py).
       - id: mrpacks
         name: modpack dependencies
         entry: >-
@@ -133,8 +134,12 @@ repos:
           .#checks.x86_64-linux.mc2-pack
           .#checks.x86_64-linux.mc3-pack
           .#checks.x86_64-linux.mc4-pack
+          .#checks.x86_64-linux.mc1-options
+          .#checks.x86_64-linux.mc2-options
+          .#checks.x86_64-linux.mc3-options
+          .#checks.x86_64-linux.mc4-options
         language: system
-        files: ^(packs/|tests/mrpack-deps\.py$)
+        files: ^(packs/|tests/(mrpack-deps|options-txt)\.py$)
         pass_filenames: false
 
       # gitleaks over a hand-rolled "is it still encrypted" grep: it scans the

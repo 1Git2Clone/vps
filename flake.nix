@@ -292,7 +292,11 @@
               # mc<N>-pack: every hard dependency in that world's pack met on
               # both sides. Sandboxed: the jars are the same pinned fetches the
               # pack is built from.
-              nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-pack" v.check) mrpacks // {
+              nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-pack" v.check) mrpacks
+              # mc<N>-options: the -with-options build, which fails on an
+              # options.txt Minecraft would throw away (tests/options-txt.py).
+              // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-options" v.withOptions) mrpacks
+              // {
                 # Same attribute name deployChecks used, so CI's
                 # `nix build .#checks.x86_64-linux.deploy-schema` is unchanged.
                 deploy-schema = pkgs.runCommand "deploy-schema" { } ''
