@@ -67,7 +67,7 @@ everything that costs frames without changing how the game plays.
 | Voxy and its server side                         | distant terrain is the heaviest thing in world 1's pack, in video memory and on disk |
 | Iris                                             | integrated graphics cannot run shaders                                               |
 | Sound Physics Remastered                         | traces every sound through the terrain, on the CPU                                   |
-| LambDynamicLights                                | re-lights the area around every moving light, every frame                            |
+| Dynamic Lights                                   | re-lights the area around every moving light, every frame; and no 26.3 build         |
 | BetterGrassify, Sodium Shadowy Path Blocks       | purely cosmetic                                                                      |
 | EMF, ETF, Continuity, OptiGUI, Skyboxify, Puzzle | they drive resource pack features, and the pack ships no resource packs              |
 | the Discord integration                          | world 1's alone                                                                      |

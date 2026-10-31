@@ -61,7 +61,7 @@ looking better on your machine.
     its durability, next to the hotbar.
   - More Chat History, Better Mount HUD, Borderless Mining (borderless
     fullscreen), Mod Menu.
-- **Visuals**: LambDynamicLights (a torch in your hand lights the area),
+- **Visuals**: Dynamic Lights (a torch in your hand lights the area),
   3D Skin Layers, BetterGrassify, Continuity (connected textures), Sodium
   Shadowy Path Blocks, and support for resource packs that use OptiFine
   features (Entity Model/Texture Features, OptiGUI, Skyboxify, Puzzle).

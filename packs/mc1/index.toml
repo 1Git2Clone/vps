@@ -254,6 +254,11 @@ hash = "42f5637a87150687969d64b172ce8ef91bc3a92ee2eb68a2a17153350ff92b4b"
 metafile = true
 
 [[files]]
+file = "mods/dynamic-lights.pw.toml"
+hash = "311dec23d3af3aaf1e2004b85b95646bfe941a4dfb36a0eac38eaf8c66a5286d"
+metafile = true
+
+[[files]]
 file = "mods/entity-model-features.pw.toml"
 hash = "f6b8f24e005da59a5cf54111f179b23ecc3cd732cdfa01668000741f855b5d94"
 metafile = true
@@ -326,11 +331,6 @@ metafile = true
 [[files]]
 file = "mods/krypton.pw.toml"
 hash = "d5060b22fa47d5d56e0f4617904731e9d397d1ba104320b7ec8e59f7ca0700a7"
-metafile = true
-
-[[files]]
-file = "mods/lambdynamiclights.pw.toml"
-hash = "6a34c0b44a9f0a4ebbb04ae8af6cf86c2fce28353935226852d439c14e635f33"
 metafile = true
 
 [[files]]
