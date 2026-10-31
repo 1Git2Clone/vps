@@ -62,6 +62,8 @@
             ./disk-config.nix
             disko.nixosModules.disko
             sops-nix.nixosModules.sops
+            # The packs' options go through mcopts; see packs/mrpack.nix.
+            { _module.args.mcopts = mcopts.packages.${system}.default; }
           ]
           ++ extraModules;
         };

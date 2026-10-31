@@ -40,13 +40,17 @@
   config,
   lib,
   pkgs,
+  mcopts,
   ...
 }:
 
 let
   inherit (config.infra) mcNetwork;
 
-  packs = import ../../packs { inherit (pkgs) callPackage; };
+  packs = import ../../packs {
+    inherit (pkgs) callPackage;
+    inherit mcopts;
+  };
 
   worlds = [
     "minecraft"
