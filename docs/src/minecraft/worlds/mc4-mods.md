@@ -18,7 +18,7 @@ needing anything on your side.
 | [Cloth Config API](https://modrinth.com/project/9s6osm5g)                            | mod  | server and you |
 | [Clumps](https://modrinth.com/project/Wnxd13zP)                                      | mod  | server and you |
 | [Concurrent Chunk Management Engine (Fabric)](https://modrinth.com/project/VSNURh3q) | mod  | server and you |
-| [Copper Chunk Loader](https://modrinth.com/project/Y6iamK6k)                         | mod  | server only    |
+| [Copper Chunk Loader](https://modrinth.com/project/Y6iamK6k)                         | mod  | server and you |
 | [Fabric API](https://modrinth.com/project/P7dR8mSH)                                  | mod  | server and you |
 | [FallingTree](https://modrinth.com/project/Fb4jn8m6)                                 | mod  | server and you |
 | [FerriteCore](https://modrinth.com/project/uXXizFIs)                                 | mod  | server and you |

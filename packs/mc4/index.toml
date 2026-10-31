@@ -170,7 +170,7 @@ metafile = true
 
 [[files]]
 file = "mods/copper-chunk-loader.pw.toml"
-hash = "b89f8514bc8c69df4ccb404cbf7ef4db5e82a0407e915c3ae504d1355d99573d"
+hash = "fa14beb5eb6d6fe15ca08c5461ef26e6e40b46a1bf93ed06d360e2f7a4f83cf4"
 metafile = true
 
 [[files]]
