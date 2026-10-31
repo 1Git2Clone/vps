@@ -35,7 +35,8 @@ away.
   generated underground, worth finding. Server-only; nothing to install.
 - **Trees fall**, **half the players can skip the night**, and **sound bounces
   and muffles**, as on world 1 (FallingTree, Server Sleep, Sound Physics
-  Remastered). Chat stays unreportable.
+  Remastered). Chat stays unreportable. Creepers still hurt you, but their
+  explosions no longer break blocks.
 
 ## What your pack adds
 

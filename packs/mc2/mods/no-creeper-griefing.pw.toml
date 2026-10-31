@@ -1,0 +1,13 @@
+name = "No Creeper Griefing"
+filename = "No creeper griefing-1.3.2-all-mc1.21.1.jar"
+side = "server"
+
+[download]
+url = "https://cdn.modrinth.com/data/XUMo8IRd/versions/Pid05aQL/No%20creeper%20griefing-1.3.2-all-mc1.21.1.jar"
+hash-format = "sha512"
+hash = "a32dd9e7cbf122372f05310e894c6da61814516ab4ce3ac4f0846e5db4458999fec514f7702569a57919c3f4e390bd1fc3f6b8cb11975bcfc20cc3548bd709fd"
+
+[update]
+[update.modrinth]
+mod-id = "XUMo8IRd"
+version = "Pid05aQL"

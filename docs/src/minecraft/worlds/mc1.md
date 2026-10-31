@@ -30,6 +30,10 @@ looking better on your machine.
   past your render distance.
 - **Chat stays unreportable**
   ([No Chat Reports](https://modrinth.com/mod/no-chat-reports)).
+- **Creepers do not break blocks**
+  ([No Creeper Griefing](https://modrinth.com/project/XUMo8IRd)): their
+  explosions still hurt and knock you back, they just leave your builds
+  alone. Server-only; nothing to install.
 - Under the hood: Lithium, FerriteCore and Krypton make the server itself
   faster, and a Discord integration mod connects it to Discord.
 

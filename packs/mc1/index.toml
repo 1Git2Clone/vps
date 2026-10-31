@@ -374,6 +374,11 @@ hash = "3db1b61528d0fdd908f1fe57685bbc49cdbe496bfe0e349a0280334444193c73"
 metafile = true
 
 [[files]]
+file = "mods/no-creeper-griefing.pw.toml"
+hash = "b7bf18a69a5889763c08b902e4d5624022121b20f0ed4b684090c80f5ed1e799"
+metafile = true
+
+[[files]]
 file = "mods/optigui.pw.toml"
 hash = "460aa9c8aaed3845f1c4f31e997991bcc92fafe4d5c25f79255f1e0ddec82eac"
 metafile = true

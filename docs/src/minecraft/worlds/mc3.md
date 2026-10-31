@@ -52,6 +52,7 @@ kept on the server, not deleted.
     break one with a pickaxe.
   - Dynamic Lights makes held torches light the area.
   - Clumps merges XP orbs.
+  - Creepers still hurt you, but their explosions no longer break blocks.
   - Half the players can skip the night.
   - Unloaded Activity catches up crops, furnaces and the like in chunks
     nobody was near, so a base keeps going while you explore. It counts

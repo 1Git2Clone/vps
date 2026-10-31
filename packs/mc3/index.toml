@@ -281,6 +281,11 @@ hash = "68f5930c1212376b4b26a295c91dd5eb5c1157af1f95a18a5f8c06c4da7125cb"
 metafile = true
 
 [[files]]
+file = "mods/no-creeper-griefing.pw.toml"
+hash = "da299b86c80d4e4ab56fd813a65c185f4a2c3ea681da5cf72ebf9e0a1098355c"
+metafile = true
+
+[[files]]
 file = "mods/no-telemetry.pw.toml"
 hash = "c5e7e0a3de03c138f587fc56dca70013978677e0cde2ad19024dc798178a49bd"
 metafile = true

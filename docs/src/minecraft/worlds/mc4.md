@@ -38,6 +38,10 @@ everything that costs frames without changing how the game plays.
 - **Clumps** merges XP orbs.
 - **Chat stays unreportable**
   ([No Chat Reports](https://modrinth.com/mod/no-chat-reports)).
+- **Creepers do not break blocks**
+  ([No Creeper Griefing](https://modrinth.com/project/XUMo8IRd)): their
+  explosions still hurt and knock you back, they just leave your builds
+  alone. Server-only; nothing to install.
 - Under the hood: Lithium, FerriteCore, Krypton, C2ME, ScalableLux,
   ServerCore, Ksyxis and Alternate Current (for redstone) make the server
   itself faster, as on world 3.
