@@ -798,6 +798,8 @@
               markdownlint-cli2
               packwiz # the packwiz-refresh hook
               python3 # the mod-lists hook (packs/mod-list.py)
+              jq # packs/modrinth.sh
+              unzip # packs/modrinth.sh
               jdk21_headless
               jdk25_headless
               mdbook
