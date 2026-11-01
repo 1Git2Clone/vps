@@ -5,15 +5,15 @@
 #
 # Upsert with no IDs in the repo:
 #   - the project is the world's address as a slug (mc4.hu-tao.dev is
-#     mc4-hu-tao-dev): found, or created (unlisted, then
-#     sent to Modrinth's review once it has a version);
-#   - a version is skipped when Modrinth already has the exact file (by sha1),
+#     mc4-hu-tao-dev): found, or created unlisted; while it is still a
+#     draft, each run sends it to Modrinth's review;
+#   - a version is skipped when Modrinth already has the exact file (by sha512),
 #     so only a changed pack gets a new one.
 #
 # MODRINTH_TOKEN needs the create projects, write projects, create versions,
 # read projects and read versions scopes; without the reads, a project still in
-# review looks missing and the run tries to create it again. A slug someone else owns fails the upload with 401: nothing is
-# published into their project.
+# review looks missing and the run tries to create it again. A slug someone
+# else owns fails the upload with 401: nothing is published into their project.
 set -euo pipefail
 
 api=https://api.modrinth.com/v2
@@ -29,15 +29,8 @@ for pack in "$@"; do
   host="${name%-*}"
   slug="${host//./-}" # mc4-hu-tao-dev
 
-  sha1="$(sha1sum "$file" | cut -d' ' -f1)"
-  if [ "$(curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" "$api/version_file/$sha1?algorithm=sha1")" = 200 ]; then
-    echo "$pack: $name is already on Modrinth"
-    continue
-  fi
-
-  new=
   case "$(curl -s -o "$tmp" -w '%{http_code}' "${auth[@]}" "$api/project/$slug")" in
-    200) id="$(jq -r .id "$tmp")" ;;
+    200) id="$(jq -r .id "$tmp")" status="$(jq -r .status "$tmp")" ;;
     404)
       data="$(jq -n --arg slug "$slug" --arg host "$host" '{
         project_type: "modpack", slug: $slug, title: $host,
@@ -48,27 +41,34 @@ for pack in "$@"; do
         is_draft: true, requested_status: "unlisted", initial_versions: []
       }')"
       id="$(curl -sS --fail-with-body "${auth[@]}" -F "data=$data" "$api/project" | jq -r .id)"
-      new=1
+      status=draft
       echo "$pack: created project $slug ($id)"
       ;;
     *) cat "$tmp" >&2; exit 1 ;;
   esac
 
-  index="$(unzip -p "$file" modrinth.index.json)"
-  data="$(jq -n --arg id "$id" --arg v "$(jq -r .dependencies.minecraft <<<"$index")-$version" \
-    --arg log "$changelog" --argjson deps "$(jq .dependencies <<<"$index")" '{
-      project_id: $id, name: $v, version_number: $v, changelog: $log,
-      game_versions: [$deps.minecraft],
-      loaders: [$deps | keys[] | select(. != "minecraft") | sub("-loader$"; "")],
-      version_type: "release", featured: true, dependencies: [],
-      file_parts: ["file"], primary_file: "file"
-    }')"
-  curl -sS --fail-with-body -o /dev/null "${auth[@]}" -F "data=$data" -F "file=@$file;filename=$name.mrpack" "$api/version"
-  echo "$pack: uploaded $name"
+  sha512="$(sha512sum "$file" | cut -d' ' -f1)"
+  if [ "$(curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" "$api/version_file/$sha512?algorithm=sha512")" = 200 ]; then
+    echo "$pack: $name is already on Modrinth"
+  else
+    index="$(unzip -p "$file" modrinth.index.json)"
+    data="$(jq -n --arg id "$id" --arg v "$(jq -r .dependencies.minecraft <<<"$index")-$version" \
+      --arg log "$changelog" --argjson deps "$(jq .dependencies <<<"$index")" '{
+        project_id: $id, name: $v, version_number: $v, changelog: $log,
+        game_versions: [$deps.minecraft],
+        loaders: [$deps | keys[] | select(. != "minecraft") | sub("-loader$"; "")],
+        version_type: "release", featured: true, dependencies: [],
+        file_parts: ["file"], primary_file: "file"
+      }')"
+    curl -sS --fail-with-body -o "$tmp" "${auth[@]}" -F "data=$data" -F "file=@$file;filename=$name.mrpack" "$api/version" ||
+      { cat "$tmp" >&2; exit 1; }
+    echo "$pack: uploaded $name"
+  fi
 
-  if [ -n "$new" ]; then
-    curl -sS --fail-with-body -o /dev/null -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-      -d '{"status":"processing"}' "$api/project/$id"
+  # Still a draft (new, or a run that died before this): send it to review.
+  if [ "$status" = draft ]; then
+    curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+      -d '{"status":"processing"}' "$api/project/$id" || { cat "$tmp" >&2; exit 1; }
     echo "$pack: sent $slug to Modrinth's review"
   fi
 done
