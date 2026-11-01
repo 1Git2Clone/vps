@@ -67,7 +67,7 @@ for pack in "$@"; do
 
   # Still a draft (new, or a run that died before this): send it to review.
   if [ "$status" = draft ]; then
-    curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+    curl -sS --fail-with-body -D /dev/stderr -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
       -d '{"status":"processing"}' "$api/project/$id" || { cat "$tmp" >&2; exit 1; }
     echo "$pack: sent $slug to Modrinth's review"
   fi
