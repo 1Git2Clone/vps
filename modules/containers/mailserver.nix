@@ -242,7 +242,12 @@ in
     };
 
     webmail = {
-      image = "roundcube/roundcubemail:1.7.5-apache";
+      # Pinned by digest because the tag alone does not move a running box:
+      # 1.7.5-apache was rebuilt on 2026-10-27 with PHP 8.4.27 (php2shell,
+      # CVE-2026-109618/109619), and the host kept the 10-21 pull with 8.4.26.
+      #
+      # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/roundcube/roundcubemail/tags?page_size=20&ordering=last_updated'
+      image = "roundcube/roundcubemail:1.7.5-apache@sha256:a6ef4cff166b5e2056238bb400ca84210bd796c83d859495ab67e60101ff2c55";
 
       environment = {
         ROUNDCUBEMAIL_DEFAULT_HOST = "ssl://${hostname}";
