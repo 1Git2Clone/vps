@@ -81,9 +81,9 @@ for pack in "$@"; do
     -d "$meta" "$api/project/$id" || { cat "$tmp" >&2; exit 1; }
 
   # Still a draft (new, or a run that died before this): send it to review.
-  # Modrinth refuses this with a bare 400 and no reason, so a refusal is a
-  # warning: the upload above still counts, and the project page's "Submit
-  # for review" names what is missing.
+  # Modrinth answers a project that fails its publishing checklist with a bare
+  # 400 and no reason, so a refusal is a warning: the upload above still
+  # counts, and the checklist on the project page names what is missing.
   if [ "$status" = draft ]; then
     if curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
       -d '{"status":"processing"}' "$api/project/$id"; then
