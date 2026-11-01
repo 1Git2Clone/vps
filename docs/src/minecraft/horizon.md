@@ -11,7 +11,7 @@ address in Multiplayer. Java/Fabric mod jars do not run in Horizon.
 ## Version and access
 
 Both sides use the upstream **`nightly-2026-10-30`** game binaries, commit
-`587f81f9c69629e999584f30aae0c9edacfc1b1d`. The client's launcher is a separate
+`1da354b67a509812c4141b67de2affd6de65c342`. The client's launcher is a separate
 package. Nix patches the Linux binaries' loaders; it does not compile Rust.
 
 `packages/horizon-server.nix` pins the server archive by SHA-256. To update,

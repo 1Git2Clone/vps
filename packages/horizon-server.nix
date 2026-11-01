@@ -13,7 +13,7 @@ stdenvNoCC.mkDerivation {
 
   src = fetchurl {
     url = "https://github.com/horizon-rust/horizon/releases/download/nightly-2026-10-30/horizon-server-linux-x86_64.tar.gz";
-    hash = "sha256-o5uZ46X9ETGFiJS/M1/z2ok+egsxm+b/x6gG1whst2w=";
+    hash = "sha256-hhCPpkd9H2RRmbLLHP82I5pYNU/MqYoco8a9GHXHbps=";
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];
