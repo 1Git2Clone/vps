@@ -1,0 +1,9 @@
+# actionlint reads this from .github/ for BOTH forges' workflows; see the
+# actionlint hook in .pre-commit-config.yaml.
+#
+# `nix` is the Forgejo runner's label (modules/containers/forgejo-runner.nix).
+# Without it every .forgejo job fails runner-label, which actionlint only knows
+# from GitHub's hosted runners.
+self-hosted-runner:
+  labels:
+    - nix

@@ -92,6 +92,33 @@ repos:
         files: \.md$
         pass_filenames: false
 
+      # Shell. actionlint hands every workflow `run:` block to shellcheck, so
+      # inline steps are linted where they are, without moving them to files.
+      # .github/actionlint.yaml names the Forgejo runner's label.
+      - id: actionlint
+        name: actionlint (workflows and their run blocks)
+        entry: nix develop .#ci -c actionlint
+        language: system
+        files: ^\.(forgejo|github)/workflows/.*\.ya?ml$
+
+      - id: shellcheck
+        name: shellcheck
+        entry: nix develop .#ci -c shellcheck
+        language: system
+        types: [shell]
+
+      # A command substitution as a for loop's word list. Neither set -e nor
+      # shellcheck (0.11.0, every optional check on) notices it failing: the
+      # loop runs zero times and the script carries on. pages.yml staged its
+      # packs that way, so a broken pack shipped an empty directory to players.
+      # Assign the substitution to a variable first and loop over that; a plain
+      # assignment's exit status is the substitution's.
+      - id: for-substitution
+        name: no command substitution as a for word list
+        language: pygrep
+        entry: '\bfor\s+\w+\s+in\b[^;#]*(\$\(|`)'
+        files: (\.(ya?ml|sh|nix)$|^scripts/)
+
       # The worlds' modpacks. Both run only when something under packs/ is
       # staged.
       #

@@ -958,7 +958,7 @@ in
     after = [ "tailscaled.service" ];
     wants = [ "tailscaled.service" ];
     serviceConfig.ExecStartPre = "${pkgs.writeShellScript "wait-for-tailnet-address" ''
-      for _ in $(${pkgs.coreutils}/bin/seq 60); do
+      for _ in {1..60}; do
         ${pkgs.iproute2}/bin/ip -4 addr show dev tailscale0 2>/dev/null \
           | ${pkgs.gnugrep}/bin/grep -qF "inet ${tailnetIPv4}/" && exit 0
         ${pkgs.coreutils}/bin/sleep 1

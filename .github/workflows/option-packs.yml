@@ -77,7 +77,10 @@ jobs:
         if: steps.select.outputs.worlds != ''
         env:
           WORLDS: ${{ steps.select.outputs.worlds }}
-        run: nix develop .#ci -c packs/startup.sh _pack-builds $WORLDS
+        # Unquoted on purpose: WORLDS is a space-separated list, one argument each.
+        run: |
+          # shellcheck disable=SC2086
+          nix develop .#ci -c packs/startup.sh _pack-builds $WORLDS
 
       - name: Upload
         if: steps.select.outputs.worlds != ''

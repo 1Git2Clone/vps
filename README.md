@@ -32,6 +32,7 @@ nothing to remember to run.
 ├── .markdownlint-cli2.yaml  # what the markdown linter checks, and what it skips
 ├── .forgejo/workflows/   # CI and pages, run on the dedicated runner box
 ├── .github/workflows/    # CI and option packs, run on the GitHub mirror
+├── .github/actionlint.yaml  # actionlint's config for both forges' workflows
 ├── docs/                 # the handbook — mdBook source in docs/src/
 ├── runner/               # the CI runner's own configuration.nix
 ├── tests/                # VM and network tests behind checks.*

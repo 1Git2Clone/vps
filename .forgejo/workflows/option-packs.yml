@@ -100,7 +100,10 @@ jobs:
         if: steps.select.outputs.worlds != ''
         env:
           WORLDS: ${{ steps.select.outputs.worlds }}
-        run: nix develop .#ci -c packs/startup.sh _pack-builds $WORLDS
+        # Unquoted on purpose: WORLDS is a space-separated list, one argument each.
+        run: |
+          # shellcheck disable=SC2086
+          nix develop .#ci -c packs/startup.sh _pack-builds $WORLDS
 
       # Verbatim from pages.yml: upload-artifact is a JavaScript action.
       - name: Put the dev shell's node on PATH for the upload action

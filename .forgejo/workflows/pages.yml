@@ -7,9 +7,10 @@
 # into the VPS, which is the entire premise of the split.
 # See docs/src/operations/pages.md.
 #
-# The published URL is https://pages.hu-tao.dev/hutao/vps/docs/ — the layout of
-# the artifact IS the URL below `<owner>/<repo>/`, with no rewriting anywhere,
-# which is why the book is staged under `_site/docs/` rather than at the root.
+# The artifact's layout IS the URL below https://pages.hu-tao.dev/hutao/vps/,
+# with no rewriting anywhere, which is why the book is staged under
+# `_site/docs/` rather than at the root. The handbook's published URL is
+# https://docs.hu-tao.dev/, and that pages path redirects to it (docs/book.toml).
 #
 # THIS FILE IS SKAVEX'S pages.yml, ADAPTED. That repo and hutao/compress have
 # both been publishing through this exact path since the runner moved off the
@@ -105,11 +106,17 @@ jobs:
       # Beside each, its -with-options build (packs/options laid over it). The
       # same build option-packs.yml uploads for forks; it is staged here
       # because only this workflow's `pages` artifact is served.
+      #
+      # The build is its own assignment, not the loop's word list: set -e does
+      # not see a substitution that fails there, so a broken pack would stage
+      # nothing and the step would still pass. The for-substitution hook in
+      # .pre-commit-config.yaml keeps it that way.
       - name: Stage the modpacks
         run: |
           for pack in mc1 mc2 mc3 mc4; do
             mkdir -p "_site/$pack"
-            for out in $(nix build --print-out-paths --no-link ".#$pack-mrpack" ".#$pack-mrpack-with-options"); do
+            outs=$(nix build --print-out-paths --no-link ".#$pack-mrpack" ".#$pack-mrpack-with-options")
+            for out in $outs; do
               cp "$out" "_site/$pack/$(basename "$out" | cut -d- -f2-)"
             done
           done

@@ -800,6 +800,8 @@
               python3 # the mod-lists hook (packs/mod-list.py)
               jq # packs/modrinth.sh
               unzip # packs/modrinth.sh
+              actionlint
+              shellcheck # actionlint's run-block checks, and the shellcheck hook
               jdk21_headless
               jdk25_headless
               mdbook
