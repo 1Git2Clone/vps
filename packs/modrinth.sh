@@ -66,9 +66,15 @@ for pack in "$@"; do
   fi
 
   # Still a draft (new, or a run that died before this): send it to review.
+  # Modrinth refuses this with a bare 400 and no reason, so a refusal is a
+  # warning: the upload above still counts, and the project page's "Submit
+  # for review" names what is missing.
   if [ "$status" = draft ]; then
-    curl -sS --fail-with-body -D /dev/stderr -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-      -d '{"status":"processing"}' "$api/project/$id" || { cat "$tmp" >&2; exit 1; }
-    echo "$pack: sent $slug to Modrinth's review"
+    if curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+      -d '{"status":"processing"}' "$api/project/$id"; then
+      echo "$pack: sent $slug to Modrinth's review"
+    else
+      echo "::warning::$pack: Modrinth refused to review $slug; submit it from https://modrinth.com/modpack/$slug"
+    fi
   fi
 done
