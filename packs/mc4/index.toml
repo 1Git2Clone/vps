@@ -369,6 +369,11 @@ hash = "63d1a46f0deeb755036fe55b93b4569f3874bc19cf5a346e33e9dea0652d9c4d"
 metafile = true
 
 [[files]]
+file = "mods/travelersbackpack.pw.toml"
+hash = "6b34fbba370a0a6d9670422b07d471112545e0f416679c517e79229b3494212c"
+metafile = true
+
+[[files]]
 file = "mods/ukulib.pw.toml"
 hash = "c002bc66b617ce1e5d8c59362744cb24515809ed571415b77906da6d4a8fa32e"
 metafile = true
