@@ -10,9 +10,10 @@
 #   - a version is skipped when Modrinth already has the exact file (by sha512),
 #     so only a changed pack gets a new one.
 #
-# MODRINTH_TOKEN needs the create projects, write projects, create versions,
-# read projects and read versions scopes; without the reads, a project still in
-# review looks missing and the run tries to create it again. A slug someone
+# MODRINTH_TOKEN needs the create, read and write scopes for both projects and
+# versions. Without the reads, a project still in review looks missing and the
+# run tries to create it again; setting the sides edits every version, which
+# is a bare 401 without write versions. A slug someone
 # else owns fails the upload with 401: nothing is published into their project.
 set -euo pipefail
 
