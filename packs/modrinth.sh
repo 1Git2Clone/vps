@@ -29,17 +29,28 @@ for pack in "$@"; do
   host="${name%-*}"
   slug="${host//./-}" # mc4-hu-tao-dev
 
+  # Summary, description and sides, re-sent every run so the project follows
+  # the handbook. The description is the world's handbook page with its mod
+  # list inlined; the summary is its title, since Modrinth refuses one that
+  # holds an address. Sides on a project apply to all its versions.
+  page=docs/src/minecraft/worlds
+  meta="$(jq -n --rawfile page "$page/$pack.md" --rawfile mods "$page/$pack-mods.md" '
+    def clean: gsub("(?s)<!--.*?-->\\s*"; "");
+    {
+      description: (($page | capture("^# (?<t>[^\\n]+)").t) + ", the modpack for a private, whitelisted Minecraft server."),
+      body: ($page | gsub("\\{\\{#include [^}]+\\}\\}"; $mods | clean) | clean
+        | gsub("\\]\\((?<p>[a-z0-9-]+)\\.md\\)"; "](https://docs.hu-tao.dev/minecraft/worlds/\(.p).html)")),
+      client_side: "required", server_side: "optional"
+    }')"
+
   case "$(curl -s -o "$tmp" -w '%{http_code}' "${auth[@]}" "$api/project/$slug")" in
     200) id="$(jq -r .id "$tmp")" status="$(jq -r .status "$tmp")" ;;
     404)
-      data="$(jq -n --arg slug "$slug" --arg host "$host" '{
+      data="$(jq --arg slug "$slug" --arg host "$host" '. + {
         project_type: "modpack", slug: $slug, title: $host,
-        description: "The modpack for \($host), a private Minecraft server.",
-        body: "The modpack for \($host), a private, whitelisted Minecraft server. Built from https://git.hu-tao.dev/hutao/vps.",
-        categories: ["multiplayer"], client_side: "required", server_side: "optional",
-        license_id: "MIT", source_url: "https://git.hu-tao.dev/hutao/vps",
+        categories: ["multiplayer"], license_id: "MIT", source_url: "https://git.hu-tao.dev/hutao/vps",
         is_draft: true, requested_status: "unlisted", initial_versions: []
-      }')"
+      }' <<<"$meta")"
       id="$(curl -sS --fail-with-body "${auth[@]}" -F "data=$data" "$api/project" | jq -r .id)"
       status=draft
       echo "$pack: created project $slug ($id)"
@@ -64,6 +75,9 @@ for pack in "$@"; do
       { cat "$tmp" >&2; exit 1; }
     echo "$pack: uploaded $name"
   fi
+
+  curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+    -d "$meta" "$api/project/$id" || { cat "$tmp" >&2; exit 1; }
 
   # Still a draft (new, or a run that died before this): send it to review.
   # Modrinth refuses this with a bare 400 and no reason, so a refusal is a
