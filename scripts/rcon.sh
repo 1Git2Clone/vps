@@ -48,7 +48,7 @@ wake() {
     exit 1
   fi
   # RCON answers once the server is ready; up to three minutes.
-  for _ in $(seq 90); do
+  for _ in {1..90}; do
     rcon "$world" list >/dev/null 2>&1 && return
     sleep 2
   done
@@ -62,8 +62,14 @@ put_back_to_sleep() {
 # Players on every world that is up. A world whose count cannot be read
 # counts as one, so an unknown never reads as "nobody is on".
 players_online() {
-  local total=0 unit world
-  for unit in $(systemctl list-units --state=active --plain --no-legend 'docker-minecraft*' | cut -d' ' -f1); do
+  local total=0 units unit world
+  # Its own assignment: as the loop's word list a failure here would read as
+  # no worlds up, so nobody on. This runs inside $(...), where set -e is off.
+  units=$(systemctl list-units --state=active --plain --no-legend 'docker-minecraft*' | cut -d' ' -f1) || {
+    echo 1
+    return
+  }
+  for unit in $units; do
     world=${unit#docker-}
     world=${world%.service}
     # A regex, not grep | head: under pipefail, head closing early fails the pipe.
