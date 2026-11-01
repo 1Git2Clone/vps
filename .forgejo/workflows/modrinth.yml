@@ -1,0 +1,41 @@
+# ==============================================================================
+# Modrinth — publish the packs where launchers can update them
+# ==============================================================================
+# packs/modrinth.sh uploads each pack's .mrpack (the same build pages serves)
+# to its Modrinth project, creating the project the first time. Unchanged
+# packs are skipped, so this is safe on every push. Pages stays the source of
+# truth; Modrinth only adds the "update available" button.
+#
+# Its own workflow, not a pages.yml step, so it can be dispatched on a branch
+# without publishing that branch's handbook.
+name: Modrinth
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: modrinth
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish the packs
+    # The same image and NIX_CONFIG as ci.yml; see the notes there.
+    runs-on: nix
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
+    steps:
+      # mods.yml's checkout: the script reads only HEAD's hash and subject.
+      - name: Checkout
+        run: |
+          git init -q -b main .
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}"
+          git fetch -q --depth 1 origin "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+
+      - name: Upload changed packs
+        env:
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+        run: nix develop .#ci -c packs/modrinth.sh mc1 mc2 mc3 mc4
