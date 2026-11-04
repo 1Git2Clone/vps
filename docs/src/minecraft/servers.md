@@ -92,5 +92,6 @@ whose library is server-only crashes every player's launch, and the reverse
 stops the server, so both sides are checked. It runs offline, on the same
 pinned downloads the pack is built from, as a pre-commit hook and in CI.
 
-Version ranges are not evaluated, only presence: a mismatch names itself in the
-server log, while a missing mod is a crash on every player's launch.
+Version ranges are evaluated too. A client-only mod never reaches a server
+log, so a mismatch there is invisible until a player launches: mc1 shipped
+Voxy 0.2.18, which accepts only Sodium 0.9.1, next to Sodium 0.9.2.

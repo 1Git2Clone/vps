@@ -99,11 +99,17 @@ nix build .#checks.x86_64-linux.mc1-pack -L        # mc2-pack, mc3-pack
 ```
 
 The dependency check prints how many mods each side gets and names any mod
-whose required library is missing on a side, for example:
+whose required library is missing on a side, or present in a version outside
+the range it asks for, for example:
 
 ```text
 client: mods/tectonic-3.0.28-fabric-26.2.jar needs lithostitched *
+client: mods/voxy-0.2.18-beta-26.1.2.jar needs sodium ['=0.0.0', '>=0.9.1- <=0.9.1'], pack has 0.9.2+mc26.1.2
 ```
+
+The fix for a range is usually `packwiz pin` on the older library, plus pins
+on whatever else then wants the newer one. mc1 pins Sodium 0.9.1, Sodium
+Extra 0.9.3 and Reese's Sodium Options 2.2.3 for Voxy 0.2.18.
 
 The Option packs workflow boots each built options pack with its pinned
 server-side mods and Fabric loader,
