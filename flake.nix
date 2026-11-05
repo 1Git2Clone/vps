@@ -161,9 +161,21 @@
 
             # Port 2222 reaches the host's own sshd. The default port is
             # forgejo's, and Tailscale SSH is off (modules/services.nix).
+            #
+            # One shared connection, so the key's passphrase is asked once
+            # rather than per ssh call. The rollback confirmation opts out (the
+            # ssh wrapper in the dev shell): it has to prove a NEW connection
+            # still gets in, which a connection opened before the activation
+            # cannot. That is a second passphrase prompt, inside confirmTimeout.
             sshOpts = [
               "-p"
               "2222"
+              "-o"
+              "ControlMaster=auto"
+              "-o"
+              "ControlPath=\${XDG_RUNTIME_DIR}/ssh-cm-%C"
+              "-o"
+              "ControlPersist=20m"
             ];
 
             # sudo needs a password (modules/security.nix). deploy-rs asks for
@@ -772,6 +784,17 @@
               nixos-rebuild
               opentofu
               deploy-rs.packages.${devSystem}.default
+              # deploy-rs runs `ssh` from PATH with the node's sshOpts on every
+              # call, the rollback confirmation included, so this is the only
+              # place to tell that one call apart: it removes the canary file.
+              # ControlPath=none comes first, and ssh keeps the first value, so
+              # it opens a fresh connection instead of reusing the shared one.
+              (pkgs.writeShellScriptBin "ssh" ''
+                case "$*" in
+                  *deploy-rs-canary-*) exec ${pkgs.openssh}/bin/ssh -o ControlPath=none "$@" ;;
+                esac
+                exec ${pkgs.openssh}/bin/ssh "$@"
+              '')
               # The worlds' modpacks are packwiz packs; see packs/mrpack.nix.
               packwiz
               # The hook runner. `pre-commit install` once per clone, after which

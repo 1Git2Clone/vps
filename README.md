@@ -112,8 +112,8 @@ server use pinned upstream binaries; the Fabric packs are separate.
 
 ```sh
 nix develop                       # the shell everything below assumes
-deploy .#vps                      # the VPS
-deploy .#runner-forgejo-runner    # the CI runner, via ProxyJump through the VPS
+deploy .#vps                      # the VPS; wrapped in a one-shot ssh-agent,
+deploy .#runner-forgejo-runner    # see docs/src/operations/deploying.md
 
 QEMU_OPTS="-vnc :0" nix run .#default    # the whole system, locally
 nix develop -c pre-commit install        # once per clone

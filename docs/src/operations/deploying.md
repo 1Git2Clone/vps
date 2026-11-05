@@ -9,32 +9,31 @@ There are two deploy targets, and one of them is only reachable through the
 other:
 
 ```sh
-deploy .#vps              # the VPS
-deploy .#runner-forgejo-runner   # the CI runner, via ProxyJump through the VPS
+SOPS_AGE_KEY_FILE=/var/lib/sops-nix/vps.txt nix develop -c ssh-agent sh -c 'ssh-add ~/.ssh/id_ed25519 && deploy .#vps'
+SOPS_AGE_KEY_FILE=/var/lib/sops-nix/vps.txt nix develop -c ssh-agent sh -c 'ssh-add ~/.ssh/id_ed25519 && deploy .#runner-forgejo-runner'
 ```
 
-Everything below assumes the ssh key is loaded, because it is passphrase-
-protected and nothing here can prompt for it:
+Name the node. A bare `deploy .` deploys every node, the runner first, which is
+the wrong order (see below).
 
-```sh
-export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/hutao-agent.sock"
-pkill -f "ssh-agent.*$SSH_AUTH_SOCK"; rm -f "$SSH_AUTH_SOCK"
-ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null 2>&1 && ssh-add -c -t 60m ~/.ssh/id_ed25519
-```
+**Two prompts, then nothing:** the key's passphrase at `ssh-add`, then hutao's
+sudo password (`interactiveSudo` in `flake.nix`; the runner logs in as root and
+skips it). The agent exists only for that one command: `ssh-agent` starts it
+in a private `/tmp/ssh-*` directory, runs the deploy under it and kills it on
+exit, so no socket outlives the deploy. It stays on the workstation: nothing
+forwards it to the box.
 
-The socket lives in `$XDG_RUNTIME_DIR` (`/run/user/<uid>`, mode 0700), not
-`/tmp`: in `/tmp` another user can create the path first, and with the agent's
-error thrown away `ssh-add` would hand the key to their socket. `-c` makes every
-signature ask for confirmation, which needs `SSH_ASKPASS` set when the agent
-starts; without one, every use is refused. A deploy opens several ssh
-connections and each one signs, so expect a confirmation per connection.
+Without the agent, every ssh connection decrypts the key itself and a deploy
+opens several, so you would type the passphrase several times.
 
-A `Permission denied (publickey)` from any command here almost always means the
-agent is gone, not that a key is missing on a server.
+The VPS deploy's ssh calls share one connection (`ControlMaster`, kept 20 min,
+in `flake.nix`), except the rollback confirmation: the dev shell's `ssh` wrapper
+sends it over a fresh one, because only a new login proves the box still lets
+you in. sshd's log shows it: one `Accepted publickey` for the shared connection
+and another just before `rm /tmp/deploy-rs-canary-…`.
 
 **sudo as hutao takes hutao's password** (`modules/security.nix`), and no
-agent is ever forwarded. `deploy .#vps` asks for it once, up front
-(`interactiveSudo` in `flake.nix`). By hand, `ssh -t` gives sudo a terminal to
+agent is ever forwarded. By hand, `ssh -t` gives sudo a terminal to
 ask on: `ssh -t -p 2222 hutao@vps 'sudo …'`; `scripts/rcon.sh` does the same.
 A command whose output is captured or piped (`$(ssh …)`, `ssh … | openssl`,
 `ssh … < file`) cannot show the prompt: run those in an interactive
@@ -46,7 +45,7 @@ A command whose output is captured or piped (`$(ssh …)`, `ssh … | openssl`,
 
 ```sh
 nix flake check          # optional; deploy builds anyway
-deploy .#vps
+SOPS_AGE_KEY_FILE=/var/lib/sops-nix/vps.txt nix develop -c ssh-agent sh -c 'ssh-add ~/.ssh/id_ed25519 && deploy .#vps'
 ```
 
 Without deploy-rs — same result, no automatic rollback:
