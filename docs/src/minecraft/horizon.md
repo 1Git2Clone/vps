@@ -73,11 +73,11 @@ policy above. CLI access-list changes last until the next restart; permanent
 changes require editing the private policy, which is backed up daily:
 
 ```sh
-ssh -p 2222 hutao@vps 'sudo docker logs --tail 100 horizon'
-ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server status --json'
-ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server whitelist list'
-ssh -p 2222 hutao@vps 'sudo docker exec horizon horizon-server cmd list'
-ssh -p 2222 hutao@vps 'sudo docker stats --no-stream horizon'
+ssh -t -p 2222 hutao@vps 'sudo docker logs --tail 100 horizon'
+ssh -t -p 2222 hutao@vps 'sudo docker exec horizon horizon-server status --json'
+ssh -t -p 2222 hutao@vps 'sudo docker exec horizon horizon-server whitelist list'
+ssh -t -p 2222 hutao@vps 'sudo docker exec horizon horizon-server cmd list'
+ssh -t -p 2222 hutao@vps 'sudo docker stats --no-stream horizon'
 ```
 
 The container's `PATH` includes the packaged CLI. The management panel binds

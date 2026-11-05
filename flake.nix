@@ -166,6 +166,12 @@
               "2222"
             ];
 
+            # sudo needs a password (modules/security.nix). deploy-rs asks for
+            # it once up front and pipes it to every sudo, the confirmation
+            # included, so the agent is never forwarded to the box during a
+            # deploy.
+            interactiveSudo = true;
+
             magicRollback = true;
             autoRollback = true;
 

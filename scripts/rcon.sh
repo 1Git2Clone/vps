@@ -18,7 +18,9 @@ if [ "${1:-}" != --remote ]; then
     echo "usage: $0 <mc1..mc4> <command...>" >&2
     exit 2
   fi
-  exec ssh -p 2222 hutao@vps "sudo bash -s -- --remote $(printf '%q ' "$@")" <"$0"
+  # The script goes as an argument, not on stdin: -t hands stdin to the
+  # terminal, which is where sudo asks for hutao's password.
+  exec ssh -t -p 2222 hutao@vps "sudo bash -c $(printf '%q' "$(<"$0")") rcon.sh --remote $(printf '%q ' "$@")"
 fi
 
 # Everything below runs on the VPS, as root. The functions are all defined

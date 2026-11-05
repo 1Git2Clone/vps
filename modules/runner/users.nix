@@ -8,9 +8,9 @@
 # hashedPasswordFile, NixOS locks both accounts' passwords, which is the
 # correct state for a key-only box.
 #
-# hutao is in wheel, and modules/security.nix sets
-# security.sudo.wheelNeedsPassword = false — so a locked password does not stop
-# `deploy-rs`, which activates as root over an unprivileged login.
+# hutao is in wheel, but modules/security.nix makes sudo take a password, so
+# with the password locked hutao has no sudo here. deploy-rs logs in as root
+# (flake.nix), so nothing needs it.
 #
 # The keys are duplicated rather than factored out of modules/users.nix.
 # Factoring them would mean importing a module that also wants sops, or adding

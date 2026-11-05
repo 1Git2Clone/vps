@@ -17,13 +17,28 @@ Everything below assumes the ssh key is loaded, because it is passphrase-
 protected and nothing here can prompt for it:
 
 ```sh
-ssh-agent -a /tmp/hutao-agent.sock >/dev/null 2>&1
-SSH_AUTH_SOCK=/tmp/hutao-agent.sock ssh-add ~/.ssh/id_ed25519
-export SSH_AUTH_SOCK=/tmp/hutao-agent.sock
+export SSH_AUTH_SOCK="$XDG_RUNTIME_DIR/hutao-agent.sock"
+pkill -f "ssh-agent.*$SSH_AUTH_SOCK"; rm -f "$SSH_AUTH_SOCK"
+ssh-agent -a "$SSH_AUTH_SOCK" >/dev/null 2>&1 && ssh-add -c -t 60m ~/.ssh/id_ed25519
 ```
+
+The socket lives in `$XDG_RUNTIME_DIR` (`/run/user/<uid>`, mode 0700), not
+`/tmp`: in `/tmp` another user can create the path first, and with the agent's
+error thrown away `ssh-add` would hand the key to their socket. `-c` makes every
+signature ask for confirmation, which needs `SSH_ASKPASS` set when the agent
+starts; without one, every use is refused. A deploy opens several ssh
+connections and each one signs, so expect a confirmation per connection.
 
 A `Permission denied (publickey)` from any command here almost always means the
 agent is gone, not that a key is missing on a server.
+
+**sudo as hutao takes hutao's password** (`modules/security.nix`), and no
+agent is ever forwarded. `deploy .#vps` asks for it once, up front
+(`interactiveSudo` in `flake.nix`). By hand, `ssh -t` gives sudo a terminal to
+ask on: `ssh -t -p 2222 hutao@vps 'sudo …'`; `scripts/rcon.sh` does the same.
+A command whose output is captured or piped (`$(ssh …)`, `ssh … | openssl`,
+`ssh … < file`) cannot show the prompt: run those in an interactive
+`ssh -p 2222 hutao@vps` session instead, after one `sudo -v`.
 
 ---
 
@@ -38,7 +53,7 @@ Without deploy-rs — same result, no automatic rollback:
 
 ```sh
 nix develop            # provides nixos-rebuild on a non-NixOS workstation
-nixos-rebuild switch --flake .#vps-hetzner --target-host hutao@vps --use-remote-sudo
+nixos-rebuild switch --flake .#vps-hetzner --target-host hutao@vps --ask-sudo-password
 ```
 
 If deploy-rs itself ever becomes unavailable, note that an unresolvable flake
@@ -63,7 +78,7 @@ A crashlooping container is visible and you still have ssh, so:
 
 ```sh
 ssh -p 2222 hutao@vps 'systemctl --failed; systemctl status docker-<name>'
-ssh -p 2222 hutao@vps 'sudo nixos-rebuild switch --rollback'
+ssh -t -p 2222 hutao@vps 'sudo nixos-rebuild switch --rollback'
 ```
 
 Rolling the whole system back because one container is unhappy is usually the
@@ -135,7 +150,7 @@ you cannot push to it — build on the box instead:
 
 ```sh
 rsync -a --delete --exclude .git -e 'ssh -p 2222' ./ hutao@vps:nixos-image/
-ssh -p 2222 hutao@vps 'cd nixos-image && sudo nixos-rebuild switch --flake .#vps-hetzner'
+ssh -t -p 2222 hutao@vps 'cd nixos-image && sudo nixos-rebuild switch --flake .#vps-hetzner'
 ```
 
 That is also the bootstrap for the very first deploy after an install.
@@ -152,7 +167,7 @@ Same as a redeploy, with two one-time steps:
 ssh-keyscan -p 2222 -H hu-tao >> ~/.ssh/known_hosts
 
 # 2. Confirm the box can decrypt its own secrets before relying on it.
-ssh -p 2222 hutao@vps 'sudo ls /run/secrets/ | wc -l'   # expect 31
+ssh -t -p 2222 hutao@vps 'sudo ls /run/secrets/ | wc -l'   # expect 31
 ```
 
 31 is 30 secrets plus the `rendered/` directory; the root and user password
@@ -195,14 +210,14 @@ nix eval --raw .#nixosConfigurations.vps-hetzner.config.systemd.services.docker-
 cat /tmp/create-proxy.sh     # want: --subnet=172.18.0.0/16 --gateway=172.18.0.1 --ip-range=172.18.128.0/17
 
 # 2. On the box: the units on the network, read from docker rather than a list.
-units=$(ssh -p 2222 hutao@vps \
+units=$(ssh -t -p 2222 hutao@vps \
   "sudo docker network inspect proxy --format '{{range .Containers}}docker-{{.Name}} {{end}}'")
 echo "$units"
 
 # 3. Stop them, remove the network, create it from the script, start them again.
-ssh -p 2222 hutao@vps "sudo systemctl stop $units && sudo docker network rm proxy"
-ssh -p 2222 hutao@vps 'sudo bash -s' < /tmp/create-proxy.sh
-ssh -p 2222 hutao@vps "sudo docker network inspect proxy --format '{{json .IPAM.Config}}' \
+ssh -t -p 2222 hutao@vps "sudo systemctl stop $units && sudo docker network rm proxy"
+ssh -t -p 2222 hutao@vps 'sudo bash -s' < /tmp/create-proxy.sh
+ssh -t -p 2222 hutao@vps "sudo docker network inspect proxy --format '{{json .IPAM.Config}}' \
   && sudo systemctl start $units"
 
 # 4. Deploy as usual. caddy is recreated at 172.18.0.2 and nftables switches
@@ -217,7 +232,7 @@ active endpoints, `sudo docker network inspect proxy` names what is left.
 Then check that it did what it was for:
 
 ```sh
-ssh -p 2222 hutao@vps "sudo docker inspect caddy --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'"
+ssh -t -p 2222 hutao@vps "sudo docker inspect caddy --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'"
 # want: 172.18.0.2
 
 # From a tailnet device, then read caddy's log for that request:
@@ -252,6 +267,7 @@ the worst failure shape there is.
 | `time.timeZone`                                         | `modules/boot.nix`     | Unset means NixOS does not manage `/etc/localtime`, so docker creates a _directory_ there and every container that bind-mounts it dies with "not a directory".                     |
 | `nix.settings.trusted-users = @wheel`                   | `modules/nix.nix`      | `deploy-rs` cannot push: "lacks a signature by a trusted key".                                                                                                                     |
 | ssh on **2222**                                         | `modules/services.nix` | Port 22 is forgejo's. Also needs a matching rule in the **Hetzner edge firewall**, which is separate from the host's nftables.                                                     |
+| `interactiveSudo` on `deploy.nodes.vps`                 | `flake.nix`            | sudo asks for a password nobody can type. Activation fails and the box rolls back.                                                                                                 |
 
 **The VM test cannot catch any of these.** `nixos-anywhere --flake .#vps
 --vm-test` validates disko, GRUB and that the system boots — genuinely useful,
@@ -267,7 +283,7 @@ bootloader are sane", never as "this will boot on the server".
 Not "the deploy said success" — these:
 
 ```sh
-ssh -p 2222 hutao@vps '
+ssh -t -p 2222 hutao@vps '
   systemctl is-system-running          # want: running
   systemctl --failed                   # want: empty
   sudo ls /run/secrets | wc -l         # want: 31
@@ -287,7 +303,7 @@ And confirm the certificate is real rather than the self-signed placeholder that
 nothing looks wrong until you check the issuer:
 
 ```sh
-ssh -p 2222 hutao@vps 'sudo cat /var/lib/acme/hu-tao.dev/cert.pem' \
+ssh -t -p 2222 hutao@vps 'sudo cat /var/lib/acme/hu-tao.dev/cert.pem' \
   | openssl x509 -noout -issuer -enddate
 # want: issuer=C=US, O=Let's Encrypt, ...
 # bad:  issuer=CN=minica root ca ...   <- placeholder, DNS-01 failed
@@ -297,7 +313,7 @@ Before triggering ACME, test the Cloudflare token directly — Let's Encrypt cap
 failed validations at 5 per hour and lego spends one per attempt:
 
 ```sh
-ssh -p 2222 hutao@vps 'sudo bash -c "
+ssh -t -p 2222 hutao@vps 'sudo bash -c "
   T=\$(cat /run/secrets/cloudflare_api_token)
   curl -sS -H \"Authorization: Bearer \$T\" \
     https://api.cloudflare.com/client/v4/zones?name=hu-tao.dev"'

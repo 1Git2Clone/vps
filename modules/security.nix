@@ -1,14 +1,14 @@
 {
   security = {
-    # Required for the circuit breaker to be a circuit breaker. deploy-rs
-    # activates as root over an unprivileged ssh login, and an automatic
-    # rollback that stops to ask a human for a sudo password is not automatic.
+    # sudo takes hutao's password, and no agent is ever forwarded to the box.
+    # deploy-rs asks for the password once per deploy (interactiveSudo in
+    # flake.nix) and pipes it to every sudo, so the automatic rollback still
+    # never stops to ask. By hand, `ssh -t` gives sudo a terminal to prompt on;
+    # scripts/rcon.sh does the same.
     #
-    # The trade is small here: ssh is key-only (PasswordAuthentication = false,
-    # KbdInteractiveAuthentication = false), so anyone who can reach a shell as
-    # hutao already holds a private key, and the sudo password protects nothing
-    # they could not get by other means.
-    sudo.wheelNeedsPassword = false;
+    # A shell as hutao without the password (say, something that wrote hutao's
+    # authorized_keys) no longer gets root through sudo.
+    sudo.wheelNeedsPassword = true;
 
     auditd.enable = true;
     audit = {

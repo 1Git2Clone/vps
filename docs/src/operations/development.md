@@ -49,7 +49,7 @@ only if the build happens somewhere else:
 ```sh
 deploy -s --remote-build .#vps         # build on the VPS itself
 nixos-rebuild switch --flake .#vps-hetzner \
-  --target-host hutao@vps --build-host hutao@vps --use-remote-sudo
+  --target-host hutao@vps --build-host hutao@vps --ask-sudo-password
 ```
 
 `-s` is not optional here. deploy-rs runs `nix flake check` first, and every
