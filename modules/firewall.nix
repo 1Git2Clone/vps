@@ -262,7 +262,10 @@ in
           # and navidrome share the proxy bridge with caddy and are still
           # matched. Only caddy has a fixed address on that bridge, so the
           # narrowest version would admit caddy's address to 3000 and 8384 and
-          # keep 8443 open to the bridge for kuma.
+          # keep 8443 open to the bridge for kuma. For tailnetHttpsPort that
+          # residual is closed one layer up instead: caddy aborts any peer there
+          # that is neither a tailnet address nor kuma's client certificate
+          # (`tailnetCidr` in containers/caddy.nix).
           iifname "br-*" ip saddr != { ${config.infra.botSubnet}, ${config.infra.mcSubnet} } tcp dport {
             3000,
             8384,

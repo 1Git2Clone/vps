@@ -235,7 +235,9 @@
 
         It is published on 0.0.0.0 like every other container port and kept
         private exactly the way grafana:3000 is — by its ABSENCE from the
-        firewall's public allow-lists, not by a bind address.
+        firewall's public allow-lists, not by a bind address. Behind that,
+        caddy itself refuses every peer that is neither a tailnet address nor
+        kuma's client certificate (`tailnetCidr` in containers/caddy.nix).
       '';
     };
 

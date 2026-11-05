@@ -247,6 +247,37 @@ let
   ++ lib.attrValues runnerIPv4s;
   rateLimitOf = site: site.rateLimit or defaultRateLimit;
 
+  # WHO THE TAILNET LISTENER SERVES. Until this, nothing above the firewall
+  # cared: a packet that reached tailnetHttpsPort by any route got every
+  # tailnet vhost. Now every request there is one of three things:
+  #
+  #   * A TAILNET PEER — remote_ip in Tailscale's CGNAT range. Served normally.
+  #     Tailnet IPv4 is DNAT'd straight to this container at `infra.caddyIPv4`
+  #     (modules/firewall.nix), so caddy sees the real 100.x. Tailnet IPv6
+  #     still goes through docker-proxy and is aborted; the tailnet names
+  #     have no AAAA, so only a literal v6 address takes that path.
+  #
+  #   * KUMA, identified by its client certificate. NOT by address: kuma
+  #     reaches this listener from the proxy bridge, docker's DNAT skips
+  #     bridge-sourced packets (see the input rule in modules/firewall.nix),
+  #     so they go through docker-proxy and arrive from the bridge gateway —
+  #     the same address as anything else docker-proxy forwards. An address
+  #     allow-list for kuma would be an allow-list for all of that.
+  #
+  #   * ANYONE ELSE — aborted, the connection closed with no response. That
+  #     includes searxng, forgejo and navidrome, which share the proxy bridge
+  #     and which the firewall's input rule still lets reach this port.
+  #
+  # KUMA GETS A HEALTH CHECK AND NOTHING ELSE, so its key opens nothing worth
+  # stealing: GET/HEAD only, credentials stripped, every path rewritten to the
+  # site's `healthPath`, and only the upstream's status code sent back — no
+  # body, no headers (handle_response does not copy them). A site with no
+  # `healthPath` answers kuma 404. Its monitors therefore can only ever check
+  # a 2xx; a keyword monitor on a tailnet site cannot work, by design.
+  tailnetCidr = "100.64.0.0/10";
+  kumaClientSubject = "CN=kuma-probe";
+  kumaClientCert = "/etc/caddy/kuma-client.pem";
+
   # git.<domain> is served twice — publicly, and on the tailnet listener
   # with the admin paths open — so it is defined once, here.
   gitSite = {
@@ -471,6 +502,7 @@ let
       host = "music.${domain}";
       upstream = "navidrome:4533";
       tailnet = true;
+      healthPath = "/ping";
 
       # Subsonic clients authenticate on EVERY /rest/ call and a library sync
       # is thousands of them, so the site-wide brake sits high. The Subsonic
@@ -486,6 +518,7 @@ let
       host = "search.${domain}";
       upstream = "searxng:8080";
       tailnet = true;
+      healthPath = "/healthz";
 
       # searxng has no accounts of its own. Tailnet-only now, so this is the
       # second layer rather than the only one — see
@@ -522,6 +555,7 @@ let
       host = "dozzle.${domain}";
       upstream = "dozzle:8080";
       tailnet = true;
+      healthPath = "/healthcheck";
     }
     {
       # status.<domain> AGAIN, on the tailnet listener and with /socket.io/
@@ -531,12 +565,15 @@ let
       host = "status.${domain}";
       upstream = "kuma:3001";
       tailnet = true;
+      healthPath = "/api/entry-page";
     }
     {
       # mail.<domain> AGAIN: the only copy that serves roundcube.
       host = "mail.${domain}";
       upstream = "webmail:80";
       tailnet = true;
+      # Roundcube has no health route; its login page is the cheapest 200.
+      healthPath = "/";
 
       # Roundcube's login form posts to `/?_task=login`. Roundcube also locks
       # an account after 3 failures a minute (login_rate_limit), but only per
@@ -554,6 +591,7 @@ let
       ]
       // {
         tailnet = true;
+        healthPath = "/api/healthz";
       }
     )
     {
@@ -573,6 +611,7 @@ let
       # modules/firewall.nix — without that rule this is a hang, not an error.
       upstream = "${dockerBridgeGateway}:3000";
       tailnet = true;
+      healthPath = "/api/health";
     }
     {
       host = "syncthing.${domain}";
@@ -580,6 +619,7 @@ let
       # A host service, not even a container. Same route as grafana.
       upstream = "${dockerBridgeGateway}:8384";
       tailnet = true;
+      healthPath = "/rest/noauth/health";
 
       # The GUI polls several REST endpoints every few seconds.
       rateLimit = {
@@ -650,7 +690,25 @@ let
         [
           ""
           "${site.host}${lib.optionalString (site.tailnet or false) ":${toString tailnetHttpsPort}"} {"
-          "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem"
+        ]
+        # verify_if_given: a client with no certificate (every browser) is
+        # unaffected; one that offers a certificate must offer kuma's, or the
+        # handshake fails. The pool is that one self-signed cert, so any
+        # certificate that verifies IS kuma's.
+        ++ (
+          if site.tailnet or false then
+            [
+              "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem {"
+              "\t\tclient_auth {"
+              "\t\t\tmode verify_if_given"
+              "\t\t\ttrust_pool file ${kumaClientCert}"
+              "\t\t}"
+              "\t}"
+            ]
+          else
+            [ "\ttls ${certDir}/fullchain.pem ${certDir}/key.pem" ]
+        )
+        ++ [
           "\theader ${hsts}"
           # THE ONE PLACE THE REAL CLIENT ADDRESS IS RECORDED. Every upstream's
           # peer is caddy, so their own logs read 172.18.0.x — the php2shell
@@ -718,6 +776,48 @@ let
           ]
           ++ [ "\t}" ]
         )
+        # The gate, see `tailnetCidr`. `handle` sorts before `abort`, and both
+        # before the bare reverse_proxy below, so kuma is diverted first, then
+        # everyone who is neither kuma nor a tailnet peer is cut off.
+        ++ lib.optionals (site.tailnet or false) (
+          [
+            "\t@tailnetPeer remote_ip ${tailnetCidr}"
+            "\t@kuma vars {tls_client_subject} \"${kumaClientSubject}\""
+            "\t@outsider {"
+            "\t\tnot remote_ip ${tailnetCidr}"
+            "\t\tnot vars {tls_client_subject} \"${kumaClientSubject}\""
+            "\t}"
+            "\thandle @kuma {"
+          ]
+          ++ (
+            if site ? healthPath then
+              [
+                "\t\t@kumaWrite not method GET HEAD"
+                "\t\trespond @kumaWrite 405"
+                "\t\trequest_header -Authorization"
+                "\t\trequest_header -Cookie"
+                # The trailing `?` drops the query string as well as the path.
+                "\t\trewrite * ${site.healthPath}?"
+                "\t\treverse_proxy ${site.upstream} {"
+              ]
+              ++ lib.optional (site.rewriteHost or false) "\t\t\theader_up Host {upstream_hostport}"
+              ++ [
+                # The empty body is not optional: a lone argument is a BODY,
+                # so `respond {rp.status_code}` answers 200 with the code as
+                # text, and every monitor stays green through any outage.
+                "\t\t\thandle_response {"
+                "\t\t\t\trespond \"\" {rp.status_code}"
+                "\t\t\t}"
+                "\t\t}"
+              ]
+            else
+              [ "\t\trespond 404" ]
+          )
+          ++ [
+            "\t}"
+            "\tabort @outsider"
+          ]
+        )
         # Response headers, each entry scoped to a path or a path regexp. In a
         # `route` they run in the order written, so a later entry overrides an
         # earlier one; outside one caddy sorts them by path and the catch-all
@@ -765,8 +865,13 @@ let
         ]) (site.redirects or [ ])
         # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
         # spelling is a hard config-load error rather than a warning.
+        #
+        # On a tailnet site only tailnet peers are asked for it: basic_auth
+        # sorts before handle and abort, so unscoped it would answer an
+        # outsider 401 (and take its password guesses) before the gate runs,
+        # and would ask kuma for a password it no longer needs.
         ++ lib.optionals (site ? basicAuth) [
-          "\tbasic_auth {"
+          "\tbasic_auth${lib.optionalString (site.tailnet or false) " @tailnetPeer"} {"
           "\t\t${site.basicAuth.user} ${site.basicAuth.hash}"
           "\t}"
         ]
@@ -872,7 +977,8 @@ in
       # The tailnet listeners. Published on 0.0.0.0 like everything else and
       # kept private the same way dozzle:8080 always has been — neither port is
       # in the firewall's public allow-lists, so only `iifname tailscale0
-      # accept` reaches them.
+      # accept` reaches them. If that ever slips, the https one still aborts
+      # every peer that is neither tailnet nor kuma; see `tailnetCidr`.
       "${toString tailnetHttpPort}:${toString tailnetHttpPort}"
       "${toString tailnetHttpsPort}:${toString tailnetHttpsPort}"
       # HTTP/3 on the tailnet listener. The firewall redirects tailscale0's
@@ -889,6 +995,8 @@ in
       # Read-only, and written only by workflow jobs. Docker creates the volume
       # empty on first start, so every pages URL 404s until something publishes.
       "${pagesVolume}:${pagesRoot}:ro"
+      # Only the public half; the key never enters this container.
+      "/var/lib/kuma-client-cert/cert.pem:${kumaClientCert}:ro"
     ];
 
     networks = [ proxyNetwork ];
@@ -972,10 +1080,51 @@ in
     ''}";
   };
 
-  # acme writes the certificate before anything can serve it. Without this a
-  # first boot starts caddy against an empty directory and it exits.
-  systemd.services.docker-caddy = {
-    after = [ "acme-${domain}.service" ];
-    wants = [ "acme-${domain}.service" ];
+  systemd.services = {
+    # KUMA'S CLIENT CERTIFICATE, the one identity the tailnet listener accepts
+    # from off the tailnet (see `tailnetCidr`). Generated here once rather than
+    # kept in sops: nothing but kuma needs the key, and kuma keeps its own copy
+    # in its monitor settings, so there is no second place it must match.
+    #
+    # Self-signed and used as its own trust root. clientAuth EKU because Go
+    # refuses a client certificate without it.
+    #
+    # TO PUT IT IN KUMA: each tailnet monitor, Authentication method mTLS, with
+    #   sudo cat /var/lib/kuma-client-cert/{cert,key}.pem
+    # as Cert and Key and Cert also as CA. A monitor without it is aborted.
+    #
+    # ponytail: ten years and no rotation. Rotate by deleting the directory,
+    # `systemctl restart kuma-client-cert docker-caddy`, then re-pasting into kuma.
+    kuma-client-cert = {
+      description = "Generate kuma's client certificate for caddy's tailnet listener";
+      requiredBy = [ "docker-caddy.service" ];
+      before = [ "docker-caddy.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StateDirectory = "kuma-client-cert";
+        StateDirectoryMode = "0755";
+        UMask = "0077";
+      };
+      script = ''
+        cd /var/lib/kuma-client-cert
+        [ -s cert.pem ] && [ -s key.pem ] && exit 0
+        ${pkgs.openssl}/bin/openssl req -x509 -nodes -days 3650 \
+          -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+          -subj "/${kumaClientSubject}" \
+          -addext "basicConstraints=critical,CA:FALSE" \
+          -addext "extendedKeyUsage=clientAuth" \
+          -keyout key.pem -out cert.pem
+        # The cert is public and caddy's uid must read it; the key stays 0600.
+        chmod 0644 cert.pem
+      '';
+    };
+
+    # acme writes the certificate before anything can serve it. Without this a
+    # first boot starts caddy against an empty directory and it exits.
+    docker-caddy = {
+      after = [ "acme-${domain}.service" ];
+      wants = [ "acme-${domain}.service" ];
+    };
   };
 }
