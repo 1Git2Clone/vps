@@ -776,6 +776,46 @@ let
           ]
           ++ [ "\t}" ]
         )
+        # ANUBIS, on every public site (modules/containers/anubis.nix). Its
+        # challenge page lives under /.within.website/ on each host, proxied
+        # through a named-matcher `handle` emitted ahead of the others, so it is
+        # tried before `@blocked` and the runner handles. Everything else asks
+        # Anubis first: forward_auth sorts before every handle, after
+        # rate_limit, so a flood is braked before it costs a check. A 401 is
+        # "challenge this one"; a 403 (DENY) is passed back as it is.
+        #
+        # Exempt exactly like the rate limit: kuma, renovate, pages-pull and the
+        # CI runners are not browsers and must never see a challenge. git and
+        # API clients from anywhere else pass on their own: Anubis's stock
+        # policy only weighs browser user agents.
+        #
+        # X-Real-Ip is what Anubis keys its challenge on, and it refuses a
+        # request without one.
+        #
+        # ponytail: `{uri}` goes into `redir=` unescaped, so a challenged URL
+        # loses its query string after the first `&` (Anubis's own documented
+        # Caddy config does the same). Only the very first page a visitor lands
+        # on is affected.
+        ++ lib.optionals (!(site.tailnet or false)) [
+          "\t@anubisPage path /.within.website/*"
+          "\thandle @anubisPage {"
+          "\t\treverse_proxy anubis:8923 {"
+          "\t\t\theader_up X-Real-Ip {remote_host}"
+          "\t\t}"
+          "\t}"
+          "\t@anubis {"
+          "\t\tnot path /.within.website/*"
+          "\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+          "\t}"
+          "\tforward_auth @anubis anubis:8923 {"
+          "\t\turi /.within.website/x/cmd/anubis/api/check"
+          "\t\theader_up X-Real-Ip {remote_host}"
+          "\t\t@challenge status 401"
+          "\t\thandle_response @challenge {"
+          "\t\t\tredir * /.within.website/?redir={uri} 307"
+          "\t\t}"
+          "\t}"
+        ]
         # The gate, see `tailnetCidr`. `handle` sorts before `abort`, and both
         # before the bare reverse_proxy below, so kuma is diverted first, then
         # everyone who is neither kuma nor a tailnet peer is cut off.
