@@ -45,8 +45,8 @@ the runner restriction, so a bare `respond` there would never run.
 Every caddy site is rate-limited unless it sets `rateLimit = null`, and none
 does. It used to be opt-in, and only `search.` had opted in, which left the
 logins on `music.`, `mail.` and `git.` open to guessing at whatever speed each
-app allowed — Forgejo allows any. Up to three zones per site, all keyed on the
-client IP (`modules/containers/caddy.nix`):
+app allowed — Forgejo allows any. Up to four zones per site, all but one keyed
+on the client IP (`modules/containers/caddy.nix`):
 
 - **Site-wide** — a flood brake: 300 a minute by default; `git.` 600;
   `music.`, `grafana.` and `syncthing.` 1200; `search.` 120. Private ranges,
@@ -61,6 +61,12 @@ client IP (`modules/containers/caddy.nix`):
   `Authorization: Basic`, which is how a password reaches Forgejo over git or
   the API without ever touching `/user/login`. Exempt like the site-wide zone,
   because renovate pushes with its token as a basic-auth password.
+- **Downloads** — every public site: 30 a minute **in total**, keyed on a
+  constant rather than the client, for `*.mrpack` and `*/releases/download/*`.
+  These answer a small request with a large file, so a botnet spread thin
+  enough to pass every per-IP zone could still spend the uplink on them; one
+  shared bucket caps that however many addresses ask. Under attack downloads
+  return 429 and nothing else is affected. Exempt like the site-wide zone.
 
 These are one layer, not the only one. Roundcube also locks an account after 3
 failures a minute; Navidrome 0.64.1 throttles failed Subsonic logins itself;
@@ -111,6 +117,40 @@ a misconfigured rate limiter throttles requests, it cannot take the box down.
 The env file is read by docker at container _start_, so it re-resolves the sops
 generation symlink each time. A _mounted_ template would pin a stale inode —
 see [Secrets](secrets.md#the-stale-symlink-trap).
+
+## Anubis, every public site
+
+Every public site asks [Anubis](https://anubis.techaro.lol/) about each
+request before serving it (`modules/containers/anubis.nix`, wired in by
+`forward_auth` in `modules/containers/caddy.nix`). One instance, in
+subrequest mode, serves all of them. It sits **after** the site-wide rate
+limit, so a flood is braked before it costs a check.
+
+It exists because of 2026-11-07: a scraper swarm walked every commit and
+`/archive/` link on `git.` from hundreds of residential addresses, a few
+requests each, and Forgejo went from 2 GB to 5 GB of RAM in half an hour. A
+per-IP limit cannot see a flood spread that thin. Source archives are off
+since (`DISABLE_DOWNLOAD_SOURCE_ARCHIVES`), and Anubis is the general answer.
+
+- **Challenged:** everyone, browser or not, on every web page — a
+  proof-of-work page a real browser solves in under a second, then a signed
+  cookie good for a week. A scraper has to run a JavaScript engine per address.
+- **Passed without a challenge:** the paths real tools use, which a challenge
+  would only break — `/api/`, `/v2/`, git over https (`info/refs`,
+  `git-upload-pack`, `git-receive-pack`), git LFS, `/releases/download/`,
+  `.rss`/`.atom` feeds, `.mrpack` modpacks and `?go-get=1` — plus Anubis's own allow-list
+  (`/.well-known/`, `/robots.txt`, verified search crawlers).
+- **Denied (403):** known AI crawlers and the cloud ranges in Anubis's stock
+  policy (Huawei, Alibaba, …).
+- **Exempt entirely:** the same addresses as the rate limit — private ranges,
+  this host's public address, the CI runners.
+
+Tailnet sites have no Anubis. `git.` and `status.` therefore never challenge a
+tailnet device: split DNS sends it to their tailnet copies.
+
+The signing key is generated at start, so restarting `docker-anubis`
+re-challenges everyone once. `journalctl -u docker-anubis` shows each
+challenge and each deny with the client address.
 
 ## Client addresses
 

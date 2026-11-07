@@ -122,6 +122,7 @@ let
 in
 {
   imports = [
+    ./anubis.nix
     ./caddy.nix
     ./cloudflared.nix
     ./dozzle.nix

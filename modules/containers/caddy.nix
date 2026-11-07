@@ -247,6 +247,28 @@ let
   ++ lib.attrValues runnerIPv4s;
   rateLimitOf = site: site.rateLimit or defaultRateLimit;
 
+  # DOWNLOADS, CAPPED FOR EVERYONE AT ONCE. The paths that answer a small
+  # request with a large file — release assets (MBs) and modpacks — are the
+  # amplification surface: a botnet spread thin enough to slip under every
+  # per-IP zone could still have this host spend its uplink on them. One
+  # bucket per site, keyed on a constant rather than the client, caps the
+  # total however many addresses ask. Under attack, downloads return 429 for
+  # a while and the rest of the site does not notice.
+  #
+  # Exempt like the site-wide zone, so pages-pull, renovate and CI never
+  # share the bucket with the internet.
+  #
+  # ponytail: counts requests, not bytes. A release asset of hundreds of MB
+  # would need a lower number here, or a byte cap upstream.
+  downloadRateLimit = {
+    # `*/releases/download/*` is caddy's substring form: a `*` in the MIDDLE
+    # of a path pattern does not cross `/`, so `/*/*/releases/download/*`
+    # missed every `…/download/<tag>/<file>` and capped nothing.
+    paths = "*.mrpack */releases/download/*";
+    events = 30;
+    window = "1m";
+  };
+
   # WHO THE TAILNET LISTENER SERVES. Until this, nothing above the firewall
   # cared: a packet that reached tailnetHttpsPort by any route got every
   # tailnet vhost. Now every request there is one of three things:
@@ -763,6 +785,17 @@ let
             "\t\t\twindow ${site.basicAuthRateLimit.window}"
             "\t\t}"
           ]
+          ++ lib.optionals (!(site.tailnet or false)) [
+            "\t\tzone ${zoneName site}-downloads {"
+            "\t\t\tmatch {"
+            "\t\t\t\tpath ${downloadRateLimit.paths}"
+            "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+            "\t\t\t}"
+            "\t\t\tkey everyone"
+            "\t\t\tevents ${toString downloadRateLimit.events}"
+            "\t\t\twindow ${downloadRateLimit.window}"
+            "\t\t}"
+          ]
           ++ lib.optionals (site ? loginMatch) [
             "\t\tzone ${zoneName site}-login {"
             "\t\t\tmatch {"
@@ -776,6 +809,46 @@ let
           ]
           ++ [ "\t}" ]
         )
+        # ANUBIS, on every public site (modules/containers/anubis.nix). Its
+        # challenge page lives under /.within.website/ on each host, proxied
+        # through a named-matcher `handle` emitted ahead of the others, so it is
+        # tried before `@blocked` and the runner handles. Everything else asks
+        # Anubis first: forward_auth sorts before every handle, after
+        # rate_limit, so a flood is braked before it costs a check. A 401 is
+        # "challenge this one"; a 403 (DENY) is passed back as it is.
+        #
+        # Exempt exactly like the rate limit: kuma, renovate, pages-pull and the
+        # CI runners are not browsers and must never see a challenge. git and
+        # API clients from anywhere else pass on their own: Anubis's stock
+        # policy only weighs browser user agents.
+        #
+        # X-Real-Ip is what Anubis keys its challenge on, and it refuses a
+        # request without one.
+        #
+        # ponytail: `{uri}` goes into `redir=` unescaped, so a challenged URL
+        # loses its query string after the first `&` (Anubis's own documented
+        # Caddy config does the same). Only the very first page a visitor lands
+        # on is affected.
+        ++ lib.optionals (!(site.tailnet or false)) [
+          "\t@anubisPage path /.within.website/*"
+          "\thandle @anubisPage {"
+          "\t\treverse_proxy anubis:8923 {"
+          "\t\t\theader_up X-Real-Ip {remote_host}"
+          "\t\t}"
+          "\t}"
+          "\t@anubis {"
+          "\t\tnot path /.within.website/*"
+          "\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+          "\t}"
+          "\tforward_auth @anubis anubis:8923 {"
+          "\t\turi /.within.website/x/cmd/anubis/api/check"
+          "\t\theader_up X-Real-Ip {remote_host}"
+          "\t\t@challenge status 401"
+          "\t\thandle_response @challenge {"
+          "\t\t\tredir * /.within.website/?redir={uri} 307"
+          "\t\t}"
+          "\t}"
+        ]
         # The gate, see `tailnetCidr`. `handle` sorts before `abort`, and both
         # before the bare reverse_proxy below, so kuma is diverted first, then
         # everyone who is neither kuma nor a tailnet peer is cut off.
