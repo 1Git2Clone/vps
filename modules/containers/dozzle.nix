@@ -57,7 +57,7 @@ in
     # safe major for this deployment specifically.
     #
     # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/amir20/dozzle/tags?page_size=20&ordering=last_updated'
-    image = "amir20/dozzle:v11.1.2@sha256:55204b375a03c92310d79b659b66217bd38f5675b361e2b5e7b4a03139bbb077";
+    image = "amir20/dozzle:v11.4.1@sha256:915a5acf91b01bb4d11de1fde7e30d55646211240269e4404c03a6f71c5fc91e";
 
     ports = [ "8080:8080" ];
 
@@ -65,7 +65,18 @@ in
     # itself talks to nothing on this network.
     networks = [ config.infra.proxyNetwork ];
 
-    environment.DOZZLE_AUTH_PROVIDER = "simple";
+    # MCP at https://dozzle.<domain>/api/mcp, so an AI client can read logs
+    # and stats. Every tool is read-only, and the docker socket is mounted :ro
+    # anyway. Under simple auth a client signs in through Dozzle's own OAuth
+    # (a browser login and a consent page), so no token lives in sops; a
+    # client's token carries the user's session and expires. Tailnet-only like
+    # the rest of Dozzle. 11.3.4 fixed a critical MCP bug, hence the bump.
+    #
+    #   claude mcp add --transport http dozzle https://dozzle.<domain>/api/mcp
+    environment = {
+      DOZZLE_AUTH_PROVIDER = "simple";
+      DOZZLE_ENABLE_MCP = "true";
+    };
 
     volumes = [
       # Read-only: dozzle only ever reads container logs, and a writable docker
