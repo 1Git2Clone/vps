@@ -36,6 +36,7 @@ let
   #   .git/info/lfs/                  git LFS
   #   /releases/download/             release assets fetched by curl/wget
   #   .rss, .atom                     feed readers
+  #   .mrpack                         modpacks a launcher imports by URL
   #   ?go-get=1                       `go get` resolving a module path
   #
   # BEHIND forward_auth, ANUBIS'S `path` IS THE URI WITH ITS QUERY. So the
@@ -66,7 +67,7 @@ let
         expression:
           all:
             - '!userAgent.matches("Mozilla|Opera")'
-            - '!path.matches("^/(api|v2)/|^[^?]*(/info/refs|/git-(upload|receive)-pack|\\.rss|\\.atom)(\\?|$)|^[^?]*(\\.git/info/lfs|/releases/download)/")'
+            - '!path.matches("^/(api|v2)/|^[^?]*(/info/refs|/git-(upload|receive)-pack|\\.rss|\\.atom|\\.mrpack)(\\?|$)|^[^?]*(\\.git/info/lfs|/releases/download)/")'
             - '!("go-get" in query)'
         weight:
           adjust: 10

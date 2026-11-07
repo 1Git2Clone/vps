@@ -247,6 +247,28 @@ let
   ++ lib.attrValues runnerIPv4s;
   rateLimitOf = site: site.rateLimit or defaultRateLimit;
 
+  # DOWNLOADS, CAPPED FOR EVERYONE AT ONCE. The paths that answer a small
+  # request with a large file — release assets (MBs) and modpacks — are the
+  # amplification surface: a botnet spread thin enough to slip under every
+  # per-IP zone could still have this host spend its uplink on them. One
+  # bucket per site, keyed on a constant rather than the client, caps the
+  # total however many addresses ask. Under attack, downloads return 429 for
+  # a while and the rest of the site does not notice.
+  #
+  # Exempt like the site-wide zone, so pages-pull, renovate and CI never
+  # share the bucket with the internet.
+  #
+  # ponytail: counts requests, not bytes. A release asset of hundreds of MB
+  # would need a lower number here, or a byte cap upstream.
+  downloadRateLimit = {
+    # `*/releases/download/*` is caddy's substring form: a `*` in the MIDDLE
+    # of a path pattern does not cross `/`, so `/*/*/releases/download/*`
+    # missed every `…/download/<tag>/<file>` and capped nothing.
+    paths = "*.mrpack */releases/download/*";
+    events = 30;
+    window = "1m";
+  };
+
   # WHO THE TAILNET LISTENER SERVES. Until this, nothing above the firewall
   # cared: a packet that reached tailnetHttpsPort by any route got every
   # tailnet vhost. Now every request there is one of three things:
@@ -761,6 +783,17 @@ let
             "\t\t\tkey {remote_host}"
             "\t\t\tevents ${toString site.basicAuthRateLimit.events}"
             "\t\t\twindow ${site.basicAuthRateLimit.window}"
+            "\t\t}"
+          ]
+          ++ lib.optionals (!(site.tailnet or false)) [
+            "\t\tzone ${zoneName site}-downloads {"
+            "\t\t\tmatch {"
+            "\t\t\t\tpath ${downloadRateLimit.paths}"
+            "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+            "\t\t\t}"
+            "\t\t\tkey everyone"
+            "\t\t\tevents ${toString downloadRateLimit.events}"
+            "\t\t\twindow ${downloadRateLimit.window}"
             "\t\t}"
           ]
           ++ lib.optionals (site ? loginMatch) [
