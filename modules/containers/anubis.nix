@@ -47,6 +47,12 @@ let
   # verified search crawlers) still come first and still win. What stays
   # challenged for a non-browser: every web page, /raw/ and /media/ included.
   #
+  # ONE DIFFICULTY, 4, for everything challenged. The stock thresholds give a
+  # browser or non-browser weight (+10) difficulty 2: ~256 hashes, free even
+  # to a farm of headless browsers. 4 is ~65k: a fraction of a second for a
+  # visitor once a week, real CPU per address for a scraper. Each step is 16x;
+  # git.kernel.org reportedly runs 5, which costs visitors seconds.
+  #
   # DENY must not be 200. In subrequest mode the check endpoint's status IS
   # the verdict, and caddy's forward_auth lets any 2xx through, so the default
   # DENY=200 would wave every denied bot past. CHALLENGE never reaches
@@ -64,6 +70,16 @@ let
             - '!("go-get" in query)'
         weight:
           adjust: 10
+    thresholds:
+      - name: no-suspicion
+        expression: weight <= 0
+        action: ALLOW
+      - name: challenge
+        expression: weight > 0
+        action: CHALLENGE
+        challenge:
+          algorithm: fast
+          difficulty: 4
     status_codes:
       CHALLENGE: 200
       DENY: 403
