@@ -103,7 +103,7 @@ let
     cloudflared = "256m";
     dozzle = "256m";
     forgejo = "2g";
-    grafana = "1g";
+    grafana = "2g";
     kuma = "512m";
     mailserver = "1g";
     mc-router = "128m";
