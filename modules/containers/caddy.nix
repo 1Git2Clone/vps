@@ -210,7 +210,7 @@ let
   # every login on music, mail and git open to guessing at whatever speed the
   # service itself allowed. The default has to be the limit.
   #
-  # Up to three zones per site, all keyed on the client IP:
+  # Per-IP zones, plus two shared ones (downloads, anonymous tool traffic):
   #
   #   * SITE-WIDE — a flood brake. `rateLimit` overrides the numbers. Exempt:
   #     private ranges (every docker bridge, so kuma's probes and anything
@@ -323,6 +323,28 @@ let
     # host's own address.
     basicAuthRateLimit = {
       events = 30;
+      window = "1m";
+    };
+
+    # ANONYMOUS TOOL TRAFFIC, CAPPED FOR EVERYONE AT ONCE. Anubis passes the
+    # API and git over https unchallenged, so a swarm thin enough to slip
+    # under the per-IP zones can walk commits through /api/v1 or ask for
+    # clones (a pack built per request) the way it walked /archive/ on
+    # 2026-11-07. One shared bucket caps that, public listener only.
+    #
+    # Requests carrying a token or Bearer header are not counted. Forging
+    # one buys nothing: Forgejo answers an unknown token 401 off a hash
+    # lookup, before any repo work, and with sign-up off a real token needs
+    # an account here. Basic IS counted: it is how git sends a password, and
+    # a forged one naming a real user costs Forgejo a password hash, which is
+    # exactly what a swarm would pick. Exempt like the site-wide zone, so
+    # renovate and CI never share it.
+    #
+    # ponytail: a knob, not a measurement. It stops unsophisticated
+    # pipelines; one holding real tokens spread across accounts is outside it.
+    anonToolRateLimit = {
+      paths = "/api/* */info/refs */git-upload-pack */git-receive-pack */info/lfs/*";
+      events = 120;
       window = "1m";
     };
 
@@ -783,6 +805,19 @@ let
             "\t\t\tkey {remote_host}"
             "\t\t\tevents ${toString site.basicAuthRateLimit.events}"
             "\t\t\twindow ${site.basicAuthRateLimit.window}"
+            "\t\t}"
+          ]
+          ++ lib.optionals (site ? anonToolRateLimit && !(site.tailnet or false)) [
+            "\t\tzone ${zoneName site}-anon-tools {"
+            "\t\t\tmatch {"
+            "\t\t\t\tpath ${site.anonToolRateLimit.paths}"
+            "\t\t\t\tnot header Authorization \"token *\""
+            "\t\t\t\tnot header Authorization \"Bearer *\""
+            "\t\t\t\tnot remote_ip ${lib.concatStringsSep " " rateLimitExempt}"
+            "\t\t\t}"
+            "\t\t\tkey everyone"
+            "\t\t\tevents ${toString site.anonToolRateLimit.events}"
+            "\t\t\twindow ${site.anonToolRateLimit.window}"
             "\t\t}"
           ]
           ++ lib.optionals (!(site.tailnet or false)) [

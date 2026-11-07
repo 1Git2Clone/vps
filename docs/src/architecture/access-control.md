@@ -45,7 +45,7 @@ the runner restriction, so a bare `respond` there would never run.
 Every caddy site is rate-limited unless it sets `rateLimit = null`, and none
 does. It used to be opt-in, and only `search.` had opted in, which left the
 logins on `music.`, `mail.` and `git.` open to guessing at whatever speed each
-app allowed — Forgejo allows any. Up to four zones per site, all but one keyed
+app allowed — Forgejo allows any. Up to five zones per site, all but two keyed
 on the client IP (`modules/containers/caddy.nix`):
 
 - **Site-wide** — a flood brake: 300 a minute by default; `git.` 600;
@@ -67,6 +67,13 @@ on the client IP (`modules/containers/caddy.nix`):
   enough to pass every per-IP zone could still spend the uplink on them; one
   shared bucket caps that however many addresses ask. Under attack downloads
   return 429 and nothing else is affected. Exempt like the site-wide zone.
+- **Anonymous tools** — `git.` only: 120 a minute **in total** for `/api/`
+  and git over https without a `token` or `Bearer` header. Anubis passes
+  these unchallenged, so this is what stops a thin swarm walking commits
+  through the API or asking for clone after clone. A forged token header
+  gets Forgejo's 401 before any repo work, and sign-up is off, so skipping
+  the bucket takes a real account. Basic auth is counted: a forged one naming
+  a real user costs a password hash. Exempt like the site-wide zone.
 
 These are one layer, not the only one. Roundcube also locks an account after 3
 failures a minute; Navidrome 0.64.1 throttles failed Subsonic logins itself;

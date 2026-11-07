@@ -40,6 +40,31 @@ let
 in
 
 {
+  # THE CONNTRACK TABLE IS THE CHEAPEST THING TO EXHAUST ON THIS BOX. Every SYN
+  # this ruleset accepts to an open port becomes a tracked connection, and a
+  # spoofed one never completes, so it sits there until it times out. With the
+  # kernel's defaults (262144 entries, 120 s for an unanswered SYN) about
+  # 2,200 spoofed SYNs a second — roughly 1 Mbit/s, under most edge detection
+  # thresholds — fill the table, and from then on the kernel drops EVERY new
+  # connection: web, mail, minecraft, and the tailnet's ssh with them.
+  #
+  # Four times the table (an entry is ~320 bytes, so ~330 MB at worst on a
+  # 15 GB box) and a sixth of the timeout put that at ~50,000 SYNs a second,
+  # ~25 Mbit/s: past that, the flood is Hetzner's edge's to filter, not ours.
+  #
+  # nf_conntrack_max is only writable once the module is loaded, and
+  # systemd-sysctl runs early, hence loading it explicitly.
+  #
+  # ponytail: SYNPROXY would take spoofed SYNs out of conntrack entirely, but
+  # it does not compose with docker's DNAT of the published ports on this
+  # same host. Revisit if a flood ever outgrows the numbers above.
+  boot.kernelModules = [ "nf_conntrack" ];
+  boot.kernel.sysctl = {
+    "net.netfilter.nf_conntrack_max" = 1048576;
+    "net.netfilter.nf_conntrack_tcp_timeout_syn_sent" = 20;
+    "net.netfilter.nf_conntrack_tcp_timeout_syn_recv" = 20;
+  };
+
   networking.nftables = {
     enable = true;
 
@@ -70,6 +95,25 @@ in
       delete table inet nixos-fw
 
       table inet nixos-fw {
+        # ONE ADDRESS, AT MOST 128 OPEN CONNECTIONS. Nothing else on this
+        # host counts connections: caddy's zones count requests, and a client
+        # that opens thousands of sockets and trickles a header down each
+        # (slowloris) costs a file descriptor and a goroutine per socket for
+        # a minute at a time. A browser holds a handful, a mail server or a
+        # git client fewer, so 128 is far past any one honest client, even
+        # several behind one NAT. It also stops one bot from parking
+        # thousands of sockets on the tarpit.
+        #
+        # This only bites addresses that complete handshakes, i.e. real ones.
+        # Spoofed SYN floods are the conntrack sizing above this ruleset.
+        #
+        # IPv4 only: the public sites have no AAAA and the host no global v6.
+        set conn_per_source {
+          type ipv4_addr
+          flags dynamic
+          size 65535
+        }
+
         # THE TAILNET'S PORT 443, MOVED ONTO CADDY'S SECOND LISTENER.
         #
         # dozzle, grafana and syncthing are ordinary caddy vhosts, but served on
@@ -127,6 +171,15 @@ in
           iifname lo accept
           ct state { established, related } accept
           iifname tailscale0 accept
+
+          # Packets that belong to no connection conntrack can make sense of
+          # (a stray ACK, a bad flag combination). Dropped before the log rule
+          # below so a flood of them is not a flood of log lines too.
+          ct state invalid drop
+
+          # See `conn_per_source`. Container-to-host traffic arrives on a
+          # bridge and is matched by its own rules further down, never here.
+          iifname != "docker0" iifname != "br-*" meta nfproto ipv4 ct state new add @conn_per_source { ip saddr ct count over 128 } counter drop
 
           # The SSH tarpit (modules/tarpit.nix): endlessh-go, not an sshd.
           # 2222 is here because publicly it IS the tarpit; the real sshd
@@ -272,7 +325,13 @@ in
             ${toString config.infra.tailnetHttpsPort}
           } ct state new accept
 
-          log prefix "DROP_in: " counter drop
+          # SAMPLED, NOT EVERY PACKET. Junk to a closed port is the cheapest
+          # flood there is, and an unlimited log rule turns each packet into a
+          # kernel log line and a journald write. 10 a second is plenty to
+          # diagnose with (the greps in the comments above still work); the
+          # counter still counts all of them.
+          limit rate 10/second burst 50 packets log prefix "DROP_in: "
+          counter drop
         }
 
         chain output {
@@ -328,7 +387,8 @@ in
           } accept
           icmp type echo-request accept
 
-          log prefix "DROP_out: " counter drop
+          limit rate 10/second burst 50 packets log prefix "DROP_out: "
+          counter drop
         }
 
         chain forward {
@@ -347,6 +407,12 @@ in
           # This is also what admits the prerouting DNAT of tailnet 80/443 to
           # caddy's tailnet listeners (`infra.caddyIPv4`).
           iifname tailscale0 accept
+
+          ct state invalid drop
+
+          # See `conn_per_source`. Published ports reached by docker's DNAT
+          # are counted here; the ones its userland proxy carries, in input.
+          meta nfproto ipv4 ct state new add @conn_per_source { ip saddr ct count over 128 } counter drop
 
           # From anywhere else, the published ports that are meant to be public.
           # DNAT has already happened, but these services all map host port to
@@ -370,7 +436,8 @@ in
           # HTTP/3, which caddy publishes on 443/udp.
           udp dport 443 ct state new accept
 
-          log prefix "DROP_fwd: " counter drop
+          limit rate 10/second burst 50 packets log prefix "DROP_fwd: "
+          counter drop
         }
       }
     '';

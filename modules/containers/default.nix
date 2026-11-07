@@ -82,6 +82,40 @@ let
     exit $rc
   '';
 
+  # EVERY CONTAINER HAS A MEMORY CEILING, so one that runs away is OOM-killed
+  # and restarted (Restart=always below) instead of the kernel picking a
+  # victim on a box with no swap — which could be mail or a world mid-save.
+  # Forgejo went from 2G to 5G in half an hour under a scraper swarm
+  # (2026-11-07) with nothing in its way. A tmpfs's pages count against the
+  # container's limit too.
+  #
+  # Roughly 3x what each used on 2026-11-08, with room for its known spikes
+  # (forgejo packing a clone, navidrome scanning, tempo compacting). The worlds
+  # and horizon set their own, next to the heap they size it from; the
+  # assertion below fails the build for any container that has none.
+  #
+  # ponytail: ceilings, not reservations — they add up past 16G on purpose,
+  # since nothing runs at its ceiling at once. A container that OOM-loops
+  # in normal use means raise its number here.
+  memoryLimits = {
+    anubis = "512m";
+    caddy = "512m";
+    cloudflared = "256m";
+    dozzle = "256m";
+    forgejo = "2g";
+    grafana = "2g";
+    kuma = "512m";
+    mailserver = "1g";
+    mc-router = "128m";
+    navidrome = "512m";
+    pages-hook = "128m";
+    searxng = "512m";
+    serenity-bot-0 = "2g";
+    serenity-redis = "256m";
+    tempo = "1g";
+    webmail = "512m";
+  };
+
   # Network name -> extra `docker network create` arguments.
   #
   # An attrset rather than two near-identical units, because the per-container
@@ -139,8 +173,16 @@ in
     ./tempo.nix
   ];
 
+  assertions = lib.mapAttrsToList (name: c: {
+    assertion = lib.any (lib.hasPrefix "--memory=") c.extraOptions;
+    message = "container ${name} has no --memory limit; add it to memoryLimits in modules/containers/default.nix";
+  }) cfg.containers;
+
   virtualisation = {
     oci-containers.backend = "docker";
+    oci-containers.containers = lib.mapAttrs (_: limit: {
+      extraOptions = [ "--memory=${limit}" ];
+    }) memoryLimits;
 
     # Container logs are NOT configured here on purpose: oci-containers already
     # defaults every container to the journald driver, so journald's own limits

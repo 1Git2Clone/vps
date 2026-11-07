@@ -34,6 +34,33 @@ kept deliberately similar: **each is what survives a misconfiguration of the
 other.** A port opened at one but not the other is still closed. When something
 is unreachable, check both.
 
+## Floods below the edge's radar
+
+Hetzner's edge filters volumetric floods. What it lets through is still enough
+to hurt a single box, so `modules/firewall.nix` covers the gap:
+
+- **Spoofed SYN floods vs the conntrack table.** Every accepted SYN to an open
+  port is tracked until it times out. With the kernel defaults (262,144
+  entries, 120 s per unanswered SYN), about 2,200 spoofed SYNs a second, roughly
+  1 Mbit/s, fill the table. After that every new connection is dropped,
+  including the tailnet's SSH. The table is now 1,048,576 and the SYN timeouts
+  20 s, which puts the threshold at roughly 50,000 a second (~25 Mbit/s). Above
+  that, filtering is the edge's job. Check headroom with
+  `sysctl net.netfilter.nf_conntrack_count net.netfilter.nf_conntrack_max`.
+- **One address, at most 128 open connections** (`conn_per_source`), on both
+  hooks. Caddy's zones count requests, not sockets, so nothing else stopped one
+  client from parking thousands of slow connections (slowloris). Closed
+  connections free their slot at once. `nft list set inet nixos-fw
+  conn_per_source` shows who is counted.
+- **Drop logging is sampled** at 10 lines a second. Junk to a closed port is the
+  cheapest flood there is, and an unlimited `log` rule turned each packet into
+  a journald write. The counters still count everything. `ct state invalid`
+  packets are dropped before the log rule.
+
+Bandwidth spent on large downloads is capped one layer up, in caddy, by one
+bucket shared by every client; see
+[Access control](access-control.md#rate-limiting-every-site-by-default).
+
 ## input vs forward — the single most load-bearing fact
 
 A published container port is **DNAT'd in prerouting and then forwarded** — it
