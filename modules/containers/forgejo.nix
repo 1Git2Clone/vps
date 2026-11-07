@@ -100,6 +100,11 @@ in
       FORGEJO__admin__DISABLE_REGULAR_ORG_CREATION = "true";
       FORGEJO__actions__ENABLED = "true";
 
+      # Crawlers walking every commit's /archive/ link made Forgejo build a
+      # tarball per request: 2 GB to 5 GB of RAM in ~30 minutes (2026-11-07).
+      # Releases still carry their own uploaded assets; `git clone` is unaffected.
+      FORGEJO__repository__DISABLE_DOWNLOAD_SOURCE_ARCHIVES = "true";
+
       # WITHOUT THIS, THE PAGES WEBHOOK SILENTLY NEVER FIRES.
       #
       # ALLOWED_HOST_LIST defaults to `external` (Gitea 1.16 and later), which
