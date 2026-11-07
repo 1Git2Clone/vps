@@ -176,7 +176,13 @@ let
       ]
       ++ [ "${patchSet}:/patches.json:ro" ];
 
-      extraOptions = stopOptions;
+      # The heap plus 1.5G for what the JVM keeps outside it (metaspace,
+      # native buffers, mod natives) and the /tmp tmpfs. A heap that outgrew
+      # this would be killed mid-tick rather than throw OutOfMemoryError, so
+      # it moves with MAX_MEMORY.
+      extraOptions = stopOptions ++ [
+        "--memory=${toString (lib.toInt (lib.removeSuffix "G" maxMemory) * 1024 + 1536)}m"
+      ];
     };
 in
 {
@@ -206,7 +212,9 @@ in
       image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";
       pack = packs.mc1;
       rconPort = 25575;
-      maxMemory = "6G";
+      # 5G, down from 6G: past ~5G the JVM spends more on collecting a bigger
+      # heap than the extra room buys, and the box needs the leeway more.
+      maxMemory = "5G";
       motd = "A Place for Gemstones to Chill";
     };
 
@@ -239,7 +247,7 @@ in
     };
 
     # Third world: the Vanilla+ modpack. 4G, as for world 2: with the cap at 2,
-    # the worst pair is still world 1's 6G plus 4G.
+    # the worst pair is still world 1's 5G plus 4G.
     minecraft3 = world {
       name = "minecraft3";
       # java25, the same digest as world 1: 26.x targets Java 25.
