@@ -54,7 +54,13 @@ in
     # the move to 16.0.3 during the data migration.
     #
     # Bump with: curl -sS 'https://codeberg.org/api/v1/repos/forgejo/forgejo/releases?limit=5'
-    image = "codeberg.org/forgejo/forgejo:16.0.6@sha256:e2c34a699543ca8a00217ee9ab2bea5feedc98bd6d0ea95ec287d3b7ae1355c6";
+    # 17.0, not 16.0.7: 16.x went out of support on 2026-10-29. 17.0 renames
+    # no settings; its breaks are the deprecated action-run webhook events
+    # (the pages hook listens to pushes) and absolute links in rendered files
+    # resolving from the repo root. The runner is already 13.2, which 17's
+    # job summaries need. Cold restore point: restic snapshot tagged
+    # pre-forgejo-17 (2026-11-08), taken with forgejo stopped.
+    image = "codeberg.org/forgejo/forgejo:17.0.1@sha256:fcd19ff4ebc85fb098a67e8e1d0d5a84d07dd6e8a23edcfdfd5b71a6178953be";
 
     # journald, so the fail2ban jail can read the SSH auth failures at all. The
     # default json-file driver writes to a path containing the container ID and
