@@ -145,7 +145,7 @@ in
     # later". Receiving keeps working, so the failure looks like anything
     # except a file mode. The key itself is valid and matches DNS throughout.
     #
-    # 102:102 are opendkim's uid:gid inside the DMS image, which has no
+    # 102:103 are opendkim's uid:gid inside the DMS image, which has no
     # counterpart on this host — hence numeric. Verify after an image bump with:
     #   docker exec mailserver id opendkim
     #
@@ -155,7 +155,9 @@ in
     # allocates it changed. Installing the key -g 104 under v16 hands it to a
     # group opendkim is not in, RequireSafeKeys refuses to load it, and
     # submissions get 451 4.7.1 while RECEIVING still works — the exact silent
-    # half-failure described above. Check the IMAGE before deploying it, which
+    # half-failure described above. It moved AGAIN on 16.0.1 -> 17.0.0, 102 ->
+    # 103: v17 swaps redis for valkey and the group allocation order shifted
+    # with it. Check the IMAGE before deploying it, which
     # needs no running container and no downtime:
     #   docker run --rm --entrypoint id <image> opendkim
     #
@@ -163,34 +165,35 @@ in
     # does for keys it manages in its own config volume.
     script = ''
       install -d -m 0700 -o root -g root /var/lib/mailserver/dkim
-      install -m 0600 -o 102 -g 102 \
+      install -m 0600 -o 102 -g 103 \
         ${config.sops.secrets.email_dkim_private_key.path} ${dkimKey}
     '';
   };
 
   virtualisation.oci-containers.containers = {
     mailserver = {
-      # v16.0.1, a MAJOR: Debian 12 -> 13, and with it Postfix 3.7.11 ->
-      # 3.10.13 and Dovecot 2.3.19.1 -> 2.4.1-4.
+      # v17.0.0, a MAJOR, but the breaks are in things this box does not use:
+      # no LDAP (accounts are FILE), no Xapian FTS, and DKIM is signed by
+      # OpenDKIM from user-patches.sh, not by Rspamd keys from `setup config
+      # dkim`. What does land here:
       #
-      # What makes it safe for THIS deployment is mostly what dms_config does
-      # not contain. There is no custom dovecot.cf — 2.3 syntax does not load
-      # under 2.4 — and no dhparams.pem, which v16 stopped applying when it
-      # dropped DHE from 465/587/993. The volume holds exactly three things:
-      # postfix-accounts.cf, an empty dovecot-quotas.cf, and user-patches.sh.
+      # - opendkim's gid moved 102 -> 103 — handled in mailserver-dkim above.
+      # - Rspamd's redis became valkey. v16 left redis 8 state (RDB 12) in
+      #   /var/mail-state/lib-redis that valkey cannot read, so valkey starts
+      #   empty and Bayes/greylisting history is relearned. lib-redis is left
+      #   untouched; delete it once v17 has run clean for a while.
       #
-      # user-patches.sh writes the OpenDKIM KeyTable/SigningTable/TrustedHosts,
-      # which is also why v16's Rspamd DKIM key rename to
-      # <domain>-<selector>.private does not apply: signing here is OpenDKIM
-      # and the key path is pinned by that KeyTable, not discovered.
+      # v16.0.1 before it was Debian 12 -> 13 (Postfix 3.10, Dovecot 2.4),
+      # safe because dms_config holds no custom dovecot.cf or dhparams — only
+      # postfix-accounts.cf, an empty dovecot-quotas.cf and user-patches.sh.
       #
-      # SA_SPAM_SUBJECT was removed in favour of SPAM_SUBJECT; neither is set
-      # below, so there is nothing to migrate. The gid change this bump carries
-      # is handled in mailserver-dkim above — read that comment before touching
-      # the tag again.
+      # Pinned to the -rN tag: since v17, DMS rebuilds releases for Debian
+      # security updates and moves 17.0.0 along with them (it was -r0, now
+      # -r1). The -rN tag is immutable, so the gid above was checked against
+      # exactly these bytes. Re-check it on every -rN bump.
       #
-      # Bump with: curl -sS 'https://api.github.com/repos/docker-mailserver/docker-mailserver/releases?per_page=5'
-      image = "ghcr.io/docker-mailserver/docker-mailserver:16.0.1";
+      # Bump with: crane ls ghcr.io/docker-mailserver/docker-mailserver | tail
+      image = "ghcr.io/docker-mailserver/docker-mailserver:17.0.0-r1";
       inherit hostname;
 
       environment = {
