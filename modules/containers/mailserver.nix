@@ -187,13 +187,15 @@ in
       # safe because dms_config holds no custom dovecot.cf or dhparams — only
       # postfix-accounts.cf, an empty dovecot-quotas.cf and user-patches.sh.
       #
-      # Pinned to the -rN tag: since v17, DMS rebuilds releases for Debian
-      # security updates and moves 17.0.0 along with them (it was -r0, now
-      # -r1). The -rN tag is immutable, so the gid above was checked against
-      # exactly these bytes. Re-check it on every -rN bump.
+      # Pinned by digest, the tag kept for reading. Since v17 DMS rebuilds
+      # releases for Debian security updates and moves 17.0.0 along with them
+      # (it was -r0, now -r1). The -rN tags are immutable only by DMS's
+      # promise; the registry would let them move, and this container holds
+      # the DKIM key. The digest is what the gid above was checked against.
+      # Re-check the gid on every bump, -rN included.
       #
       # Bump with: crane ls ghcr.io/docker-mailserver/docker-mailserver | tail
-      image = "ghcr.io/docker-mailserver/docker-mailserver:17.0.0-r1";
+      image = "ghcr.io/docker-mailserver/docker-mailserver:17.0.0-r1@sha256:b9a5f5045b4dae139201281f68f976b7ae7a5f451e3e61aaa935ad6def026bcb";
       inherit hostname;
 
       environment = {

@@ -26,9 +26,10 @@ may refuse to start on it. The cold snapshot is the only undo.
    sudo docker run --rm --entrypoint id <image> <user>
    ```
 
-3. **Pin immutably.** Use a tag that cannot move: `@sha256:` digest, or an
-   upstream immutable tag such as DMS's `X.Y.Z-rN`. A tag that gets rebuilt
-   under you means the bytes you checked are not the bytes you run.
+3. **Pin by digest**, as `<tag>@sha256:<digest>`. Every tag can move, those
+   upstream calls immutable (DMS's `X.Y.Z-rN`) included, and a moved tag means
+   the bytes you checked are not the bytes you run. Evaluation fails on a
+   registry image without a digest (`modules/containers/default.nix`).
    `nix run nixpkgs#crane -- digest <image>` gives the digest.
 4. **Take a cold snapshot**, with the service stopped (see below), and
    **verify it by restoring it**. A snapshot you have not restored is a hope.
@@ -126,8 +127,8 @@ Done for 16.0.1 → 17.0.0 in #52 (snapshot `648d9ba6`, tag `mail-cold`), and
   `dovecot-quotas.cf` and `user-patches.sh`, and signing is OpenDKIM via
   KeyTable rather than Rspamd keys. Re-check that list:
   `sudo docker exec mailserver ls -la /tmp/docker-mailserver`.
-- **Pin:** the immutable `X.Y.Z-rN` tag. DMS rebuilds releases for Debian
-  updates and moves `X.Y.Z` along. Bump with
+- **Pin:** `X.Y.Z-rN@sha256:…`. DMS rebuilds releases for Debian updates and
+  moves `X.Y.Z` along. Bump the `-rN` too, and re-check the gid. Bump with
   `nix run nixpkgs#crane -- ls ghcr.io/docker-mailserver/docker-mailserver | tail`.
 - **Before stopping it**, record per-mailbox counts:
   `docker exec mailserver doveadm mailbox status -A messages '*' > /root/counts-before.txt`.

@@ -67,7 +67,7 @@ in
     # and NOT the tag LISTING: grafana/tempo publishes enough tags that every
     # 3.x falls outside the 100 most-recently-updated, so a listing looks like
     # 3.x does not exist at all. Ask for the exact tag instead.
-    image = "grafana/tempo:3.0.5";
+    image = "grafana/tempo:3.0.5@sha256:54bfbf8713813b5eb56e0ddf580553f48f9d55d7d8b15159159c91ecfdb5b949";
 
     cmd = [ "-config.file=/etc/tempo.yaml" ];
 

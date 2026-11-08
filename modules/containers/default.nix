@@ -173,10 +173,26 @@ in
     ./tempo.nix
   ];
 
-  assertions = lib.mapAttrsToList (name: c: {
-    assertion = lib.any (lib.hasPrefix "--memory=") c.extraOptions;
-    message = "container ${name} has no --memory limit; add it to memoryLimits in modules/containers/default.nix";
-  }) cfg.containers;
+  # EVERY REGISTRY IMAGE IS PINNED BY DIGEST. A tag is a pointer whoever can
+  # push to the repository can move, "immutable" tags included: DMS's
+  # X.Y.Z-rN is immutable by its release workflow's promise, not by the
+  # registry. The mailserver holds the DKIM key, so a moved tag there signs
+  # mail as this domain with someone else's code.
+  #
+  # Exempt: images loaded from the nix store (imageFile), and the serenity bot,
+  # which is built on the host from a hash-pinned fetchgit and never pulled.
+  assertions =
+    lib.mapAttrsToList (name: c: {
+      assertion = lib.any (lib.hasPrefix "--memory=") c.extraOptions;
+      message = "container ${name} has no --memory limit; add it to memoryLimits in modules/containers/default.nix";
+    }) cfg.containers
+    ++ lib.mapAttrsToList (name: c: {
+      assertion =
+        c.imageFile != null
+        || lib.hasPrefix "serenity-discord-bot:" c.image
+        || lib.hasInfix "@sha256:" c.image;
+      message = "container ${name} pulls ${c.image} by tag; pin it as <tag>@sha256:<digest> (nix run nixpkgs#crane -- digest <image>)";
+    }) cfg.containers;
 
   virtualisation = {
     oci-containers.backend = "docker";

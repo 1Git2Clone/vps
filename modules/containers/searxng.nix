@@ -63,7 +63,7 @@ in
   '';
 
   virtualisation.oci-containers.containers.searxng = {
-    image = "searxng/searxng:2026.9.12-d4f00d15d";
+    image = "searxng/searxng:2026.9.12-d4f00d15d@sha256:1f3720f59a0361592dc942e4be50e0ebb63c112d915883fcb78a011995fffb47";
 
     environmentFiles = [ config.sops.templates."searxng.env".path ];
 
