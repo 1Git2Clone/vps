@@ -36,6 +36,7 @@
 - [CI](operations/ci.md)
 - [Pages](operations/pages.md)
 - [Runbook](operations/runbook.md)
+- [Upgrading a service](operations/upgrades.md)
 - [Failure modes and recovery](operations/recovery.md)
 - [Development](operations/development.md)
 
