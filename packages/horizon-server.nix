@@ -1,5 +1,5 @@
 # Upstream's server-only binary release: patch its ELF loader for Nix, never
-# compile Rust. The matching client is pinned in nixos-dotfiles.
+# compile Rust. Use the stable server tag and verify its release asset digest.
 {
   lib,
   stdenv,
@@ -9,11 +9,11 @@
 }:
 stdenvNoCC.mkDerivation {
   pname = "horizon-server-bin";
-  version = "2026-10-30";
+  version = "0.2.97";
 
   src = fetchurl {
-    url = "https://github.com/horizon-rust/horizon/releases/download/nightly-2026-10-30/horizon-server-linux-x86_64.tar.gz";
-    hash = "sha256-hhCPpkd9H2RRmbLLHP82I5pYNU/MqYoco8a9GHXHbps=";
+    url = "https://github.com/horizon-rust/horizon/releases/download/v0.2.97/horizon-server-linux-x86_64.tar.gz";
+    hash = "sha256-V0IttGUz4HcnfvFQXcwDgF1S0V86ITIAVpEYw2xffMk=";
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];
