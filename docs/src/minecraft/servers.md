@@ -5,17 +5,17 @@ what the server runs and what players install.
 
 ## The pieces
 
-| Piece            | Where                                  | Does                                                                                      |
-| ---------------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
-| mc-router        | `modules/containers/mc-router.nix`     | owns 25565, reads the hostname the player typed, routes to that world, wakes it if asleep |
-| minecraft-scaler | `modules/containers/minecraft-cap.nix` | turns mc-router's wake/sleep webhook into `systemctl start`/`stop`; refuses a third world |
-| the worlds       | `modules/containers/minecraft.nix`     | one `itzg/minecraft-server` container each, on its own volume, RCON on loopback only      |
-| the packs        | `packs/mc1` to `packs/mc4`             | each world's mods, pinned, with the side each one runs on                                 |
-| the pack build   | `packs/mrpack.nix`                     | turns a pack into one `.mrpack`, plus the dependency check                                |
-| the downloads    | `.forgejo/workflows/pages.yml`         | publishes the same `.mrpack` files on pages                                               |
+| Piece            | Where                                  | Does                                                                                                          |
+| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| mc-router        | `modules/containers/mc-router.nix`     | owns 25565, reads the hostname the player typed, routes to that world, wakes it if asleep                     |
+| minecraft-scaler | `modules/containers/minecraft-cap.nix` | turns mc-router's wake/sleep webhook into `systemctl start`/`stop`; shares the two-program cap with OpenAmika |
+| the worlds       | `modules/containers/minecraft.nix`     | one `itzg/minecraft-server` container each, on its own volume, RCON on loopback only                          |
+| the packs        | `packs/mc1` to `packs/mc4`             | each world's mods, pinned, with the side each one runs on                                                     |
+| the pack build   | `packs/mrpack.nix`                     | turns a pack into one `.mrpack`, plus the dependency check                                                    |
+| the downloads    | `.forgejo/workflows/pages.yml`         | publishes the same `.mrpack` files on pages                                                                   |
 
 Waking, sleeping, the cap of two and the whitelist-gated wake are described in
-[Worlds on demand](../architecture/services.md#worlds-on-demand-at-most-two-at-once);
+[Worlds on demand](../architecture/services.md#high-memory-usage-programs-at-most-two-at-once);
 the heap settings in
 [Why the Minecraft heap is two numbers](../architecture/services.md#why-the-minecraft-heap-is-two-numbers).
 

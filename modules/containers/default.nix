@@ -152,6 +152,14 @@ let
       "--gateway=${config.infra.mcGateway}"
       "--ip-range=${config.infra.mcIpRange}"
     ];
+
+    # Pinned because the firewall confines it by subnet and the host-side
+    # gateway reaches the container at a fixed address.
+    ${config.infra.openamikaNetwork} = [
+      "--subnet=${config.infra.openamikaSubnet}"
+      "--gateway=${config.infra.openamikaGateway}"
+      "--ip-range=${config.infra.openamikaIpRange}"
+    ];
   };
 in
 {
@@ -168,6 +176,7 @@ in
     ./mc-router.nix
     ./minecraft.nix
     ./navidrome.nix
+    ./openamika.nix
     ./searxng.nix
     ./serenity-bot.nix
     ./tempo.nix

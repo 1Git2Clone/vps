@@ -31,6 +31,7 @@
 
 # Operations
 
+- [OpenAmika and high memory usage programs](operations/openamika.md)
 - [Deploying](operations/deploying.md)
 - [Provisioning a machine](operations/provisioning.md)
 - [CI](operations/ci.md)

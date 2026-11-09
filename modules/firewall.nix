@@ -37,6 +37,22 @@ let
   runnerSshRules = lib.concatMapStringsSep "\n    " (
     addr: "ip daddr ${addr} tcp dport 22 ct state new accept"
   ) (lib.attrValues config.infra.runnerIPv4s);
+
+  inherit (config.infra) openamikaSubnet;
+
+  # Bridges running code this repo did not write: Modrinth mods, a Discord bot
+  # answering strangers, pip-installed models. Each may talk within its own
+  # bridge and to the public internet, and to nothing private. See the forward
+  # chain. Same separator trick as runnerSshRules.
+  confinedSubnets = [
+    config.infra.mcSubnet
+    config.infra.botSubnet
+    openamikaSubnet
+  ];
+  confined = lib.concatStringsSep ", " confinedSubnets;
+  ownBridge = lib.concatMapStringsSep "\n    " (
+    net: "ip saddr ${net} ip daddr ${net} accept"
+  ) confinedSubnets;
 in
 
 {
@@ -176,6 +192,12 @@ in
           # (a stray ACK, a bad flag combination). Dropped before the log rule
           # below so a flood of them is not a flood of log lines too.
           ct state invalid drop
+
+          # OPENAMIKA REACHES NOTHING ON THE HOST. The gateway connects TO the
+          # container, so its replies are `established` above; nothing on the
+          # host is a service the container calls. Dropped first, so no rule
+          # below that names "br-*" broadly can ever hand it a port.
+          iifname "br-*" ip saddr ${openamikaSubnet} counter drop
 
           # See `conn_per_source`. Container-to-host traffic arrives on a
           # bridge and is matched by its own rules further down, never here.
@@ -395,6 +417,47 @@ in
           type filter hook forward priority filter; policy drop;
 
           ct state { established, related } accept
+
+          # CONFINED BRIDGES: their own subnet, then the public internet only.
+          #
+          # The broad `iifname "br-*" accept` below gave every container a
+          # route to 100.64.0.0/10 (the tailnet, out of tailscale0), to
+          # Hetzner's metadata service on 169.254.169.254, and to every other
+          # private range. The tailnet ACL never naming tag:vps as a source
+          # was the ONE layer between a modded world and the owner's devices.
+          # This is the second.
+          #
+          # Own subnet first, because br_netfilter is on (measured 2026-11-10,
+          # bridge-nf-call-iptables = 1): traffic WITHIN a bridge passes this
+          # hook too, so mc-router -> world and bot -> redis would hit the
+          # private-range drop and die.
+          ${ownBridge}
+
+          # The host resolver is MagicDNS, 100.100.100.100, which sits inside
+          # the CGNAT range dropped next. Docker's embedded DNS may forward
+          # from the container's namespace; this keeps DNS working either way.
+          iifname "br-*" ip saddr { ${confined} } ip daddr 100.100.100.100 meta l4proto { tcp, udp } th dport 53 accept
+
+          iifname "br-*" ip saddr { ${confined} } ip daddr {
+            0.0.0.0/8,
+            10.0.0.0/8,
+            100.64.0.0/10,
+            127.0.0.0/8,
+            169.254.0.0/16,
+            172.16.0.0/12,
+            192.0.0.0/24,
+            192.168.0.0/16,
+            198.18.0.0/15,
+            224.0.0.0/3
+          } counter drop
+          iifname "br-*" ip saddr { ${confined} } oifname tailscale0 counter drop
+
+          # OpenAmika's whole outside world is HTTPS: OpenRouter, PyPI,
+          # Hugging Face, GitHub. Anything else it tries is a bug or worse.
+          # Not applied to mc/bot: their ports were never measured, and a mod
+          # on an odd port fails silently mid-game.
+          iifname "br-*" ip saddr ${openamikaSubnet} tcp dport 443 accept
+          iifname "br-*" ip saddr ${openamikaSubnet} counter drop
 
           # Container egress, and container-to-container across the proxy
           # network. Traffic arriving from the internet has iifname eth0 and is

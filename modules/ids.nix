@@ -77,6 +77,7 @@ in
       # own that directory, and it must not be root.
       pages-hook = 2;
       horizon = 3;
+      openamika = 4;
     };
 
     infra.serviceId = ids;

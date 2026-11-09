@@ -18,7 +18,7 @@ flowchart TB
     ts --> inp
 
     inp --> hostsvc["host namespace<br/>sshd :2222 · grafana :3000<br/>tempo :4317/4318 · pgbouncer :6432<br/>syncthing GUI :8384<br/>tarpit :222/2022/22222"]
-    fwd --> dock["docker networks<br/><code>proxy</code> · <code>botnet</code> · <code>mc</code>"]
+    fwd --> dock["docker networks<br/><code>proxy</code> · <code>botnet</code> · <code>mc</code> · <code>openamika</code>"]
     dock --> caddy["caddy"]
     caddy --> pub["public vhosts :443"]
     caddy --> priv["tailnet vhosts :8443"]
@@ -51,7 +51,7 @@ to hurt a single box, so `modules/firewall.nix` covers the gap:
   hooks. Caddy's zones count requests, not sockets, so nothing else stopped one
   client from parking thousands of slow connections (slowloris). Closed
   connections free their slot at once. `nft list set inet nixos-fw
-  conn_per_source` shows who is counted.
+conn_per_source` shows who is counted.
 - **Drop logging is sampled** at 10 lines a second. Junk to a closed port is the
   cheapest flood there is, and an unlimited `log` rule turned each packet into
   a journald write. The counters still count everything. `ct state invalid`
@@ -84,13 +84,42 @@ This boundary is also why fail2ban jails for containerised services set
 `chain_hook = forward`, which carries a sharp edge of its own — see
 [Failure modes](../operations/recovery.md#the-fail2ban-blast-radius).
 
+## Confined bridges
+
+`mc`, `botnet` and `openamika` run code this repo did not write: Modrinth mods,
+a bot answering strangers, pip-installed models. Before 2026-11-10 the forward
+chain's `iifname "br-*" accept` let every container route to the tailnet
+(100.64.0.0/10, out of `tailscale0`), to Hetzner's metadata service at
+169.254.169.254, and to every other private range. The tailnet policy never
+naming `tag:vps` as a source was the only layer between a modded world and the
+owner's devices. The forward chain now carries a second one, ahead of the broad
+accept:
+
+1. Each confined subnet may reach **its own subnet**. `br_netfilter` is on
+   (`bridge-nf-call-iptables = 1`, measured), so traffic within a bridge passes
+   the forward hook too; without this, mc-router could not reach a world, nor
+   the bot its redis.
+2. **DNS to 100.100.100.100.** The host resolver is MagicDNS, inside the CGNAT
+   range dropped next, and docker's embedded DNS may forward from the
+   container's namespace.
+3. **Drop** every private, CGNAT, link-local, loopback, benchmark and multicast
+   destination, and anything leaving by `tailscale0`.
+4. `openamika` only: **TCP 443, then drop.** OpenRouter, PyPI, Hugging Face and
+   GitHub are all it needs. `mc` and `botnet` keep any public port: theirs were
+   never measured, and a mod on an odd port fails silently mid-game.
+
+The bot's postgres and OTLP traffic is unaffected: it addresses the host
+(172.30.0.1), which is the input hook, not forward. `openamika` gets nothing on
+input at all, dropped before any rule that names `br-*` broadly.
+
 ## Docker networks
 
-| Network  | Subnet                   | Purpose                                                                                                                                                                                                                                                                                |
-| -------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `proxy`  | `172.18.0.0/16` (pinned) | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                                                                                                      |
-| `botnet` | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule                                                                                        |
-| `mc`     | `172.31.0.0/24` (pinned) | mc-router (pinned at 172.31.0.2) and the Minecraft worlds behind it, which get addresses from `172.31.0.128/25` so they can never take mc-router's. Pinned because the firewall's input rule and `minecraft-scaler` (on the gateway, 172.31.0.1:25580) admit mc-router's address alone |
+| Network     | Subnet                   | Purpose                                                                                                                                                                                                                                                                                |
+| ----------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxy`     | `172.18.0.0/16` (pinned) | caddy resolves its upstreams here by container name over docker's embedded DNS — no IP addresses in the Caddyfile                                                                                                                                                                      |
+| `botnet`    | `172.30.0.0/24` (pinned) | the discord bot + its redis, isolated from the proxy. Pinned because `infra.botGateway` (172.30.0.1) is a literal in the bot's `DATABASE_URL`, its OTLP endpoint, and the firewall's input rule                                                                                        |
+| `mc`        | `172.31.0.0/24` (pinned) | mc-router (pinned at 172.31.0.2) and the Minecraft worlds behind it, which get addresses from `172.31.0.128/25` so they can never take mc-router's. Pinned because the firewall's input rule and `minecraft-scaler` (on the gateway, 172.31.0.1:25580) admit mc-router's address alone |
+| `openamika` | `172.29.0.0/24` (pinned) | OpenAmika alone, pinned at 172.29.0.2; the one-shot setup takes an address from `172.29.0.128/25`. Nothing is published and caddy is not on it: the host-side `openamika-gateway` connects to 172.29.0.2:53000, and uvicorn trusts forwarded headers from 172.29.0.1 alone             |
 
 `proxy` is pinned so caddy can sit at a fixed `172.18.0.2` (`infra.caddyIPv4`),
 the address the tailnet DNAT below sends to. Docker gives every other container

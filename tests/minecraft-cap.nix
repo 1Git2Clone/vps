@@ -30,6 +30,12 @@ pkgs.testers.runNixOSTest {
       ];
 
       minecraftCap.worlds = worlds;
+      highMemory.programs.docker-openamika = { };
+      users.users.amika-test = {
+        isSystemUser = true;
+        group = "amika-test";
+      };
+      users.groups.amika-test = { };
       minecraftCap.alwaysOnWorlds = [ "horizon" ];
 
       environment.systemPackages = [ pkgs.curl ];
@@ -45,6 +51,11 @@ pkgs.testers.runNixOSTest {
           };
         })
         // {
+          docker-openamika.serviceConfig = {
+            User = "amika-test";
+            ExecStop = "${pkgs.coreutils}/bin/sleep 3";
+            ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
+          };
           docker-horizon = {
             wantedBy = [ "multi-user.target" ];
             serviceConfig.ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
@@ -133,6 +144,35 @@ pkgs.testers.runNixOSTest {
         machine.succeed("systemctl start --no-block docker-w1.service docker-w2.service docker-w3.service")
         machine.sleep(3)
         assert up_count() == 2, up_count()
+
+    with subtest("OpenAmika and Minecraft share the two-program cap"):
+        machine.succeed("systemctl stop docker-w1.service docker-w2.service docker-w3.service")
+        machine.succeed("systemctl start docker-openamika.service")
+        assert scale("up", "w1") == "200"
+        assert scale("up", "w2") == "409"
+        machine.succeed("systemctl stop docker-openamika.service")
+        assert scale("up", "w2") == "200"
+        machine.succeed("systemctl start docker-openamika.service")
+        assert machine.succeed("systemctl show -P ActiveState docker-openamika.service").strip() == "inactive"
+        machine.succeed("systemctl stop docker-w1.service docker-w2.service")
+
+    with subtest("a stopping program keeps its memory slot"):
+        machine.succeed("systemctl start docker-openamika.service")
+        assert scale("up", "w1") == "200"
+        machine.succeed("systemctl stop --no-block docker-openamika.service")
+        machine.wait_until_succeeds("systemctl show -P ActiveState docker-openamika.service | grep -qx deactivating")
+        assert scale("up", "w2") == "409"
+        machine.wait_until_succeeds("systemctl show -P ActiveState docker-openamika.service | grep -qx inactive")
+        assert scale("up", "w2") == "200"
+        machine.succeed("systemctl stop docker-w1.service docker-w2.service")
+
+    with subtest("Minecraft's backup hold does not hold OpenAmika"):
+        machine.succeed("touch /run/minecraft-hold")
+        assert scale("up", "w1") == "409"
+        machine.succeed("systemctl start docker-openamika.service")
+        assert machine.succeed("systemctl show -P ActiveState docker-openamika.service").strip() == "active"
+        machine.succeed("systemctl stop docker-openamika.service")
+        machine.succeed("rm /run/minecraft-hold")
 
     with subtest("anything but a known world's up/down is a 400"):
         assert scale("up", "minecraft-evil") == "400"

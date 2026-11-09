@@ -46,6 +46,12 @@ in
       # needs an A record or a reachable port 80 — which is why the apex itself
       # can be on the certificate.
       dnsPropagationCheck = true;
+      # NOT the host resolver. That is MagicDNS, which sends the split-DNS
+      # names (mail., status.) to the CoreDNS in containers/caddy.nix, and that
+      # zone owns _acme-challenge.<name> too while answering nothing in it:
+      # lego's SOA lookup got SERVFAIL and the 2026-11-10 order failed on
+      # exactly those two. Cloudflare is authoritative, so ask the public view.
+      dnsResolver = "1.1.1.1:53";
 
       # The certificate directory is group-owned by `caddy`, not by `acme`.
       #

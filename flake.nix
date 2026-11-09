@@ -431,6 +431,7 @@
                 minecraft-cap = import ./tests/minecraft-cap.nix {
                   inherit nixpkgs system;
                 };
+                openamika-gateway = import ./tests/openamika-gateway.nix { inherit pkgs; };
 
                 # The static, CI-run counterpart to runner-firewall above. It
                 # cannot prove the kernel enforces the one-way rule — only a

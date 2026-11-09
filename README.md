@@ -70,17 +70,18 @@ aborts — is in `docs/`, published at
 nix run .#docs -- --open   # writes the mermaid assets first, then serves
 ```
 
-| Chapter                                                          | For                                                                |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| [Network and trust boundaries](docs/src/architecture/network.md) | the three doors, input vs forward, why there is no private network |
-| [The tailnet policy](docs/src/architecture/tailnet.md)           | what a tailnet peer may reach, and why tags are the only lever     |
-| [CI runner isolation](docs/src/architecture/runner.md)           | the seven layers, the one-way rule, the six-path allow-list        |
-| [The service stack](docs/src/architecture/services.md)           | what runs, and how each thing is reached                           |
-| [Deploying](docs/src/operations/deploying.md)                    | the everyday path, and the circuit breaker behind it               |
-| [CI and validation](docs/src/operations/ci.md)                   | what each forge checks and how to run the Minecraft startup test   |
-| [Failure modes and recovery](docs/src/operations/recovery.md)    | what rolls back on its own and what does not                       |
-| [Runbook](docs/src/operations/runbook.md)                        | the commands, in the order you want them                           |
-| [Working on the packs](docs/src/minecraft/packs.md)              | the Minecraft modpacks: packwiz, sides, the dependency check       |
+| Chapter                                                                      | For                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Network and trust boundaries](docs/src/architecture/network.md)             | the three doors, input vs forward, why there is no private network |
+| [The tailnet policy](docs/src/architecture/tailnet.md)                       | what a tailnet peer may reach, and why tags are the only lever     |
+| [CI runner isolation](docs/src/architecture/runner.md)                       | the seven layers, the one-way rule, the six-path allow-list        |
+| [The service stack](docs/src/architecture/services.md)                       | what runs, and how each thing is reached                           |
+| [OpenAmika and high memory usage programs](docs/src/operations/openamika.md) | tailnet login, shared two-program cap, wake and idle shutdown      |
+| [Deploying](docs/src/operations/deploying.md)                                | the everyday path, and the circuit breaker behind it               |
+| [CI and validation](docs/src/operations/ci.md)                               | what each forge checks and how to run the Minecraft startup test   |
+| [Failure modes and recovery](docs/src/operations/recovery.md)                | what rolls back on its own and what does not                       |
+| [Runbook](docs/src/operations/runbook.md)                                    | the commands, in the order you want them                           |
+| [Working on the packs](docs/src/minecraft/packs.md)                          | the Minecraft modpacks: packwiz, sides, the dependency check       |
 
 Those links go to the source, which renders fine in Forgejo — diagrams
 included, since they are mermaid and Forgejo draws them natively.
