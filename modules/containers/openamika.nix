@@ -5,7 +5,7 @@
 # embeddings run on CPU inside the container. Nobody reaches the container
 # directly:
 #
-#   browser -tailnet-> caddy (basic auth) -unix socket-> openamika-gateway
+#   browser -tailnet-> caddy (Forgejo sign-in) -unix socket-> openamika-gateway
 #     -> 172.29.0.2:53000 (the container's web UI, on its own bridge)
 #
 # The gateway is a host unit, not a container, for the same reason
@@ -13,11 +13,10 @@
 # container on an authenticated request and stops it twenty minutes after the
 # last browser tab closes.
 #
-# The image is stock python:3.11-slim. Upstream is pip and venvs on Python
-# 3.11 and fetches its own static ffmpeg, which is what Debian slim is for.
-# The pinned source and our scripts are mounted read-only from the store; the
-# venvs, weights, voice, settings and memories live on openamika_data. The
-# one-shot setup container (docker-openamika-setup) fills that volume.
+# A tiny dockerTools base provides mount points. Only the application
+# runtime closure is mounted read-only from the host store. The volume holds
+# settings, memories and disposable caches.
+# Starting the container never installs packages or fetches models.
 #
 # Confinement, each layer independent of the others:
 #   network   own bridge, nothing published, no host port reachable, TCP 443
@@ -33,21 +32,18 @@
   config,
   lib,
   pkgs,
+  openamika,
   ...
 }:
 let
   inherit (config.infra) openamikaNetwork openamikaAddress openamikaGateway;
-  source = pkgs.callPackage ../../pkgs/openamika { };
   id = toString config.infra.serviceId.openamika;
   volume = "/var/lib/docker/volumes/openamika_data/_data";
-  systemctl = "${config.systemd.package}/bin/systemctl";
   docker = "${config.virtualisation.docker.package}/bin/docker";
   python = pkgs.python3.withPackages (p: [ p.aiohttp ]);
 
   # The uid needs a name. torch asks getpass.getuser(), which ends in
-  # getpwuid(), and the stock image has no entry for 1000004: setup's
-  # embedder died on "getpwuid(): uid not found" (2026-11-10). Mounted over
-  # the image's own, so root and nobody are kept.
+  # getpwuid(). Keep a named entry for the service uid inside the image.
   passwd = pkgs.writeText "openamika-passwd" ''
     root:x:0:0:root:/root:/usr/sbin/nologin
     nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
@@ -59,27 +55,17 @@ let
     openamika:x:${id}:
   '';
 
-  # Everything both containers share. Only the address and command differ.
-  container = command: {
-    image = "python:3.11-slim-bookworm@sha256:a83ba18aef0f865b1a4a611c2cf460fe446f2795673bbb9fe43be570439e3b39";
+  container = {
+    image = "openamika-base:1";
+    imageFile = openamika.image;
+    entrypoint = "${openamika.runtime}/bin/openamika-runtime";
     user = "${id}:${id}";
-    entrypoint = "bash";
-    cmd = [
-      "/opt/launcher.sh"
-      command
-    ];
     autoStart = false;
     networks = [ openamikaNetwork ];
-    environment = {
+    environment = openamika.runtimeEnvironment // {
       HOME = "/data";
-      # On the volume, not the /tmp tmpfs: pip unpacks torch through it, and
-      # a tmpfs's pages count against the 8g limit.
+      PYTHONUNBUFFERED = "1";
       TMPDIR = "/data/.tmp";
-      # Mounted at its own store path, so the launcher's record of which
-      # revision set up the volume changes when the pin does.
-      OPENAMIKA_SOURCE = "${source}";
-      OPENAMIKA_CONFIGURE = "/opt/configure.py";
-      OPENAMIKA_CPU_COMPAT = "/opt/cpu-compat.py";
       # Matches --cpus below; more threads than cores only thrash.
       OMP_NUM_THREADS = "4";
       MKL_NUM_THREADS = "4";
@@ -92,11 +78,8 @@ let
     };
     environmentFiles = [ config.sops.templates."openamika.env".path ];
     volumes = [
-      "openamika_data:/data"
-      "${source}:${source}:ro"
-      "${../../pkgs/openamika/launcher.sh}:/opt/launcher.sh:ro"
-      "${../../pkgs/openamika/configure.py}:/opt/configure.py:ro"
-      "${../../pkgs/openamika/cpu-compat.py}:/opt/cpu-compat.py:ro"
+      "openamika_data:/data:nocopy"
+      "${openamika.app}:/opt/openamika:ro"
       "${passwd}:/etc/passwd:ro"
       "${group}:/etc/group:ro"
     ];
@@ -104,7 +87,7 @@ let
       "--cap-drop=ALL"
       "--security-opt=no-new-privileges:true"
       "--read-only"
-      "--tmpfs=/tmp:rw,nosuid,nodev,size=256m"
+      "--tmpfs=/tmp:rw,nosuid,nodev,size=256m,mode=1777"
       # launch.py supervises several servers; tini reaps what it orphans and
       # passes the stop signal on.
       "--init"
@@ -125,28 +108,33 @@ let
     ];
   };
 
+  # oci-containers shell-quotes every extraOption, so a dynamic mount list
+  # cannot be spliced there. Interpose only on this service's Docker command;
+  # all generated run flags and pre-start/stop behavior remain upstream's.
+  # Read the built closureInfo output at runtime, never during Nix evaluation
+  # (builtins.readFile here would introduce IFD into flake check --no-build).
+  closureDocker = import ../../pkgs/openamika/docker-wrapper.nix {
+    inherit pkgs docker;
+    closure = openamika.runtimeClosure;
+  };
+
   # A fresh named volume is root's; the container is not.
   ownVolume = ''
     ${docker} volume create openamika_data > /dev/null
-    install -d -m0700 -o ${id} -g ${id} ${volume} ${volume}/.tmp
+    install -d -m0700 -o ${id} -g ${id} ${volume}
   '';
 
-  # Setup rewrites the venvs the stack runs from, so the stack must not start
-  # under it. ExecCondition: a skipped start, not a failure into a restart loop.
-  notDuringSetup = pkgs.writeShellScript "openamika-not-during-setup" ''
-    case "$(${systemctl} show -P ActiveState docker-openamika-setup.service)" in
-      active | activating | deactivating)
-        echo "openamika: setup is running" >&2
-        exit 1
-        ;;
-    esac
-  '';
 in
 {
+  assertions = [
+    {
+      assertion = config.virtualisation.oci-containers.containers.openamika.preRunExtraOptions == [ ];
+      message = "OpenAmika closure mounts require docker run as the first Docker argument";
+    }
+  ];
+
   highMemory.programs = {
     docker-openamika = { };
-    # pip resolving torch is a few GiB too, and it must not sneak past the cap.
-    docker-openamika-setup = { };
   };
 
   sops.templates = {
@@ -167,8 +155,8 @@ in
   };
 
   virtualisation.oci-containers.containers = {
-    openamika = container "run" // {
-      extraOptions = (container "run").extraOptions ++ [ "--ip=${openamikaAddress}" ];
+    openamika = container // {
+      extraOptions = container.extraOptions ++ [ "--ip=${openamikaAddress}" ];
     };
     # THE SIGN-IN. Stock oauth2-proxy with Forgejo as the identity provider:
     # the login form is Forgejo's own (password manager, 2FA), and nothing
@@ -217,33 +205,13 @@ in
       ];
     };
 
-    # Started by hand, once, and again after a pin bump. It carries the
-    # operator's acceptance of MekaHime's personal-use voice/avatar license,
-    # given in the session that set this up; see docs/src/operations/openamika.md.
-    openamika-setup = container "setup";
   };
 
   systemd.services = {
     docker-openamika = {
       preStart = lib.mkBefore ownVolume;
-      serviceConfig = {
-        ExecCondition = [ notDuringSetup ];
-        # Not set up, or set up from another pin: restarting cannot fix
-        # either, and Restart=always would retry every 5s forever.
-        RestartPreventExitStatus = 3;
-      };
-    };
-
-    docker-openamika-setup = {
-      preStart = lib.mkBefore ''
-        ${systemctl} stop docker-openamika.service
-        ${ownVolume}
-      '';
-      serviceConfig = {
-        # Not a daemon. default.nix forces every container to Restart=always,
-        # which here would run a finished setup again forever.
-        Restart = lib.mkOverride 10 "no";
-      };
+      path = lib.mkBefore [ closureDocker ];
+      serviceConfig.RestartPreventExitStatus = 3;
     };
 
     openamika-gateway = {
@@ -297,12 +265,8 @@ in
     "/run/openamika-gateway:/run/openamika-gateway:ro"
   ];
 
-  # The volume is under /var/lib/docker/volumes, so the daily job already
-  # takes it. What is worth keeping is settings and memories; the venvs,
-  # voice engine and pip/HF caches are many GiB that setup re-downloads.
+  # Runtime caches are disposable; models and environments live in the store.
   services.restic.backups.b2.exclude = map (p: "${volume}/${p}") [
-    "envs"
-    "vendor/tts-engine/.venv"
     ".cache"
     ".tmp"
   ];

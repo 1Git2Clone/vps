@@ -1,6 +1,4 @@
-# The pinned upstream tree, patched. Nothing is built: the container mounts
-# this read-only and pip-installs the Python environments into its volume on
-# first setup (modules/containers/openamika.nix).
+# Pinned upstream source; all runtime patches are applied during the build.
 { stdenvNoCC, fetchFromGitHub }:
 let
   revision = "c3d71694cfb465fe6353a294f3623e010331e361";
@@ -22,6 +20,9 @@ stdenvNoCC.mkDerivation {
     # unreachable from the host. Only the UI moves; speech, voice and the
     # embedder stay on the container's loopback.
     ./ui-host.patch
+    ./cpu-compat.patch
+    ./mutable-state.patch
+    ./startup-logging.patch
   ];
   dontBuild = true;
   installPhase = ''

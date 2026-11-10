@@ -1,0 +1,22 @@
+--- a/pathsec.py
++++ b/pathsec.py
+@@ -2235,7 +2235,18 @@
+             fcntl.fcntl(
+                 fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) & ~os.O_NONBLOCK
+             )
+-        if st.st_nlink > 1:
++        # Nix deduplicates immutable files with hardlinks. A root-owned,
++        # non-writable inode read through a read-only store mount cannot be
++        # planted or rewritten by the service user. Keep all write-side and
++        # non-store hardlink checks, and still validate the pinned fd below.
++        readonly_store_read = (
++            (flags & os.O_ACCMODE) == os.O_RDONLY
++            and st.st_uid == 0
++            and not (st.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
++            and (_fd_realpath(fd) or "").startswith("/nix/store/")
++            and bool(os.fstatvfs(fd).f_flag & os.ST_RDONLY)
++        )
++        if st.st_nlink > 1 and not readonly_store_read:
+             raise PermissionError(
+                 f"Security Violation [pathsec.open]: refusing multiply-linked file "
+                 f"{raw_path!r} (st_nlink={st.st_nlink}); a hardlink can point at an "

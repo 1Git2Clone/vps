@@ -16,12 +16,47 @@ browser -tailnet-> caddy :8443
   -> 172.29.0.2:53000, the openamika container on its own bridge
 ```
 
-The stack is one container, `docker-openamika.service`, on the stock
-`python:3.11-slim-bookworm` image pinned by digest. The pinned upstream source
-(`pkgs/openamika`) and our launcher and fixups are mounted read-only from the
-Nix store. Venvs, weights, the voice, settings and memories live on the
-`openamika_data` volume. The gateway stays on the host because it starts and
-stops a systemd unit, the same reason `minecraft-scaler` does.
+The stack is one container, `docker-openamika.service`, on a tiny
+`openamika-base:1` image containing only empty mount-point directories.
+Python 3.11, the four locked uv2nix environments, patched source, models and
+voice assets run directly from read-only binds of their host Nix store paths.
+Every download has a fixed hash. Starting it needs no package installer,
+model download or setup unit.
+
+Only the application's runtime closure is mounted, never all of `/nix/store`.
+`closureInfo` writes the exact path list at build time. A service-local Docker
+wrapper reads that list at start and adds one read-only bind per store path,
+preserving oci-containers' generated flags and lifecycle. Nothing reads a built
+file during flake evaluation: `nix flake check --no-build` needs no IFD.
+`/opt/openamika` is another read-only bind of the same app, for stable model
+paths in settings. The entrypoint uses its store Bash interpreter and explicitly
+sets PATH and SSL_CERT_FILE from the closure; no base-image binaries are needed.
+
+The base archive loaded on each wake is **703 bytes**. The runtime closure is
+about **8.92 GiB** across **702 store paths** (NAR size; measured 2026-11-10).
+The previous large image cost a 5.12 GiB Nix archive plus about 19.6 GB in
+containerd layer blobs and unpacked snapshots. The large files now exist only
+in the host store: bind mounts do not copy them into Docker storage.
+
+After deploying this change, remove the superseded Docker image:
+
+```sh
+sudo docker image rm openamika:c3d71694
+```
+
+The weekly Docker prune also removes it because the configuration now names
+`openamika-base:1`. The old Nix image archive remains while an older system
+generation or another GC root retains it; normal Nix garbage collection can
+reclaim it after those roots expire. The tiny base can be public, but the
+runtime closure and personal-use assets must stay out of public caches.
+
+The `openamika_data` volume holds editable configuration, persona, memories,
+optional `brain/.env`, top-level `memory_f` evidence/usage data, logs and
+disposable caches. The initial default state is about 568 KB; caches and
+memories grow as she is used. The named-volume mount uses `nocopy` so Docker
+does not replace its service-user ownership with the empty base image's root
+ownership on the first start. The gateway stays on the
+host because it starts and stops a systemd unit, as `minecraft-scaler` does.
 
 | Layer   | Limit                                                                                                                                              |
 | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,7 +76,7 @@ upstream's same-origin check (the memory reset) sees the browser's real origin.
 
 `modules/high-memory.nix` registers high memory usage programs explicitly;
 “a few gigabytes” is a description, not a measured threshold. The four Minecraft
-worlds, `docker-openamika` and `docker-openamika-setup` share
+worlds and `docker-openamika` share
 `highMemory.maxRunning = 2`. Horizon remains outside this cap. No running
 program is evicted to make room. Starting or stopping programs occupy slots
 until fully inactive/failed. Admission also applies to manual `systemctl start`.
@@ -87,41 +122,108 @@ because this repo is public.
 Only the container receives the OpenRouter key, and only oauth2-proxy the OAuth
 values, each through a docker env file. None is in the Nix store.
 
-After adding the secrets, deploy using the repository's normal rollback-safe
-path (see [Deploying](deploying.md)), then apply the reviewed OpenTofu DNS
-addition from `tofu/` (`openamika` points at the tailnet address). Then
-initialize once on the VPS:
+Deploy using the repository's normal rollback-safe path
+([Deploying](deploying.md)). Forgejo OAuth and the existing secrets need no
+changes for the declarative image. A fresh volume initializes its small,
+editable defaults automatically; opening `/use` wakes the stack. There is
+no setup command to run on the VPS.
+
+### Migrating the existing imperative volume
+
+Close all OpenAmika tabs first. On the VPS, stop the gateway and both old
+containers, then move the old volume directory aside. This preserves the old
+venvs, incomplete downloads and settings for rollback without copying them.
+Run these commands in an interactive SSH session (`ssh -p 2222 hutao@vps`):
 
 ```sh
-sudo systemctl start docker-openamika-setup.service
-sudo journalctl -fu docker-openamika-setup.service
+sudo systemctl stop openamika-gateway docker-openamika-setup docker-openamika
+sudo bash <<'SH'
+set -euo pipefail
+volume=/var/lib/docker/volumes/openamika_data/_data
+old="$volume.imperative-$(date +%Y%m%d-%H%M%S)"
+owner=$(stat -c '%u' "$volume")
+group=$(stat -c '%g' "$volume")
+mv "$volume" "$old"
+install -d -m0700 -o "$owner" -g "$group" "$volume" "$volume/brain"
+# Keep personal configuration and memories; never restore source or venvs.
+if test -d "$old/config"; then cp -a "$old/config" "$volume/"; fi
+if test -d "$old/memory_f"; then cp -a "$old/memory_f" "$volume/"; fi
+for name in memories .env scenes.json 例子.txt 表层.txt 思考.txt; do
+  if test -e "$old/brain/$name"; then
+    cp -a "$old/brain/$name" "$volume/brain/"
+  fi
+done
+if test -d "$old/avatar/stage"; then
+  install -d -m0700 -o "$owner" -g "$group" "$volume/avatar"
+  cp -a "$old/avatar/stage" "$volume/avatar/"
+fi
+printf 'Rollback copy: %s\n' "$old"
+SH
 ```
 
-Setup stops the stack if it is running, and the stack refuses to start while
-setup runs. It downloads CPU environments, recognition/embedding weights, and
-Amika's voice/avatar into the volume. The setup container includes the
-operator's already-given acceptance of MekaHime's personal-use license. Do not
-use it for another person without their acceptance of
-[the license](https://huggingface.co/MekaHime/MekaHime_Amika/blob/main/LICENSE).
-Restricted assets are not in this repository, container images or Nix sources.
+Keep the old `settings.json` in that rollback copy for comparison. Let the new
+image generate settings with Linux interpreter paths, CPU devices, disabled
+vision, a local pinned embedder and the longer CPU voice timeout. Reapply any
+personal port or other settings deliberately. Copying the old settings wholesale
+can retain stale paths to the old venvs or model cache. Do not restore `envs`,
+`vendor`, `speech/models`, `.cache`, `.tmp`, `.nix-source`, or upstream code.
 
-The source revision and model roles are pinned in `pkgs/openamika`:
-GLM-5 without reasoning for deep, DeepSeek V4.1 Flash for surface/reflection,
-and GLM-5.3 for memory writes. Vision is disabled.
+On the workstation, deploy the reviewed working tree with the usual command:
 
-**Bumping the pin** makes the stack exit 3 ("source changed"), which the unit
-does not restart on. Back up, move the volume's contents aside, and run setup
-again. "Not set up" is exit 3 too, so waking it before setup never loops.
+```sh
+SOPS_AGE_KEY_FILE=/var/lib/sops-nix/vps.txt nix develop -c ssh-agent sh -c 'ssh-add ~/.ssh/id_ed25519 && deploy .#vps'
+```
 
-The daily restic job takes the volume with every other one, minus `envs/`, the
-voice engine's `.venv`, `.cache` and `.tmp`: many GiB that setup re-downloads.
+Then on the VPS:
 
-For a desktop migration, set up the VPS first. Stop the desktop stack before
-copying personal settings, memories and configuration into
-`/var/lib/docker/volumes/openamika_data/_data` (owned by `serviceId.openamika`),
-then update any desktop-specific paths in `settings.json`. Do not copy virtual
-environments or `.nix-source`. Verify VPS chat and voice before disabling the
-desktop service and its old proxy routes.
+```sh
+sudo systemctl start openamika-gateway
+sudo systemctl start docker-openamika
+sudo journalctl -fu docker-openamika
+```
+
+Open **<https://openamika.hu-tao.dev/use>**, sign in through Forgejo and check
+chat, microphone recognition, the Live2D avatar and audible voice. The first
+CPU model load can take several minutes. No installation or download occurs.
+Keep the rollback directory until these work; remove it manually afterwards.
+If rolling the system back, stop the gateway/container before swapping `_data`
+with the saved directory.
+
+### Pins, licenses and updates
+
+The operator accepted MekaHime's
+[personal-use license](https://huggingface.co/MekaHime/MekaHime_Amika/blob/main/LICENSE).
+The voice and avatar files are fetched individually against the upstream
+manifest's SHA256s, including the Host paper doll at its separate revision.
+They belong only in the workstation/VPS store and private backups. **Never
+publish this image, its closure, or the restricted fetches to a public cache
+or registry.** Local build preference and disabled substitution are not an
+upload access control; do not attach a cache upload hook to these outputs.
+The repository carries hashes and URLs, not the restricted bytes.
+
+`pkgs/openamika/assets.json` records upstream's model/data pins. GPT-SoVITS is
+also checked against upstream's published tree digest before adding weights
+and building its dictionaries. bge-m3 is pinned separately because upstream's
+core setup downloads an unpinned Hugging Face snapshot. Only its runtime files
+are fetched, without duplicate ONNX weights.
+
+After bumping the source, review its setup scripts and refresh asset pins and
+`settings.example.json`; regenerate all four environment locks:
+
+```sh
+nix build .#openamika-source
+nix shell nixpkgs#uv nixpkgs#python311 -c python3 pkgs/openamika/envs/update.py result
+nix build .#openamika-image
+```
+
+Source and model updates replace the mounted runtime closure; they do not
+reinstall anything in the volume or enlarge the base image. The pinned default
+roles remain GLM-5 without reasoning for deep,
+DeepSeek V4.1 Flash for surface/reflection, and GLM-5.3 for memory writes.
+Existing configuration and persona edits survive. The daily restic job keeps
+the mutable volume, excluding `.cache` and `.tmp`; environments and assets are
+already
+reproducible from the runtime's pinned inputs.
 
 ## Checks and operations
 
@@ -129,9 +231,49 @@ desktop service and its old proxy routes.
 sudo systemctl status docker-openamika openamika-gateway
 journalctl -u docker-openamika -u openamika-gateway
 sudo systemctl stop docker-openamika  # closes active sessions immediately
+nix build .#checks.x86_64-linux.openamika-imports  # offline imports
+nix build .#checks.x86_64-linux.openamika-runtime  # exact mounts + empty base
+nix build .#checks.x86_64-linux.openamika-services -L  # Docker VM; needs KVM
 nix build .#checks.x86_64-linux.openamika-gateway
 nix build .#checks.x86_64-linux.minecraft-cap -L  # systemd VM; needs KVM
 ```
+
+The service-start check boots a local NixOS VM and starts TTS (including real
+model load/warmup), embedder, brain, speech and messengers together in Docker.
+It reuses the production container flags and exact closure mounts, runs as uid
+1000004 without a TTY, denies external networking, initializes state through
+the real launcher and requires every health endpoint to answer. A VM preserves
+root ownership of store paths; an unprivileged Bubblewrap namespace makes root
+appear as nobody, which NLTK's data ownership checks correctly refuse.
+
+### Writable paths and startup diagnostics
+
+All application writes land under `/data`: configuration and persona edits,
+`brain/memories`, `memory_f` (SQLite usage, evidence profiles, provider receipts
+and reset backups), launcher/agent logs, avatar banks/stage edits and TTS caches.
+The optional IoT bridge uses `AMIKA_IOT_DATA_DIR=/data/IoT/data`. GPT-SoVITS'
+Japanese dictionary and Chinese pronunciation cache are built ahead of time.
+NLTK permits Nix-deduplicated corpus hardlinks only for read-only descriptors
+on read-only store mounts, owned by root and without group/world write bits.
+The other hardlink checks remain enabled; the service test exercises both
+corpus loading and refusal of hardlinks in mutable storage.
+The model directory explicitly replaces upstream's `speech/models` directory
+before linking the six pinned SenseVoice files; keeping the original directory
+would nest the models one level too deep and break FunASR's local-model lookup.
+
+`TMPDIR=/data/.tmp` is created by the launcher so model temporary files do not
+consume the memory-accounted 256 MB tmpfs. `/tmp` also explicitly has mode 1777
+for the service uid. Both `.tmp` and `.cache` are excluded from backups.
+
+`PYTHONUNBUFFERED=1` makes launcher output immediately visible in journald and
+Dozzle. Lifecycle events also mirror `logs/launcher.log` to non-TTY stdout:
+upstream normally writes those only to the file and shows its live dashboard
+only on a TTY. Health waits print the endpoint and timeout immediately, then
+progress every 30 seconds. The embedder gate is GET
+`http://127.0.0.1:8011/health` with JSON `ok=true`; the generated settings allow
+600 seconds for loading. Each probe times out after two seconds. On failure or
+timeout, the launcher reports it and proceeds to brain and speech rather than
+waiting forever. Check `/data/logs/embedder.log` for the model-loader traceback.
 
 Verify confinement after a deploy, while the stack is awake. `exec`, never a
 throwaway `docker run`: every non-zero container exit on this box pages.
