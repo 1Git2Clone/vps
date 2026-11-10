@@ -94,17 +94,18 @@ Instead:
   `docker-<world>.service`, for the worlds in `worlds` only. It runs as root
   because polkit is off, with every capability dropped and systemd's
   `IPAddressAllow` set to mc-router's address.
-- **The cap** is an `ExecCondition` on each world's unit: it counts the other
-  registered programs that are not `inactive`/`failed` and refuses at two. Being
-  in the
-  unit, it holds for a hand-typed `systemctl start` too. A refusal skips the
+- **The cap** is an `ExecCondition` on each world's unit: it sums the slots of
+  admitted programs that are not `inactive`/`failed`, plus the requested weight,
+  and refuses above two. Each world uses one slot; OpenAmika uses both.
+  Starting and stopping programs retain their weight. Being in the unit, the
+  guard holds for a hand-typed `systemctl start` too. A refusal skips the
   start rather than failing it, so `Restart=always` does not retry it, and the
   scaler answers 409 so mc-router drops the login instead of waiting.
 
 What players see: a sleeping world's server-list entry says it is asleep, the
 first join wakes it and usually times out, and a second join a minute later
-gets in. When two registered programs are already up, the join is refused until
-one sleeps.
+gets in. When two worlds or OpenAmika are already up, a world join is refused
+until enough slots are freed.
 
 The cost is that worlds see mc-router's address as every player's. Nothing
 here keys on player IPs (whitelist and bans are by UUID); PROXY protocol would

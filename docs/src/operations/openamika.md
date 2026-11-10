@@ -74,12 +74,14 @@ upstream's same-origin check (the memory reset) sees the browser's real origin.
 
 ## Shared admission and scale to zero
 
-`modules/high-memory.nix` registers high memory usage programs explicitly;
-“a few gigabytes” is a description, not a measured threshold. The four Minecraft
-worlds and `docker-openamika` share
-`highMemory.maxRunning = 2`. Horizon remains outside this cap. No running
-program is evicted to make room. Starting or stopping programs occupy slots
-until fully inactive/failed. Admission also applies to manual `systemctl start`.
+`modules/high-memory.nix` registers high memory usage programs explicitly.
+Each program has a positive `slots` weight, defaulting to 1, and admission sums
+the occupied weights plus the requested program's weight against
+`highMemory.maxRunning = 2`. Each Minecraft world uses one slot;
+`docker-openamika` uses both. Two worlds may run together; OpenAmika cannot run
+alongside any capped world. Horizon stays outside this cap. Nothing is evicted
+to make room. Admitted programs retain their full weight while starting or
+stopping, until inactive/failed. The same guard applies to manual starts.
 
 The gateway starts the container on an authenticated browser request. Browser
 WebSockets hold a lease; twenty minutes after the last connection/request ends,
@@ -87,12 +89,18 @@ it stops the container. Close its tabs to let it sleep. Health probes to
 `/_gateway/health` never wake it. A full cap returns HTTP 503 with a retry hint.
 A cold start waits for the web service, up to fifteen minutes.
 
-**Memory, measured 2026-11-10:** 15.6 GiB, no swap, 3.7 GiB used with every
-always-on service up and no world awake. OpenAmika (~7 GiB on the desktop) plus
-world 1 (6.5 GiB limit) fits beside that only because a world's heap uncommits
-when idle and limits are ceilings, not reservations. If the box OOMs, OpenAmika
-dies first by design. If it does that in normal use, lower `maxRunning` for it
-rather than raising anything.
+**Memory, measured live after the declarative deployment:** OpenAmika holds
+6.73 GB; the host uses 9.3 of 15.3 GB with no world awake. A modded world can
+need a 5 GB heap plus overhead, and there is no swap. OpenAmika therefore
+reserves both slots; its 8 GB container ceiling is not spare capacity for a
+world. `--oom-score-adj=500` still makes her the first victim of host-wide OOM.
+
+Deploys leave a running OpenAmika container alone. Its unit sets
+`restartIfChanged = false`, so activation skips both stop/start and restart
+paths. `stopIfChanged` keeps its default: it selects between those two paths
+only when a restart is allowed. New runtime configuration applies on the next
+wake after idle shutdown or an explicit stop. The gateway still restarts on
+changes and starts the container on demand.
 
 The Minecraft-only backup hold does not stop OpenAmika or include its volume in
 a Minecraft snapshot.

@@ -26,7 +26,7 @@
 #             host itself runs out (no swap on this box)
 #   CPU       4 of 8 cores, and a quarter of the weight, so a world's tick
 #             wins any contention
-#   admission one of the two high-memory slots it shares with the worlds
+#   admission both high-memory slots; cannot run alongside a capped world
 #             (../high-memory.nix)
 {
   config,
@@ -134,7 +134,7 @@ in
   ];
 
   highMemory.programs = {
-    docker-openamika = { };
+    docker-openamika.slots = 2;
   };
 
   sops.templates = {
@@ -209,6 +209,11 @@ in
 
   systemd.services = {
     docker-openamika = {
+      # Keep the current conversation alive across configuration switches.
+      # restartIfChanged=false skips both stop/start and restart activation paths;
+      # stopIfChanged only selects between those paths, so keep its default.
+      # The new unit takes effect when the gateway next wakes the container.
+      restartIfChanged = false;
       preStart = lib.mkBefore ownVolume;
       path = lib.mkBefore [ closureDocker ];
       serviceConfig.RestartPreventExitStatus = 3;

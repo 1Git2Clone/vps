@@ -467,7 +467,10 @@
                   inherit pkgs openamika;
                   container = vps.config.virtualisation.oci-containers.containers.openamika;
                 };
-                openamika-runtime = import ./tests/openamika-runtime.nix { inherit pkgs openamika; };
+                openamika-runtime = import ./tests/openamika-runtime.nix {
+                  inherit pkgs openamika;
+                  services = vps.config.systemd.services;
+                };
                 openamika-gateway = import ./tests/openamika-gateway.nix { inherit pkgs; };
 
                 # The static, CI-run counterpart to runner-firewall above. It

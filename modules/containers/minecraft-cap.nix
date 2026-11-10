@@ -1,5 +1,5 @@
 # Minecraft-specific wake callbacks and backup hold. Admission is implemented
-# by ../high-memory.nix: these worlds and OpenAmika share two running slots.
+# by ../high-memory.nix: each world uses one slot and OpenAmika reserves both.
 # The registry here remains Minecraft-only so backups and mc-router never try
 # to treat another high memory usage program as a Minecraft world.
 # Exercised by tests/minecraft-cap.nix, including mixed-program admission.

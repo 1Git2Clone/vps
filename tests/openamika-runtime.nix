@@ -1,4 +1,8 @@
-{ pkgs, openamika }:
+{
+  pkgs,
+  openamika,
+  services,
+}:
 let
   fakeDocker = pkgs.writeShellScript "docker-record-args" ''
     printf '%s\0' "$@" > "$CAPTURE"
@@ -9,6 +13,12 @@ let
     closure = openamika.runtimeClosure;
   };
 in
+# The activator checks restartIfChanged before choosing the stopIfChanged
+# stop/start vs restart path. The gateway must still follow normal updates.
+assert !services.docker-openamika.restartIfChanged;
+assert !services.docker-openamika.reloadIfChanged;
+assert services.docker-openamika.stopIfChanged;
+assert services.openamika-gateway.restartIfChanged;
 pkgs.runCommand "openamika-runtime-mounts" { nativeBuildInputs = [ pkgs.python311 ]; } ''
   export CAPTURE="$TMPDIR/run-args"
   ${wrapper}/bin/docker run --name=openamika --read-only --cap-drop=ALL openamika-base:1
