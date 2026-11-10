@@ -39,7 +39,19 @@ let
               "vendor/tts-engine/Speakers/MekaHime_Amika/${path}";
         in
         lib.optionalString (path != ".gitattributes") (
-          link dest (private (hf pins.VOICE_REPO rev path (builtins.elemAt spec 1)))
+          let
+            file = private (hf pins.VOICE_REPO rev path (builtins.elemAt spec 1));
+          in
+          if lib.hasPrefix "live2d/" path then
+            # The avatar API resolves each file and enforces containment in
+            # its model directory. Store symlinks fail that check, even when
+            # the model directory itself resolves correctly.
+            ''
+              mkdir -p "$out/$(dirname ${lib.escapeShellArg dest})"
+              cp ${file} "$out/"${lib.escapeShellArg dest}
+            ''
+          else
+            link dest file
         )
       ) files
     );

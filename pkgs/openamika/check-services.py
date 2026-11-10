@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import traceback
+import urllib.request
 
 os.environ.update(json.loads(Path("/runtime-env.json").read_text()))
 os.environ.update(OMP_NUM_THREADS="4", MKL_NUM_THREADS="4", USER="openamika",
@@ -93,6 +94,29 @@ else:
         assert service.state in ("up", "external"), (service.name, service.state, service.detail)
         assert service.is_up(), (service.name, service.health)
         print(f"HEALTHY {service.name}: {service.health}", flush=True)
+    # Exercise browser-facing avatar routes, including the resolved-file
+    # containment checks. Registry discovery alone misses broken symlinks.
+    base = "http://127.0.0.1:53000"
+    with urllib.request.urlopen(base + "/api/avatar/models") as response:
+        registry = json.load(response)
+    models = registry["models"] if isinstance(registry, dict) else registry
+    assert {model["id"] for model in models} >= {"Amika", "Host"}, models
+    for model in models:
+        with urllib.request.urlopen(base + model["model3_url"]) as response:
+            doc = json.load(response)
+        from urllib.parse import urljoin
+        refs = doc["FileReferences"]
+        paths = [refs["Moc"], *refs["Textures"]]
+        paths += [refs[key] for key in ("Physics", "DisplayInfo") if refs.get(key)]
+        paths += [item["File"] for group in refs.get("Motions", {}).values() for item in group]
+        paths += [item["File"] for item in refs.get("Expressions", [])]
+        for path in paths:
+            with urllib.request.urlopen(urljoin(base + model["model3_url"], path)) as response:
+                assert response.status == 200 and response.read(1), path
+        for key in ("motions_url", "banks_url"):
+            with urllib.request.urlopen(base + model[key]) as response:
+                assert response.status == 200
+        print(f"AVATAR {model['id']}: model, binaries, textures, motions and banks served", flush=True)
     print("All services healthy with read-only runtime closure, uid 1000004, writable /data and /tmp", flush=True)
 except BaseException:
     traceback.print_exc()
