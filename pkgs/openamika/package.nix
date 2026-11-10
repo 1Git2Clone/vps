@@ -92,7 +92,7 @@ let
       ''
         cp -r ${source} $out
         chmod -R u+w $out
-        mkdir -p $out/envs $out/avatar/models $out/speech/static
+        mkdir -p $out/envs $out/speech/static
         ${lib.concatStrings (lib.mapAttrsToList (name: env: "ln -s ${env} $out/envs/${name}\n") envs)}
         ln -s ${assets.models}/embed $out/embed
         ln -s ${envs.voice} $out/vendor/tts-engine/.venv
@@ -101,8 +101,12 @@ let
         ln -s ${assets.models}/vendor/tts-engine/Speakers $out/vendor/tts-engine/Speakers
         rm -rf $out/speech/models
         ln -s ${assets.models}/speech/models $out/speech/models
-        ln -s ${assets.models}/avatar/models/Amika $out/avatar/models/Amika
-        ln -s ${assets.models}/avatar/models/Host $out/avatar/models/Host
+        # The whole folder, not each model: speech/api.py resolves
+        # avatar/models/<id> and refuses one whose real path is outside the
+        # resolved avatar/models (400 "Invalid model id"), which per-model
+        # links into the assets path always were.
+        rm -rf $out/avatar/models
+        ln -s ${assets.models}/avatar/models $out/avatar/models
         rm -rf $out/config
         ln -s /data/config $out/config
         ln -s /data/brain/.env $out/brain/.env
