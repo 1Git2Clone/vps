@@ -62,6 +62,12 @@ let
   policy = pkgs.writeText "anubis-policy.yaml" ''
     bots:
       - import: (data)/meta/default-config.yaml
+
+      # Photocraft v0.17.0+ has a /snippets/*/inline0.js file.
+      - name: allow-snippet-modules
+        path_regex: /snippets/.*\.js$
+        action: ALLOW
+
       - name: non-browser-off-the-tool-paths
         action: WEIGH
         expression:
