@@ -32,7 +32,7 @@ jail that reads the journal.
 | `dozzle`           | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
 | `grafana`          | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
 | `tempo`            | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address                                                                                                                                                                                                                     |
-| `mc-router`        | **25565**, the only public Minecraft port; picks the world by the hostname in the handshake and wakes it through `minecraft-scaler`. See [Worlds on demand](#high-memory-usage-programs-at-most-two-at-once)                                                                                                                                |
+| `mc-router`        | **25565**, the only public Minecraft port; picks the world by the hostname in the handshake and wakes it through `minecraft-scaler`. See [Worlds on demand](#worlds-on-demand-at-most-two-at-once)                                                                                                                                          |
 | `minecraft`        | world 1, MC **26.1.2** on the `java25` image, the `packs/mc1` modpack; `minecraft.`, `mc.` and bare-IP joins via mc-router; no published game port. RCON on loopback only (25575). Heap 1 G floor / 6 G ceiling — see below                                                                                                                 |
 | `minecraft2`       | world 2, MC **1.21.1** on the `java21` image, the `packs/mc2` zombie modpack; `mc2.` via mc-router, no published game port; RCON on loopback only (25576). Heap 1 G / 4 G                                                                                                                                                                   |
 | `minecraft3`       | world 3, MC **26.2** on the `java25` image, the `packs/mc3` Vanilla+ modpack; `mc3.` via mc-router, no published game port; RCON on loopback only (25577). Heap 1 G / 4 G. Every world's `.mrpack` is also the players' download: see [How the servers are set up](../minecraft/servers.md)                                                 |
@@ -68,12 +68,7 @@ RSS is still not heap. Metaspace, the code cache, GC structures and direct
 buffers live outside `-Xmx`, so the ceiling is not a bound on what the container
 reports.
 
-### High memory usage programs, at most two at once
-
-The Minecraft worlds and the entire OpenAmika stack share a cap of two
-[high memory usage programs](../operations/openamika.md). Registration is
-explicit, with no measured memory threshold. OpenAmika runs on demand behind
-Caddy at the authenticated, tailnet-only `openamika.hu-tao.dev`.
+### Worlds on demand, at most two at once
 
 The box has 16 G and no swap, and mail lives on it too, so every world at its
 heap ceiling at once is a job for the OOM killer. No world starts at boot.
@@ -94,26 +89,21 @@ Instead:
   `docker-<world>.service`, for the worlds in `worlds` only. It runs as root
   because polkit is off, with every capability dropped and systemd's
   `IPAddressAllow` set to mc-router's address.
-- **The cap** is an `ExecCondition` on each world's unit: it sums the slots of
-  admitted programs that are not `inactive`/`failed`, plus the requested weight,
-  and refuses above two. Each world uses one slot; OpenAmika uses both.
-  Starting and stopping programs retain their weight. Being in the unit, the
-  guard holds for a hand-typed `systemctl start` too. A refusal skips the
+- **The cap** is an `ExecCondition` on each world's unit: it counts the other
+  worlds that are not `inactive`/`failed` and refuses at two. Being in the
+  unit, it holds for a hand-typed `systemctl start` too. A refusal skips the
   start rather than failing it, so `Restart=always` does not retry it, and the
   scaler answers 409 so mc-router drops the login instead of waiting.
 
 What players see: a sleeping world's server-list entry says it is asleep, the
 first join wakes it and usually times out, and a second join a minute later
-gets in. When two worlds or OpenAmika are already up, a world join is refused
-until enough slots are freed.
+gets in. When two worlds are already up, the join is refused until one sleeps.
 
 The cost is that worlds see mc-router's address as every player's. Nothing
 here keys on player IPs (whitelist and bans are by UUID); PROXY protocol would
 fix it but needs a mod on every world.
 
-`modules/high-memory.nix` owns shared admission;
-`modules/containers/minecraft-cap.nix` owns Minecraft wake callbacks and the
-backup hold.
+`modules/containers/minecraft-cap.nix` holds both halves, and
 `nix build .#checks.x86_64-linux.minecraft-cap -L` boots them against stand-in
 worlds. A new world is a container, an entry in `worlds` in
 `modules/containers/minecraft.nix`, a `MAPPING` line, and an A record in
@@ -188,8 +178,7 @@ That makes `navidrome_data` hold a third-party credential:
 Discord _user_ token pasted into its settings. That is a self-bot by Discord's
 rules and was accepted knowingly. The token is in restic's backups along
 with the rest of the volume. While a track plays the plugin sets the account to
-Do Not Disturb, and because `music.` is tailnet-only its cover-art option
-uploads
+Do Not Disturb, and because `music.` is tailnet-only its cover-art option uploads
 covers to `uguu.se`.
 
 ## The serenity bot is built during activation

@@ -1,25 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    pyproject-nix = {
-      url = "github:pyproject-nix/pyproject.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    uv2nix = {
-      url = "github:pyproject-nix/uv2nix";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        pyproject-nix.follows = "pyproject-nix";
-      };
-    };
-    pyproject-build-systems = {
-      url = "github:pyproject-nix/build-system-pkgs";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        pyproject-nix.follows = "pyproject-nix";
-        uv2nix.follows = "uv2nix";
-      };
-    };
     disko = {
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -48,22 +29,11 @@
       sops-nix,
       deploy-rs,
       mcopts,
-      pyproject-nix,
-      uv2nix,
-      pyproject-build-systems,
       ...
     }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
-      openamika = import ./pkgs/openamika/package.nix {
-        inherit
-          pkgs
-          pyproject-nix
-          uv2nix
-          pyproject-build-systems
-          ;
-      };
 
       # Which systems get a dev shell. `system` above is the DEPLOY TARGET; the
       # shell is entered on a workstation, which is routinely a Mac. Every tool
@@ -88,7 +58,6 @@
         nixpkgs.lib.nixosSystem {
           inherit system;
           modules = [
-            { _module.args = { inherit openamika; }; }
             ./configuration.nix
             ./disk-config.nix
             disko.nixosModules.disko
@@ -462,16 +431,6 @@
                 minecraft-cap = import ./tests/minecraft-cap.nix {
                   inherit nixpkgs system;
                 };
-                openamika-imports = openamika.smoke;
-                openamika-services = import ./tests/openamika-services.nix {
-                  inherit pkgs openamika;
-                  container = vps.config.virtualisation.oci-containers.containers.openamika;
-                };
-                openamika-runtime = import ./tests/openamika-runtime.nix {
-                  inherit pkgs openamika;
-                  services = vps.config.systemd.services;
-                };
-                openamika-gateway = import ./tests/openamika-gateway.nix { inherit pkgs; };
 
                 # The static, CI-run counterpart to runner-firewall above. It
                 # cannot prove the kernel enforces the one-way rule — only a
@@ -925,14 +884,6 @@
       );
 
       packages.${system} = {
-        openamika-source = openamika.source;
-        openamika-image = openamika.image;
-        openamika-runtime = openamika.runtime;
-        openamika-runtime-closure = openamika.runtimeClosure;
-        openamika-brain = openamika.envs.brain;
-        openamika-speech = openamika.envs.speech;
-        openamika-embed = openamika.envs.embed;
-        openamika-voice = openamika.envs.voice;
         default = vps.config.system.build.toplevel;
         horizon-server = pkgs.callPackage ./packages/horizon-server.nix { };
         horizon-image = vps.config.virtualisation.oci-containers.containers.horizon.imageFile;

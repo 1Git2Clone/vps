@@ -24,11 +24,10 @@ repos:
       # packs/mc<N> are packwiz trees: each index.toml holds the hash of every
       # file, so a "fixed" config file is a pack packwiz calls corrupt. The
       # files are the pack authors', byte for byte.
-      # Unified diff context lines carry meaningful whitespace and blank EOFs.
       - id: trailing-whitespace
-        exclude: (^packs/mc[0-9]+/|\.patch$)
+        exclude: ^packs/mc[0-9]+/
       - id: end-of-file-fixer
-        exclude: (^packs/mc[0-9]+/|\.patch$)
+        exclude: ^packs/mc[0-9]+/
       - id: check-merge-conflict
       - id: check-yaml
         # secrets.yaml is sops output: valid YAML, but the parser has no reason

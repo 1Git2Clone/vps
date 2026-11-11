@@ -37,7 +37,6 @@
         # Tailnet-only vhosts. They belong on the same certificate as the rest
         # because DNS-01 never needs a name to resolve publicly or a port to be
         # reachable — see modules/containers/caddy.nix.
-        "openamika"
         "dozzle"
         "grafana"
         "syncthing"
@@ -394,58 +393,6 @@
       description = ''
         minecraft-scaler's port on `mcGateway`. Private by its absence from
         the public allow-lists, like grafana's 3000.
-      '';
-    };
-
-    openamikaNetwork = lib.mkOption {
-      type = lib.types.str;
-      default = "openamika";
-      description = ''
-        Docker network for OpenAmika alone. Not `proxyNetwork`: caddy never
-        talks to the container, the host-side gateway does
-        (modules/containers/openamika.nix), and a container that pip-installs
-        and runs third-party models has no business next to forgejo or mail.
-      '';
-    };
-
-    openamikaSubnet = lib.mkOption {
-      type = lib.types.str;
-      default = "172.29.0.0/24";
-      description = ''
-        Subnet pinned onto `openamikaNetwork`. The firewall names it: no host
-        port at all, and only TCP 443 to public addresses, see
-        modules/firewall.nix. Checked free on the live box on 2026-11-10
-        (`ip -4 route`: 172.17/16, 172.18/16, 172.30/24, 172.31/24 in use).
-      '';
-    };
-
-    openamikaGateway = lib.mkOption {
-      type = lib.types.str;
-      default = "172.29.0.1";
-      description = ''
-        The host's address on `openamikaNetwork`, which is where the gateway's
-        connections to the container come from. Upstream's uvicorn trusts
-        X-Forwarded-Proto from this address alone. MUST be the first usable
-        address of `openamikaSubnet`.
-      '';
-    };
-
-    openamikaIpRange = lib.mkOption {
-      type = lib.types.str;
-      default = "172.29.0.128/25";
-      description = ''
-        Where docker hands out `openamikaNetwork` addresses to containers that
-        do not ask for one, i.e. the one-shot setup. It excludes
-        `openamikaAddress`, the same lesson as `mcIpRange`.
-      '';
-    };
-
-    openamikaAddress = lib.mkOption {
-      type = lib.types.str;
-      default = "172.29.0.2";
-      description = ''
-        The OpenAmika container's fixed address. The gateway is configured
-        with it and its IPAddressAllow names it, so it cannot move.
       '';
     };
 

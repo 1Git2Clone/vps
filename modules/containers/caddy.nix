@@ -10,8 +10,7 @@
 # network, so a container can be recreated with a new address and caddy is none
 # the wiser. The two exceptions are grafana and syncthing: both live in the
 # HOST's network namespace, where docker's DNS cannot reach, so they are named
-# by the bridge gateway address instead. OpenAmika is another host service,
-# reached over a private Unix socket after authentication.
+# by the bridge gateway address instead.
 #
 # The sites split in two. Everything above the "Tailnet-only" marker answers the
 # internet on 443; everything below it answers `tailnetHttpsPort`, which the
@@ -544,19 +543,6 @@ let
     # Adding one of these to the PUBLIC set is a one-word mistake with no
     # visible symptom: it would simply start answering the internet.
     {
-      host = "openamika.${domain}";
-      upstream = "unix//run/openamika-gateway/http.sock";
-      tailnet = true;
-      healthPath = "/_gateway/health";
-      # Sign in through Forgejo (containers/openamika.nix). Not basic auth:
-      # a browser's basic-auth dialog is one no password manager can fill.
-      oauth2Proxy = "openamika-auth:4180";
-      rateLimit = {
-        events = 300;
-        window = "1m";
-      };
-    }
-    {
       host = "music.${domain}";
       upstream = "navidrome:4533";
       tailnet = true;
@@ -997,39 +983,6 @@ let
           "\t\t${site.basicAuth.user} ${site.basicAuth.hash}"
           "\t}"
         ]
-        # OAUTH2-PROXY, caddy's documented forward_auth pattern. Its own pages
-        # (/oauth2/*) go straight to it; everything else asks /oauth2/auth
-        # first, and a 401 is sent to sign in, then back. Scoped to tailnet
-        # peers like basic_auth above, so kuma's health check and the
-        # outsider abort are untouched. forward_auth sorts before handle, so
-        # the matcher's `not path` is what keeps the sign-in pages reachable.
-        #
-        # ponytail: `rd={uri}` is unescaped, so a query after the first `&`
-        # is lost on the way back, as with Anubis's redir above.
-        ++ lib.optionals (site ? oauth2Proxy) (
-          [ "\t@oauth2Pages {" ]
-          ++ lib.optional (site.tailnet or false) "\t\tremote_ip ${tailnetCidr}"
-          ++ [
-            "\t\tpath /oauth2/*"
-            "\t}"
-            "\thandle @oauth2Pages {"
-            "\t\treverse_proxy ${site.oauth2Proxy}"
-            "\t}"
-            "\t@signIn {"
-          ]
-          ++ lib.optional (site.tailnet or false) "\t\tremote_ip ${tailnetCidr}"
-          ++ [
-            "\t\tnot path /oauth2/*"
-            "\t}"
-            "\tforward_auth @signIn ${site.oauth2Proxy} {"
-            "\t\turi /oauth2/auth"
-            "\t\t@signedOut status 401"
-            "\t\thandle_response @signedOut {"
-            "\t\t\tredir * /oauth2/start?rd={uri} 302"
-            "\t\t}"
-            "\t}"
-          ]
-        )
         ++ (
           if site ? root then
             [ "\troot * ${site.root}" ]

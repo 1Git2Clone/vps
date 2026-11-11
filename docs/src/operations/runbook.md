@@ -89,7 +89,7 @@ backup excludes the world volumes and this job exists.
 ## Minecraft worlds by hand
 
 Worlds start when someone joins and stop ten minutes after the last player
-leaves (see [Services](../architecture/services.md#high-memory-usage-programs-at-most-two-at-once)).
+leaves (see [Services](../architecture/services.md#worlds-on-demand-at-most-two-at-once)).
 By hand, it is plain systemd, and the cap of two still applies:
 
 ```sh

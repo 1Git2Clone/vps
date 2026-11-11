@@ -30,12 +30,6 @@ pkgs.testers.runNixOSTest {
       ];
 
       minecraftCap.worlds = worlds;
-      highMemory.programs.docker-openamika.slots = 2;
-      users.users.amika-test = {
-        isSystemUser = true;
-        group = "amika-test";
-      };
-      users.groups.amika-test = { };
       minecraftCap.alwaysOnWorlds = [ "horizon" ];
 
       environment.systemPackages = [ pkgs.curl ];
@@ -44,7 +38,6 @@ pkgs.testers.runNixOSTest {
         lib.genAttrs (map (w: "docker-${w}") worlds) (_: {
           serviceConfig = {
             ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
-            ExecStop = "${pkgs.coreutils}/bin/sleep 3";
             # As on the box (modules/containers/default.nix): a refused start
             # must not turn into a retry loop.
             Restart = "always";
@@ -52,11 +45,6 @@ pkgs.testers.runNixOSTest {
           };
         })
         // {
-          docker-openamika.serviceConfig = {
-            User = "amika-test";
-            ExecStop = "${pkgs.coreutils}/bin/sleep 3";
-            ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
-          };
           docker-horizon = {
             wantedBy = [ "multi-user.target" ];
             serviceConfig.ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
@@ -145,63 +133,6 @@ pkgs.testers.runNixOSTest {
         machine.succeed("systemctl start --no-block docker-w1.service docker-w2.service docker-w3.service")
         machine.sleep(3)
         assert up_count() == 2, up_count()
-
-    with subtest("a world holds one slot and refuses two-slot OpenAmika"):
-        machine.succeed("systemctl stop docker-w1.service docker-w2.service docker-w3.service")
-        assert scale("up", "w1") == "200"
-        machine.succeed("systemctl start docker-openamika.service")
-        assert state("openamika") == "inactive"
-        assert state("w1") == "active"
-        assert machine.succeed("systemctl show -P NRestarts docker-openamika.service").strip() == "0"
-        machine.succeed("systemctl stop docker-w1.service")
-
-    with subtest("OpenAmika occupies both slots and refuses every world"):
-        machine.succeed("systemctl start docker-openamika.service")
-        assert state("openamika") == "active"
-        assert scale("up", "w1") == "409"
-        assert scale("up", "w2") == "409"
-        machine.succeed("systemctl start docker-w3.service")
-        assert state("w3") == "inactive"
-        machine.succeed("systemctl stop docker-openamika.service")
-        assert scale("up", "w1") == "200"
-        assert scale("up", "w2") == "200"
-        machine.succeed("systemctl start docker-openamika.service")
-        assert state("openamika") == "inactive"
-        machine.succeed("systemctl stop docker-w1.service docker-w2.service")
-
-    with subtest("concurrent mixed starts reserve no more than two weighted slots"):
-        machine.succeed("systemctl start --no-block docker-openamika.service docker-w1.service docker-w2.service")
-        machine.sleep(3)
-        amika_up = state("openamika") not in ("inactive", "failed")
-        assert up_count() + 2 * amika_up == 2
-        assert not (amika_up and up_count())
-        machine.succeed("systemctl stop docker-openamika.service docker-w1.service docker-w2.service")
-
-    with subtest("stopping OpenAmika keeps both slots until fully inactive"):
-        machine.succeed("systemctl start docker-openamika.service")
-        machine.succeed("systemctl stop --no-block docker-openamika.service")
-        machine.wait_until_succeeds("systemctl show -P ActiveState docker-openamika.service | grep -qx deactivating")
-        assert scale("up", "w1") == "409"
-        machine.wait_until_succeeds("systemctl show -P ActiveState docker-openamika.service | grep -qx inactive")
-        assert scale("up", "w1") == "200"
-
-    with subtest("a stopping world still blocks two-slot OpenAmika"):
-        machine.succeed("systemctl stop --no-block docker-w1.service")
-        machine.wait_until_succeeds("systemctl show -P ActiveState docker-w1.service | grep -qx deactivating")
-        machine.succeed("systemctl start docker-openamika.service")
-        assert state("openamika") == "inactive"
-        machine.wait_until_succeeds("systemctl show -P ActiveState docker-w1.service | grep -qx inactive")
-        machine.succeed("systemctl start docker-openamika.service")
-        assert state("openamika") == "active"
-        machine.succeed("systemctl stop docker-openamika.service")
-
-    with subtest("Minecraft's backup hold does not hold OpenAmika"):
-        machine.succeed("touch /run/minecraft-hold")
-        assert scale("up", "w1") == "409"
-        machine.succeed("systemctl start docker-openamika.service")
-        assert machine.succeed("systemctl show -P ActiveState docker-openamika.service").strip() == "active"
-        machine.succeed("systemctl stop docker-openamika.service")
-        machine.succeed("rm /run/minecraft-hold")
 
     with subtest("anything but a known world's up/down is a 400"):
         assert scale("up", "minecraft-evil") == "400"

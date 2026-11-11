@@ -10,25 +10,14 @@ address in Multiplayer. Java/Fabric mod jars do not run in Horizon.
 
 ## Version and access
 
-The server uses upstream stable **`v0.2.97`**, commit
-`a3acb5f0d2f59d2d5ff21a5aa000809ba1e35e2f`. This is the latest stable
-server tag; upstream now publishes newer game builds as prerelease Nightlies.
-The desktop client and its launcher are packaged separately in
-`nixos-dotfiles`. Nix patches the Linux binaries' loaders; it does not compile
-Rust. Minecraft Java 26.3 can also connect directly.
+Both sides use the upstream **`nightly-2026-10-30`** game binaries, commit
+`1da354b67a509812c4141b67de2affd6de65c342`. The client's launcher is a separate
+package. Nix patches the Linux binaries' loaders; it does not compile Rust.
 
-`packages/horizon-server.nix` pins the versioned server archive by SHA-256,
-verified against both GitHub's asset digest and upstream's `SHA256SUMS`:
-
-```text
-57422db46533e077277ef1505dcc03805d52d15f3a213200569118c36c5f7cc9
-```
-
-To update, choose the latest stable server tag (exclude launcher tags and
-prereleases), download its archive, and verify both published checksums before
-changing the version and Nix hash. The running server does not update itself:
-rebuild the image and deploy the reviewed change. Review the separately pinned
-client when changing game versions.
+`packages/horizon-server.nix` pins the server archive by SHA-256. To update,
+choose a dated release, verify its checksum against upstream's `SHA256SUMS`,
+and update the matching client pin in `nixos-dotfiles`. The running server
+does not update itself: rebuild the image and deploy the reviewed change.
 
 The server uses **online mode, a whitelist, and an enforced whitelist**.
 Minecraft account authentication happens at Horizon, after mc-router forwards
@@ -40,13 +29,13 @@ every start. No access list is inherited from another world, including during
 recovery. Names, UUIDs and game-derived resources stay out of the public
 repository and Nix store.
 
-The server is always on and outside the shared high memory usage program cap. A
-local native smoke test on 2026-10-31 settled at roughly 290 MiB engine RSS with
-no players; after deployment, Docker reported roughly 252 MiB idle container
-memory and the game reached `Done` in three seconds. These are idle
-measurements, not a multiplayer capacity benchmark. The container has a separate
-**2 GiB memory limit**. Review memory under real play before increasing the
-limit or treating this as a production replacement.
+The server is always on and outside the two-Fabric-world cap. A local native
+smoke test on 2026-10-31 settled at roughly 290 MiB engine RSS with no players;
+after deployment, Docker reported roughly 252 MiB idle container memory and
+the game reached `Done` in three seconds. These are idle measurements, not a
+multiplayer capacity benchmark. The
+container has a separate **2 GiB memory limit**. Review memory under real play
+before increasing the limit or treating this as a production replacement.
 
 ## Deployment and private resources
 

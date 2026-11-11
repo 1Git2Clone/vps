@@ -155,15 +155,6 @@
         key = "searxng/admin_password_hash";
       };
 
-      # === OpenAmika ===
-      # The sign-in: an OAuth2 application registered in Forgejo, and the one
-      # account email allowed through (private, and this repo is public).
-      openamika_oauth_client_id.key = "openamika/oauth_client_id";
-      openamika_oauth_client_secret.key = "openamika/oauth_client_secret";
-      openamika_oauth_cookie_secret.key = "openamika/oauth_cookie_secret";
-      openamika_allowed_email.key = "openamika/allowed_email";
-      openamika_openrouter_api_key.key = "openamika/openrouter_api_key";
-
       # === Minecraft ===
       # One per world: the RCON consoles are separate on purpose, so a
       # password that leaks reaches one world rather than every one.
