@@ -39,6 +39,7 @@
 - [Upgrading a service](operations/upgrades.md)
 - [Failure modes and recovery](operations/recovery.md)
 - [Development](operations/development.md)
+- [Rust CLI scripts: living requirements](operations/rust-scripts.md)
 
 # History
 
