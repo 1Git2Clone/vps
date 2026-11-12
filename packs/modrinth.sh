@@ -94,7 +94,7 @@ $(git log -1 --format='commit %H%n%n%B' "$current")
 EOF
     )"
     if [ -n "$previous" ]; then
-      changelog+="$(printf '\n\n---\n\nDiff since last update: https://git.hu-tao.dev/hutao/vps/compare/%s...%s' "$previous" "$current")"
+      changelog+="$(printf '\n\n---\n\nDiff since last update: https://git.hu-tao.dev/hutao/vps/compare/%s...%s?files=packs' "$previous" "$current")"
     fi
 
     index="$(unzip -p "$file" modrinth.index.json)"
