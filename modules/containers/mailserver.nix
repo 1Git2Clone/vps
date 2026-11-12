@@ -252,7 +252,7 @@ in
       # CVE-2026-109618/109619), and the host kept the 10-21 pull with 8.4.26.
       #
       # Bump with: curl -sS 'https://hub.docker.com/v2/repositories/roundcube/roundcubemail/tags?page_size=20&ordering=last_updated'
-      image = "roundcube/roundcubemail:1.7.5-apache@sha256:a6ef4cff166b5e2056238bb400ca84210bd796c83d859495ab67e60101ff2c55";
+      image = "roundcube/roundcubemail:1.7.6-apache@sha256:d23169b8bbb99b5e75adcd502b627d6f29e60833a7053a12e4ff133468c2e5b4";
 
       environment = {
         ROUNDCUBEMAIL_DEFAULT_HOST = "ssl://${hostname}";
