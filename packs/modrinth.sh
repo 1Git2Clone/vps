@@ -20,7 +20,7 @@ set -euo pipefail
 api=https://api.modrinth.com/v2
 auth=(-H "Authorization: $MODRINTH_TOKEN" -H "User-Agent: hutao/vps (https://git.hu-tao.dev/hutao/vps)")
 version="$(git rev-parse --short HEAD)"
-changelog="$(git log -1 --format=%s)"
+current="$(git rev-parse HEAD)"
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
@@ -45,24 +45,57 @@ for pack in "$@"; do
     }')"
 
   case "$(curl -s -o "$tmp" -w '%{http_code}' "${auth[@]}" "$api/project/$slug")" in
-    200) id="$(jq -r .id "$tmp")" status="$(jq -r .status "$tmp")" ;;
-    404)
-      data="$(jq --arg slug "$slug" --arg host "$host" '. + {
+  200) id="$(jq -r .id "$tmp")" status="$(jq -r .status "$tmp")" ;;
+  404)
+    data="$(jq --arg slug "$slug" --arg host "$host" '. + {
         project_type: "modpack", slug: $slug, title: $host,
         categories: ["multiplayer"], license_id: "MIT", source_url: "https://git.hu-tao.dev/hutao/vps",
         is_draft: true, requested_status: "unlisted", initial_versions: []
       }' <<<"$meta")"
-      id="$(curl -sS --fail-with-body "${auth[@]}" -F "data=$data" "$api/project" | jq -r .id)"
-      status=draft
-      echo "$pack: created project $slug ($id)"
-      ;;
-    *) cat "$tmp" >&2; exit 1 ;;
+    id="$(curl -sS --fail-with-body "${auth[@]}" -F "data=$data" "$api/project" | jq -r .id)"
+    status=draft
+    echo "$pack: created project $slug ($id)"
+    ;;
+  *)
+    cat "$tmp" >&2
+    exit 1
+    ;;
   esac
 
   sha512="$(sha512sum "$file" | cut -d' ' -f1)"
   if [ "$(curl -s -o /dev/null -w '%{http_code}' "${auth[@]}" "$api/version_file/$sha512?algorithm=sha512")" = 200 ]; then
     echo "$pack: $name is already on Modrinth"
   else
+    # Compare with this pack's latest published release, not HEAD's parent.
+    curl -sS --fail-with-body -o "$tmp" "${auth[@]}" "$api/project/$id/version" ||
+      {
+        cat "$tmp" >&2
+        exit 1
+      }
+    previous_version="$(jq -r '
+      [.[] | select(.version_type == "release")]
+      | sort_by(.date_published) | last | .version_number // empty
+    ' "$tmp")"
+    previous=
+    if [ -n "$previous_version" ]; then
+      previous_short="${previous_version##*-}"
+      if [[ ! "$previous_short" =~ ^[0-9a-f]{7,40}$ ]] ||
+        ! previous="$(git rev-parse --verify "$previous_short^{commit}")"; then
+        echo "$pack: cannot resolve published version $previous_version to a local commit; fetch its Git history" >&2
+        exit 1
+      fi
+    fi
+    changelog="$(
+      cat <<EOF
+\`\`\`txt
+$(git log -1 --format='commit %H%n%n%B' "$current")
+\`\`\`
+EOF
+    )"
+    if [ -n "$previous" ]; then
+      changelog+="$(printf '\n\n---\n\nDiff since last update: https://git.hu-tao.dev/hutao/vps/compare/%s...%s' "$previous" "$current")"
+    fi
+
     index="$(unzip -p "$file" modrinth.index.json)"
     data="$(jq -n --arg id "$id" --arg v "$(jq -r .dependencies.minecraft <<<"$index")-$version" \
       --arg log "$changelog" --argjson deps "$(jq .dependencies <<<"$index")" '{
@@ -73,12 +106,18 @@ for pack in "$@"; do
         file_parts: ["file"], primary_file: "file"
       }')"
     curl -sS --fail-with-body -o "$tmp" "${auth[@]}" -F "data=$data" -F "file=@$file;filename=$name.mrpack" "$api/version" ||
-      { cat "$tmp" >&2; exit 1; }
+      {
+        cat "$tmp" >&2
+        exit 1
+      }
     echo "$pack: uploaded $name"
   fi
 
   curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-    -d "$meta" "$api/project/$id" || { cat "$tmp" >&2; exit 1; }
+    -d "$meta" "$api/project/$id" || {
+    cat "$tmp" >&2
+    exit 1
+  }
 
   # Still a draft (new, or a run that died before this): send it to review.
   # Modrinth answers a project that fails its publishing checklist with a bare
