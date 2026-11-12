@@ -106,6 +106,8 @@ in
       FORGEJO__admin__DISABLE_REGULAR_ORG_CREATION = "true";
       FORGEJO__actions__ENABLED = "true";
       FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION = "false";
+      FORGEJO__openid__ENABLE_OPENID_SIGNIN = "false";
+      FORGEJO__openid__ENABLE_OPENID_SIGNUP = "false";
 
       # Crawlers walking every commit's /archive/ link made Forgejo build a
       # tarball per request: 2 GB to 5 GB of RAM in ~30 minutes (2026-11-07).
