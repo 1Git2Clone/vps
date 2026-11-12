@@ -78,10 +78,11 @@ for pack in "$@"; do
     ' "$tmp")"
     previous=
     if [ -n "$previous_version" ]; then
-      previous_short="${previous_version##*-}"
-      if [[ ! "$previous_short" =~ ^[0-9a-f]{7,40}$ ]] ||
-        ! previous="$(git rev-parse --verify "$previous_short^{commit}")"; then
-        echo "$pack: cannot resolve published version $previous_version to a local commit; fetch its Git history" >&2
+      # Forgejo resolves the published hash in the comparison URL; no local
+      # history is needed, even when releases skip commits.
+      previous="${previous_version##*-}"
+      if [[ ! "$previous" =~ ^[0-9a-f]{7,40}$ ]]; then
+        echo "$pack: published version $previous_version has no valid commit hash" >&2
         exit 1
       fi
     fi
