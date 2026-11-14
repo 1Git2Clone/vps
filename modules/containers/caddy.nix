@@ -559,6 +559,13 @@ let
       loginMatch = "path /auth/login";
     }
     {
+      host = "sillytavern.${domain}";
+      upstream = "sillytavern:8000";
+      tailnet = true;
+      healthPath = "/";
+      loginMatch = "path /api/users/login";
+    }
+    {
       host = "search.${domain}";
       upstream = "searxng:8080";
       tailnet = true;

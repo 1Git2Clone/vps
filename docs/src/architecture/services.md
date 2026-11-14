@@ -12,6 +12,10 @@ service under `modules/containers/`. Two conventions hold across all of them
   — which is what the old Ansible setup's `recreate: always` was working
   around.
 
+SillyTavern is an exception to the read-only config convention: upstream
+copies and migrates `config.yaml` at startup. Its config lives in a named
+volume; Nix-managed environment variables override the deployment settings.
+
 Restart policy is forced to `always`, and logs go to the journal — never
 `json-file`, which would put unbounded logs on the disk and break the forgejo
 jail that reads the journal.
@@ -29,6 +33,7 @@ jail that reads the journal.
 | `navidrome`        | `127.0.0.1:4533`, reached only through caddy at `music.`, on the tailnet listener                                                                                                                                                                                                                                                           |
 | `kuma`             | proxy network only, reached at `status.`; the admin socket only on the tailnet copy of that name                                                                                                                                                                                                                                            |
 | `searxng`          | proxy network only, reached at `search.` on the tailnet listener, behind `basic_auth` with caddy `rate_limit` in front of the bcrypt                                                                                                                                                                                                        |
+| `sillytavern`      | proxy network only, reached at `sillytavern.` on the tailnet listener; only Caddy's fixed IP is allow-listed, with user accounts enabled                                                                                                                                                                                                    |
 | `dozzle`           | `dozzle.` over the tailnet, and still 8080 directly — the direct port is deliberate, since this is what you open when caddy is the broken part                                                                                                                                                                                              |
 | `grafana`          | host networking, :3000, tailnet only; also `grafana.`, which caddy reaches at the docker bridge address because host networking is invisible to docker's DNS                                                                                                                                                                                |
 | `tempo`            | host networking, OTLP 4317/4318 bound to `0.0.0.0`; kept private by the firewall's input chain, not by the bind address                                                                                                                                                                                                                     |
@@ -128,6 +133,22 @@ It is still caddy 2.11.4 — the version tracks nixpkgs, which matches the tag
 the official image used — and keeps the full container hardening: non-root uid
 from `ids.nix`, read-only rootfs, `--cap-drop=ALL`, and tmpfs for `/data`,
 `/config` and `/tmp`.
+
+## SillyTavern first use
+
+Open `https://sillytavern.hu-tao.dev` over Tailscale after deployment. User
+accounts are enabled; set a password on the default account in the account
+settings on first use. In API Connections, select **Chat Completion**, then
+**OpenRouter**, enter the API key, connect and select
+[`deepseek/deepseek-v4.1-flash-1017`](https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017).
+The token's example SOPS entry is `sillytavern/openrouter_api_key` in
+`secrets.example.yaml`. It is not automatically injected into SillyTavern;
+enter it in the UI. This container is a frontend and does not run a model on
+the VPS.
+
+Configuration, user data (including chats and provider credentials), server
+plugins and global UI extensions each live in a `sillytavern_*` Docker volume.
+They are included in the existing daily restic backup automatically.
 
 ## Images are pinned where the tag moves
 

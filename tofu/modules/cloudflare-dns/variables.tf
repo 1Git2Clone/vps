@@ -68,7 +68,7 @@ variable "tailnet_subdomains" {
     record of their own to issue it.
   EOT
   type        = set(string)
-  default     = ["dozzle", "grafana", "music", "search", "syncthing"]
+  default     = ["dozzle", "grafana", "music", "search", "sillytavern", "syncthing"]
 }
 
 variable "dkim_cloudflare_key" {

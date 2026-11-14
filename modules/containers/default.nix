@@ -112,6 +112,7 @@ let
     searxng = "512m";
     serenity-bot-0 = "2g";
     serenity-redis = "256m";
+    sillytavern = "1g";
     tempo = "1g";
     webmail = "512m";
   };
@@ -170,6 +171,7 @@ in
     ./navidrome.nix
     ./searxng.nix
     ./serenity-bot.nix
+    ./sillytavern.nix
     ./tempo.nix
   ];
 

@@ -39,6 +39,7 @@
         # reachable — see modules/containers/caddy.nix.
         "dozzle"
         "grafana"
+        "sillytavern"
         "syncthing"
       ];
       description = ''
