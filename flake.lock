@@ -140,7 +140,12 @@
         "disko": "disko",
         "mcopts": "mcopts",
         "nixpkgs": "nixpkgs",
-        "sops-nix": "sops-nix"
+        "sops-nix": "sops-nix",
+        "st-dice": "st-dice",
+        "st-notebook": "st-notebook",
+        "st-promptinspect": "st-promptinspect",
+        "st-quickpersona": "st-quickpersona",
+        "st-topbar": "st-topbar"
       }
     },
     "sops-nix": {
@@ -160,6 +165,86 @@
       "original": {
         "owner": "Mic92",
         "repo": "sops-nix",
+        "type": "github"
+      }
+    },
+    "st-dice": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1754079377,
+        "narHash": "sha256-OoK9M7/XmvKm/u6Ss5mstdwPxxBhK1g7Lb/+Q1tI3Y4=",
+        "owner": "SillyTavern",
+        "repo": "Extension-Dice",
+        "rev": "b4047508a1191ba3b32cb20f64ebc5f7877d689b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SillyTavern",
+        "repo": "Extension-Dice",
+        "type": "github"
+      }
+    },
+    "st-notebook": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1775426738,
+        "narHash": "sha256-dCIj30ckaGYjZGIP7NnrN/HQRIqBc+bKPfSXzMj0Fvc=",
+        "owner": "SillyTavern",
+        "repo": "Extension-Notebook",
+        "rev": "4737cd36d5f53cacc76203dd6dbcb673bafe13b4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SillyTavern",
+        "repo": "Extension-Notebook",
+        "type": "github"
+      }
+    },
+    "st-promptinspect": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767953322,
+        "narHash": "sha256-ji2watNXWfoAVjUVa4Y4P3rgs+uLqR8O/JGvendyPXM=",
+        "owner": "SillyTavern",
+        "repo": "Extension-PromptInspector",
+        "rev": "97a9fd90afbc156db27478e9097b143dc27b9c7a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SillyTavern",
+        "repo": "Extension-PromptInspector",
+        "type": "github"
+      }
+    },
+    "st-quickpersona": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1760298281,
+        "narHash": "sha256-tcpEZ1NQpizv6r+GVOItxtuKNj5qx7xM9TOVJvwOMFg=",
+        "owner": "SillyTavern",
+        "repo": "Extension-QuickPersona",
+        "rev": "5509fb6bee903c833683cb860fbf437d4479b1cb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SillyTavern",
+        "repo": "Extension-QuickPersona",
+        "type": "github"
+      }
+    },
+    "st-topbar": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1749843519,
+        "narHash": "sha256-WWAijTFpfzR5/z4MlNKIpRmQhlbjhxmTJ3s4dAal7qE=",
+        "owner": "SillyTavern",
+        "repo": "Extension-TopInfoBar",
+        "rev": "930be54913d90abd90ebd698ddd81affa924e2e1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "SillyTavern",
+        "repo": "Extension-TopInfoBar",
         "type": "github"
       }
     },

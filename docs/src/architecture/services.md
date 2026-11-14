@@ -150,6 +150,27 @@ Configuration, user data (including chats and provider credentials), server
 plugins and global UI extensions each live in a `sillytavern_*` Docker volume.
 They are included in the existing daily restic backup automatically.
 
+### Official extensions
+
+Prompt Inspector, Quick Persona, Notebook, Chat Top Bar and D&D Dice are
+installed globally from the SillyTavern organization's repositories. Their
+`st-*` flake inputs pin the sources in `flake.lock`; Notebook's repository
+already includes its built JavaScript. No server plugins are enabled.
+
+Before the container starts, Nix copies each source into its own writable
+directory in `sillytavern_extensions`, with a `.nix-src` marker. An unchanged
+pin leaves the entire directory intact, including files the extension creates.
+**Changing an extension's pin replaces its directory, including local files.**
+Those files are included in daily restic snapshots; restore them from a
+snapshot if needed after an upgrade. User settings, personas and chats remain
+in the separate data volume and are never seeded or tracked in Git.
+
+Updates go through `nix flake update` and deployment. Managed manifests have
+`auto_update` disabled, and these source copies have no `.git` directory, so
+the in-app updater cannot update them. UI-installed extension directories are
+left alone; a name collision makes startup fail instead of overwriting one.
+Removing an input from the managed set leaves its installed directory intact.
+
 ## Images are pinned where the tag moves
 
 Most images here are `repo:tag` on a release tag, which is both a version and a

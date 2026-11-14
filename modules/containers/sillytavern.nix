@@ -1,9 +1,48 @@
 # ==============================================================================
 # SillyTavern — chat frontend, reached only through the tailnet Caddy listener
 # ==============================================================================
-{ config, ... }:
-
 {
+  config,
+  lib,
+  pkgs,
+  sillytavernExtensions,
+  ...
+}:
+
+let
+  # Copy rather than symlink: neither the Nix store nor links into it are
+  # available inside the container, and extensions may write beside their code.
+  seeds = pkgs.runCommand "sillytavern-extension-seeds" { nativeBuildInputs = [ pkgs.jq ]; } (
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (name: src: ''
+        mkdir -p "$out/${name}"
+        cp -R ${src}/. "$out/${name}/"
+        chmod -R u+w "$out/${name}"
+        jq '.auto_update = false' "$out/${name}/manifest.json" > "$out/${name}/manifest.json.tmp"
+        mv "$out/${name}/manifest.json.tmp" "$out/${name}/manifest.json"
+        printf '%s\n' '${src}' > "$out/${name}/.nix-src"
+      '') sillytavernExtensions
+    )
+  );
+  docker = "${config.virtualisation.docker.package}/bin/docker";
+in
+{
+  # Runs while the container is stopped, before Docker starts it. Inspect the
+  # volume rather than assuming Docker's data-root. Copies are owned by root,
+  # matching this image's current default runtime user; no ownership migration
+  # of the already-deployed user data is needed.
+  systemd.services.docker-sillytavern.preStart = lib.mkBefore ''
+    ${docker} volume create sillytavern_extensions >/dev/null
+    extensionRoot="$(${docker} volume inspect --format '{{.Mountpoint}}' sillytavern_extensions)"
+    ${pkgs.coreutils}/bin/env PATH=${
+      lib.makeBinPath [
+        pkgs.coreutils
+        pkgs.diffutils
+      ]
+    } \
+      ${pkgs.bash}/bin/bash ${../../scripts/seed-sillytavern-extensions.sh} ${seeds} "$extensionRoot"
+  '';
+
   virtualisation.oci-containers.containers.sillytavern = {
     image = "ghcr.io/sillytavern/sillytavern:1.19.0@sha256:eef27ff0c7961f1a2f488400f581f48ff38f8b910c5d3b8d389138d71791bb14";
 

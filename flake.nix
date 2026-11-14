@@ -19,6 +19,28 @@
       url = "git+https://git.hu-tao.dev/hutao/mcopts";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Official SillyTavern UI extensions. Sources are copied into a writable
+    # Docker volume, and refreshed only when their lockfile pins change.
+    st-promptinspect = {
+      url = "github:SillyTavern/Extension-PromptInspector";
+      flake = false;
+    };
+    st-quickpersona = {
+      url = "github:SillyTavern/Extension-QuickPersona";
+      flake = false;
+    };
+    st-notebook = {
+      url = "github:SillyTavern/Extension-Notebook";
+      flake = false;
+    };
+    st-topbar = {
+      url = "github:SillyTavern/Extension-TopInfoBar";
+      flake = false;
+    };
+    st-dice = {
+      url = "github:SillyTavern/Extension-Dice";
+      flake = false;
+    };
   };
 
   outputs =
@@ -30,7 +52,7 @@
       deploy-rs,
       mcopts,
       ...
-    }:
+    }@inputs:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -64,6 +86,15 @@
             sops-nix.nixosModules.sops
             # The packs' options go through mcopts; see packs/mrpack.nix.
             { _module.args.mcopts = mcopts.packages.${system}.default; }
+            {
+              _module.args.sillytavernExtensions = {
+                Extension-PromptInspector = inputs.st-promptinspect;
+                Extension-QuickPersona = inputs.st-quickpersona;
+                Extension-Notebook = inputs.st-notebook;
+                Extension-TopInfoBar = inputs.st-topbar;
+                Extension-Dice = inputs.st-dice;
+              };
+            }
           ]
           ++ extraModules;
         };
@@ -326,6 +357,21 @@
               # options.txt Minecraft would throw away (mcopts check).
               // nixpkgs.lib.mapAttrs' (k: v: nixpkgs.lib.nameValuePair "${k}-options" v.withOptions) mrpacks
               // {
+                sillytavern-extension-seeding =
+                  pkgs.runCommand "sillytavern-extension-seeding"
+                    {
+                      nativeBuildInputs = [
+                        pkgs.bash
+                        pkgs.coreutils
+                        pkgs.diffutils
+                        pkgs.findutils
+                      ];
+                    }
+                    ''
+                      bash ${./tests/seed-sillytavern-extensions.sh} ${./scripts/seed-sillytavern-extensions.sh}
+                      touch $out
+                    '';
+
                 # Same attribute name deployChecks used, so CI's
                 # `nix build .#checks.x86_64-linux.deploy-schema` is unchanged.
                 deploy-schema = pkgs.runCommand "deploy-schema" { } ''
