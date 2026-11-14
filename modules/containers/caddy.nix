@@ -563,6 +563,13 @@ let
       upstream = "sillytavern:8000";
       tailnet = true;
       healthPath = "/";
+      # The first load fetches hundreds of separate frontend/extension assets.
+      # The default 300/min blocked /api/settings/save during persona setup.
+      # Leave room for reloads; the login endpoint has its own tighter limit.
+      rateLimit = {
+        events = 1200;
+        window = "1m";
+      };
       loginMatch = "path /api/users/login";
     }
     {
