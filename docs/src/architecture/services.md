@@ -141,10 +141,9 @@ accounts are enabled; set a password on the default account in the account
 settings on first use. In API Connections, select **Chat Completion**, then
 **OpenRouter**, enter the API key, connect and select
 [`deepseek/deepseek-v4.1-flash-1017`](https://openrouter.ai/deepseek/deepseek-v4.1-flash-1017).
-The token's example SOPS entry is `sillytavern/openrouter_api_key` in
-`secrets.example.yaml`. It is not automatically injected into SillyTavern;
-enter it in the UI. This container is a frontend and does not run a model on
-the VPS.
+The API key, model and connection settings are managed in SillyTavern's UI
+and persist in the backed-up data volume. This container is a frontend and
+does not run a model on the VPS.
 
 Configuration, user data (including chats and provider credentials), server
 plugins and global UI extensions each live in a `sillytavern_*` Docker volume.
