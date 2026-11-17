@@ -37,6 +37,7 @@
         # Tailnet-only vhosts. They belong on the same certificate as the rest
         # because DNS-01 never needs a name to resolve publicly or a port to be
         # reachable — see modules/containers/caddy.nix.
+        "auth"
         "dozzle"
         "grafana"
         "sillytavern"
@@ -426,6 +427,25 @@
         the revert of #9. A wrong value here costs one failed container start
         and a rollback. Pinning it costs a full container restart on the box,
         every deploy that touches this line.
+      '';
+    };
+
+    forgejoLoginEverywhere = lib.mkOption {
+      type = lib.types.nonEmptyListOf lib.types.str;
+      default = [ "hutao" ];
+      description = ''
+        Forgejo USERNAMES let into EVERY site gated with `forgejoLogin` in
+        modules/containers/caddy.nix. A site's own `forgejoLogin` list adds
+        users for that site only.
+
+        Never empty, and that is load-bearing: a site's allowlist reaches
+        oauth2-proxy as `?allowed_emails=`, and an EMPTY one there means
+        "anyone signed in", which is every Forgejo account. With this list
+        always part of it, no gated site can send an empty one.
+
+        Exact and case-sensitive, as Forgejo spells the name. Usernames are
+        public on git.<domain> already, so listing them here leaks nothing
+        but who may use what.
       '';
     };
   };

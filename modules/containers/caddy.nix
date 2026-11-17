@@ -578,36 +578,16 @@ let
       tailnet = true;
       healthPath = "/healthz";
 
-      # searxng has no accounts of its own. Tailnet-only now, so this is the
-      # second layer rather than the only one — see
-      # modules/containers/searxng.nix.
-      #
-      # `{$VAR}` is caddy's own environment substitution, done when it loads
-      # this file. The values are deliberately not Nix strings: this Caddyfile
-      # becomes a world-readable store path, and a bcrypt hash in the store is
-      # a bcrypt hash anyone with shell on the box can start cracking.
-      basicAuth = {
-        user = "{$SEARXNG_USER}";
-        hash = "{$SEARXNG_PASSWORD_HASH}";
-      };
-
-      # Lower than the default: the site-wide zone returns 429 BEFORE
-      # basic_auth runs its bcrypt (see the global `order` below), so a
-      # password flood cannot turn cost-14 verifications into CPU exhaustion.
-      # In-process: a misconfig throttles requests, it cannot take the box
-      # down the way the forward-chain fail2ban jail did.
-      #
-      # events/window is a KNOB, not a law. It counts EVERY request to the
-      # site, and image_proxy means one results page pulls many thumbnails
-      # through caddy, so this has to sit well above a human's page-load burst
-      # while still being far under a flood. Caddy caches a successful
-      # verification, so a logged-in user rarely re-pays bcrypt anyway; the
-      # thing being limited is mostly the attacker who never authenticates.
-      # Tune against real 429s in the access log if browsing ever trips it.
-      rateLimit = {
-        events = 120;
-        window = "1m";
-      };
+      # searxng has no accounts of its own; see `forgejoLogin` below.
+      forgejoLogin = [ ];
+    }
+    {
+      # The sign-in gate itself: Forgejo's one registered callback, and
+      # sign-out. See modules/containers/oauth2-proxy.nix.
+      host = "auth.${domain}";
+      upstream = "oauth2-proxy:4180";
+      tailnet = true;
+      healthPath = "/ping";
     }
     {
       host = "dozzle.${domain}";
@@ -733,10 +713,12 @@ let
         "\t# See the `tls` directive on each site below."
         "\tadmin off"
       ]
-      # rate_limit is an ordered HTTP handler from a plugin, and it must run
-      # before basic_auth or the 429 would come only after the bcrypt it exists
-      # to save. Emitted only when a site actually uses it, which with the
-      # opt-out default is whenever any site has not opted out.
+      # rate_limit is an HTTP handler from a plugin and has no default
+      # position, so caddy refuses it without an `order`. Before basic_auth is
+      # early enough to run ahead of forward_auth and every handle, so a flood
+      # is braked before it costs anything. Emitted only when a site actually
+      # uses it, which with the opt-out default is whenever any site has not
+      # opted out.
       ++ lib.optionals anyRateLimit [
         "\torder rate_limit before basic_auth"
       ]
@@ -903,7 +885,6 @@ let
         # everyone who is neither kuma nor a tailnet peer is cut off.
         ++ lib.optionals (site.tailnet or false) (
           [
-            "\t@tailnetPeer remote_ip ${tailnetCidr}"
             "\t@kuma vars {tls_client_subject} \"${kumaClientSubject}\""
             "\t@outsider {"
             "\t\tnot remote_ip ${tailnetCidr}"
@@ -940,6 +921,35 @@ let
             "\tabort @outsider"
           ]
         )
+        # FORGEJO SIGN-IN, on a site that sets `forgejoLogin` (a list of extra
+        # usernames, `[ ]` for none). The flow and the reasons are in
+        # modules/containers/oauth2-proxy.nix; this is caddy's half.
+        #
+        # Asked of TAILNET PEERS ONLY, and it has to be said: forward_auth
+        # sorts before `handle` and `abort`, so unscoped it would send kuma to
+        # Forgejo instead of its health check, and answer an outsider with a
+        # sign-in redirect before the gate above aborts them.
+        #
+        # The allowlist is infra.forgejoLoginEverywhere plus the site's own,
+        # so never empty — an empty `allowed_emails` admits any account.
+        # Not signed in is 401, sent on to /oauth2/start; signed in but not
+        # listed is 403, passed back as it is. https:// is literal because
+        # every tailnet URL is 443, whatever port this listener has.
+        ++ lib.optionals (site ? forgejoLogin) [
+          "\t@forgejoLogin remote_ip ${tailnetCidr}"
+          "\tforward_auth @forgejoLogin oauth2-proxy:4180 {"
+          "\t\turi /oauth2/auth?allowed_emails=${
+            lib.concatStringsSep "," (lib.unique (config.infra.forgejoLoginEverywhere ++ site.forgejoLogin))
+          }"
+          "\t\t@signIn status 401"
+          "\t\thandle_response @signIn {"
+          "\t\t\trewrite * /oauth2/start"
+          "\t\t\treverse_proxy oauth2-proxy:4180 {"
+          "\t\t\t\theader_up X-Auth-Request-Redirect https://{host}{http.request.orig_uri}"
+          "\t\t\t}"
+          "\t\t}"
+          "\t}"
+        ]
         # Response headers, each entry scoped to a path or a path regexp. In a
         # `route` they run in the order written, so a later entry overrides an
         # earlier one; outside one caddy sorts them by path and the catch-all
@@ -985,18 +995,6 @@ let
           "\t\tredir * https://${r.to}{uri} 308"
           "\t}"
         ]) (site.redirects or [ ])
-        # `basic_auth`, not `basicauth`: renamed in caddy 2.8, and the old
-        # spelling is a hard config-load error rather than a warning.
-        #
-        # On a tailnet site only tailnet peers are asked for it: basic_auth
-        # sorts before handle and abort, so unscoped it would answer an
-        # outsider 401 (and take its password guesses) before the gate runs,
-        # and would ask kuma for a password it no longer needs.
-        ++ lib.optionals (site ? basicAuth) [
-          "\tbasic_auth${lib.optionalString (site.tailnet or false) " @tailnetPeer"} {"
-          "\t\t${site.basicAuth.user} ${site.basicAuth.hash}"
-          "\t}"
-        ]
         ++ (
           if site ? root then
             [ "\troot * ${site.root}" ]
@@ -1071,23 +1069,19 @@ let
   );
 in
 {
-  # The credential for the basic_auth site above. An environment file rather
-  # than a mounted one on purpose: docker reads --env-file at container START
-  # and copies the values in, so it resolves the sops generation symlink each
-  # time. A *mounted* template would be resolved once and then pinned to a
-  # stale inode — the problem dozzle-users.service exists to work around.
-  sops.templates."caddy.env".content = ''
-    SEARXNG_USER=${config.sops.placeholder.searxng_admin_user}
-    SEARXNG_PASSWORD_HASH=${config.sops.placeholder.searxng_admin_password_hash}
-  '';
+  # The sign-in is scoped to tailnet peers (see `forgejoLogin` above), so on a
+  # PUBLIC site every non-tailnet visitor would skip it entirely. auth.<domain>
+  # is tailnet-only as well. Gating a public site means moving both first.
+  assertions = map (site: {
+    assertion = site.tailnet or false;
+    message = "caddy: ${site.host} sets forgejoLogin but is not a tailnet site; the sign-in only covers tailnet peers.";
+  }) (lib.filter (site: site ? forgejoLogin) sites);
 
   virtualisation.oci-containers.containers.caddy = {
     # Built locally rather than pulled — caddy 2.11.4 plus the rate-limit
     # module. imageFile loads the tarball; image just names what it loaded.
     image = "caddy-ratelimit:${pkgs.caddy.version}";
     imageFile = caddyImage;
-
-    environmentFiles = [ config.sops.templates."caddy.env".path ];
 
     ports = [
       "80:80"

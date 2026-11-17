@@ -12,7 +12,7 @@ supports.
 | **kuma**       | **no seeding mechanism** — the first visitor creates the admin account and the route then closes. Create it immediately after the first deploy.    |
 | syncthing      | GUI password from sops via `guiPasswordFile`, declared rather than inherited                                                                       |
 | pages-hook     | HMAC of the Forgejo system webhook; the secret is in sops and must match the hook's Secret field                                                   |
-| **searxng**    | **no accounts at all** — caddy's `basic_auth` is the entire access control; the bcrypt hash is a sops secret handed to caddy via an env file       |
+| **searxng**    | **no accounts at all** — behind the shared Forgejo sign-in; only `forgejoLoginEverywhere` users, as no site list is set                            |
 
 ## Site administration is tailnet-only
 
@@ -43,13 +43,14 @@ the runner restriction, so a bare `respond` there would never run.
 ## Rate limiting, every site by default
 
 Every caddy site is rate-limited unless it sets `rateLimit = null`, and none
-does. It used to be opt-in, and only `search.` had opted in, which left the
-logins on `music.`, `mail.` and `git.` open to guessing at whatever speed each
-app allowed — Forgejo allows any. Up to five zones per site, all but two keyed
-on the client IP (`modules/containers/caddy.nix`):
+does. It used to be opt-in, and only `search.` had opted in (for a bcrypt that
+is gone now), which left the logins on `music.`, `mail.` and `git.` open to
+guessing at whatever speed each app allowed — Forgejo allows any. Up to five
+zones per site, all but two keyed on the client IP
+(`modules/containers/caddy.nix`):
 
 - **Site-wide** — a flood brake: 300 a minute by default; `git.` 600;
-  `music.`, `grafana.` and `syncthing.` 1200; `search.` 120. Private ranges,
+  `music.`, `grafana.` and `syncthing.` 1200. Private ranges,
   this host's public address and the CI runners are exempt, so kuma, renovate,
   pages-pull and CI are never throttled.
 - **Login** — 10 POSTs a minute to the login request, with **no** exemptions:
@@ -76,8 +77,8 @@ on the client IP (`modules/containers/caddy.nix`):
   a real user costs a password hash. Exempt like the site-wide zone.
 
 These are one layer, not the only one. Roundcube also locks an account after 3
-failures a minute; Navidrome 0.64.1 throttles failed Subsonic logins itself;
-searxng's bcrypt sits behind the limit. Forgejo has no throttle of its own, so
+failures a minute; Navidrome 0.64.1 throttles failed Subsonic logins itself.
+Forgejo has no throttle of its own, so
 two-factor auth on the account is its second layer.
 
 The mail protocols (465, 587, 993) never pass through caddy. Their only
@@ -87,43 +88,54 @@ mounted `fail2ban-jail.cf`, because Roundcube's IMAP logins arrive from a
 docker address — without it, six wrong webmail passwords would ban Roundcube
 itself and take webmail down for everyone.
 
-## searxng, the interesting one
+## Forgejo sign-in, for sites with no accounts
 
-It has no concept of a user, so authentication is the proxy's job — and that
-turns out to have a second-order problem.
+searxng has no concept of a user, so authentication is the proxy's job. Any
+tailnet site can hand that job to the shared gate with one line in its caddy
+site:
+
+```nix
+forgejoLogin = [ ];            # infra.forgejoLoginEverywhere only
+forgejoLogin = [ "friend" ];   # ...plus friend, on this site only
+```
 
 ```mermaid
 flowchart TB
-    c(("client")) --> rl["caddy rate_limit<br/>per client IP"]
-    rl -- "over limit" --> r429["429<br/>before any bcrypt"]
-    rl -- "under limit" --> ba["basic_auth<br/>cost-14 bcrypt"]
-    ba -- "bad" --> r401["401"]
-    ba -- "good" --> sx["searxng"]
-    sx -- "image_proxy<br/>many thumbnails per page" --> rl
+    c(("tailnet client")) --> cd["caddy, gated site<br/>forward_auth"]
+    cd -- "/oauth2/auth?allowed_emails=…" --> op["oauth2-proxy"]
+    op -- "401 no session" --> st["/oauth2/start<br/>(proxied, full URL kept)"]
+    st --> fj["Forgejo login form<br/>git. (public)"]
+    fj -- "code" --> cb["auth./oauth2/callback<br/>cookie on .hu-tao.dev"]
+    cb -- "back to the original URL" --> cd
+    op -- "403 not listed" --> r403["403"]
+    op -- "202 listed" --> up["the site's upstream"]
 
     classDef bad fill:#8c2f2f,stroke:#4d1a1a,color:#fff
-    class r429,r401 bad
+    class r403 bad
 ```
 
-- `search.` is tailnet-only, and caddy's `basic_auth` there is the second
-  layer behind it. The credential is passed through caddy's own
-  `{$VAR}` env substitution from a sops-rendered env file — **not** a Nix
-  string, because the Caddyfile is a world-readable store path and a bcrypt
-  hash there is one anyone with a shell could crack.
-- basic_auth runs a **cost-14 bcrypt on every request**, and searxng's
-  `image_proxy` pulls many thumbnails per results page _through_ caddy — so a
-  password flood could turn bcrypt into CPU exhaustion. caddy's `rate_limit`
-  (the compiled-in module) caps hits per client IP and returns 429 **before**
-  the bcrypt runs, ordered `before basic_auth`.
-
-The choice of an in-process limiter over a fail2ban jail is deliberate, and it
-is the same lesson as
-[the fail2ban blast radius](../operations/recovery.md#the-fail2ban-blast-radius):
-a misconfigured rate limiter throttles requests, it cannot take the box down.
-
-The env file is read by docker at container _start_, so it re-resolves the sops
-generation symlink each time. A _mounted_ template would pin a stale inode —
-see [Secrets](secrets.md#the-stale-symlink-trap).
+- **One instance, one Forgejo app, one sign-in.** The session cookie is on the
+  parent domain, so signing in on one gated site covers all of them. The
+  Forgejo app has one redirect URI, `https://auth.<domain>/oauth2/callback`;
+  gating another site needs no change in Forgejo. Sign out at
+  `auth.<domain>/oauth2/sign_out`.
+- **Any Forgejo account can finish the sign-in** (sign-up is closed, but the
+  renovate bot is an account), so the per-site list is the actual gate. It is
+  `infra.forgejoLoginEverywhere` (`modules/options.nix`, never empty) plus the
+  site's own, sent as `allowed_emails`; an empty one there would admit any
+  account. Usernames are public on `git.` anyway.
+- **Tailnet sites only, enforced.** The check is scoped to tailnet peers so
+  kuma's probe and the outsider abort still run first; on a public site that
+  scope would let everyone else through. An assertion in `caddy.nix` fails the
+  build instead.
+- oauth2-proxy's own calls (token, keys) go to `forgejo:4242` over the proxy
+  bridge. Through the public name they would hairpin into Anubis, which
+  challenges a Go client.
+- It replaced caddy's `basic_auth` on `search.`, whose native browser dialog is
+  the one login a password-manager extension cannot fill.
+- The client and cookie secrets reach oauth2-proxy as an env file, which
+  docker re-reads at container start — see
+  [Secrets](secrets.md#the-stale-symlink-trap).
 
 ## Anubis, every public site
 

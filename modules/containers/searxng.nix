@@ -5,14 +5,14 @@
 # only on the tailnet listener.
 #
 # NOTE ON AUTHENTICATION: searxng has no accounts of its own — no admin user, no
-# login, nothing to seed. Access control is entirely the proxy's job, so the
-# credential for this service lives in caddy's site block as basic_auth and the
-# bcrypt hash is in sops. See modules/containers/caddy.nix.
+# login, nothing to seed. Access control is entirely the proxy's job: the caddy
+# site carries `forgejoLogin`, so the shared sign-in gate
+# (modules/containers/oauth2-proxy.nix) checks every request first.
 #
 # That is also why `limiter` is off below. The limiter exists to keep a PUBLIC
 # instance from being scraped, and it requires a valkey/redis to hold its
 # counters — a whole second container for a site the internet cannot reach and
-# that refuses anyone without the password.
+# that refuses anyone not signed in.
 { config, pkgs, ... }:
 
 let
@@ -49,7 +49,7 @@ let
       # having forgotten to override it.
       base_url: "https://search.${domain}/"
 
-      # See the header. basic_auth in caddy is what stands in for this.
+      # See the header. The sign-in gate is what stands in for this.
       limiter: false
 
       # Images are fetched by searxng and re-served, so a result thumbnail

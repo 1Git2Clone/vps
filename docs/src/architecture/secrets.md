@@ -71,13 +71,13 @@ flowchart TB
 
     subgraph ok["✓ two fixes"]
         f1["copy to a stable path first<br/><code>dozzle-users.service</code><br/><code>mailserver-dkim.service</code>"]
-        f2["pass as an env file<br/>docker re-reads at container start<br/>caddy · cloudflared"]
+        f2["pass as an env file<br/>docker re-reads at container start<br/>oauth2-proxy · cloudflared"]
     end
 ```
 
 Both fixes work because they re-resolve the symlink at container start rather
 than pinning it at mount. The env-file form is the lighter of the two and is
-why `searxng`'s bcrypt hash reaches caddy that way — see
+how the Forgejo sign-in's secrets reach `oauth2-proxy` — see
 [Access control](access-control.md).
 
 ## The runner has no secrets at all

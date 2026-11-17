@@ -108,6 +108,7 @@ let
     mailserver = "1g";
     mc-router = "128m";
     navidrome = "512m";
+    oauth2-proxy = "128m";
     pages-hook = "128m";
     searxng = "512m";
     serenity-bot-0 = "2g";
@@ -169,6 +170,7 @@ in
     ./mc-router.nix
     ./minecraft.nix
     ./navidrome.nix
+    ./oauth2-proxy.nix
     ./searxng.nix
     ./serenity-bot.nix
     ./sillytavern.nix

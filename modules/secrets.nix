@@ -145,14 +145,18 @@
       searxng_secret_key = {
         key = "searxng/secret_key";
       };
-      # Read by CADDY, not by searxng: the service has no accounts of its own,
-      # so basic_auth on the site is the entire access control. See
-      # modules/containers/caddy.nix.
-      searxng_admin_user = {
-        key = "searxng/admin_user";
+
+      # === oauth2-proxy ===
+      # The Forgejo sign-in gate in front of every `forgejoLogin` site. See
+      # modules/containers/oauth2-proxy.nix.
+      oauth2_proxy_client_id = {
+        key = "oauth2_proxy/client_id";
       };
-      searxng_admin_password_hash = {
-        key = "searxng/admin_password_hash";
+      oauth2_proxy_client_secret = {
+        key = "oauth2_proxy/client_secret";
+      };
+      oauth2_proxy_cookie_secret = {
+        key = "oauth2_proxy/cookie_secret";
       };
 
       # === Minecraft ===
