@@ -129,15 +129,20 @@ EOF
     exit 1
   }
 
-  curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-    -d "$meta" "$api/project/$id" || {
+  if ! curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+    -d "$meta" "$api/project/$id"; then
     cat "$tmp" >&2
-    # Modrinth's 400 here has no body; the nags it refused over are in
-    # the project's validation report.
-    curl -sS "${auth[@]}" "${api%/v2}/v3/project/$id/validate" |
-      jq -c '.nags[] | select(.severity == "required")' >&2 || true
-    exit 1
-  }
+    # The v2 route refused with a bare 400 on 2026-11-20, with no required
+    # nag open. v3 gives its reason; retry the text alone there.
+    echo "$pack: v2 edit refused; retrying summary and description on v3" >&2
+    curl -sS --fail-with-body -D /dev/stderr -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+      -d "$(jq '{summary: .description, description: .body}' <<<"$meta")" \
+      "${api%/v2}/v3/project/$id" || {
+      cat "$tmp" >&2
+      exit 1
+    }
+    echo "::warning::$pack: v3 took the summary and description; the sides were not updated"
+  fi
 
   # Still a draft (new, or a run that died before this): send it to review.
   # Modrinth answers a project that fails its publishing checklist with a bare
