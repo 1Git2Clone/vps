@@ -70,4 +70,5 @@ in
     shared = true;
     inherit enforced;
   };
+  mc5 = pack "mc5" "mc5" { shared = true; };
 }

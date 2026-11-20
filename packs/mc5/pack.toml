@@ -1,0 +1,13 @@
+name = "Gemstones Classic (mc5)"
+author = "hutao"
+version = "1.0.0"
+pack-format = "packwiz:1.1.0"
+
+[index]
+file = "index.toml"
+hash-format = "sha256"
+hash = "07186c6a4d6d7552c5d6dd64e0d6950ecfea787d0a3484438caed91503d5efc4"
+
+[versions]
+fabric = "0.20.1"
+minecraft = "26.3"

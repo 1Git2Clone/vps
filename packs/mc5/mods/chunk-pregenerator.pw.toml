@@ -1,0 +1,13 @@
+name = "Chunk Pregenerator"
+filename = "chunk-pregenerator-1.1-26.3.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/3PDHuC6e/versions/72nJQHtR/chunk-pregenerator-1.1-26.3.jar"
+hash-format = "sha512"
+hash = "fe1297a561c5992b74172a8aa6d1d249e9ddbab42f1e15a22c923fea2f5040a0fe1dbfd331bf26ceabf50e5b071f2977f3525915a3eb3b082fd31c30ad33f1b0"
+
+[update]
+[update.modrinth]
+mod-id = "3PDHuC6e"
+version = "72nJQHtR"

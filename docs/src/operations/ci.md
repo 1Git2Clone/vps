@@ -99,7 +99,7 @@ the same boot command as the Option packs workflow:
 
 ```sh
 mkdir -p _pack-builds
-for world in mc1 mc2 mc3 mc4; do
+for world in mc1 mc2 mc3 mc4 mc5; do
   nix build --out-link "_pack-builds/$world" ".#$world-mrpack-with-options"
   nix build --out-link "_pack-builds/$world-server-mods" ".#$world-mrpack-with-options.serverMods"
 done

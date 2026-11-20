@@ -25,6 +25,7 @@
   - [World 2: Zombies](minecraft/worlds/mc2.md)
   - [World 3: Vanilla+](minecraft/worlds/mc3.md)
   - [World 4: Gemstones Lite](minecraft/worlds/mc4.md)
+  - [World 5: Gemstones Classic](minecraft/worlds/mc5.md)
 - [How the servers are set up](minecraft/servers.md)
 - [Working on the packs](minecraft/packs.md)
 - [Horizon trial server](minecraft/horizon.md)

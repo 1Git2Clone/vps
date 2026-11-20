@@ -1,0 +1,96 @@
+hash-format = "sha256"
+
+[[files]]
+file = "mods/alternate-current.pw.toml"
+hash = "086ec970616326d9cbabf8b17597483a6395e2d3ee1c2e8f374b3dd7b13831ae"
+metafile = true
+
+[[files]]
+file = "mods/async.pw.toml"
+hash = "4864f6906d17c30f783af9dc1b171bb5233b7f318bfc8c7d89634e8c18017256"
+metafile = true
+
+[[files]]
+file = "mods/beautified-chat-server.pw.toml"
+hash = "52252304f6157df88a096219369a11875a95ebf70da28704922aa2977fb7caf3"
+metafile = true
+
+[[files]]
+file = "mods/c2me-fabric.pw.toml"
+hash = "f33721c5dd3b6896e1c814ca6f4fb0a7c7bebd6aa925f70e93fbde1c3392c0cf"
+metafile = true
+
+[[files]]
+file = "mods/chunk-pregenerator.pw.toml"
+hash = "f4e8f995445dcc9249cfb02fb49043bd02bfad39e97e9843974b6767bb8f54dc"
+metafile = true
+
+[[files]]
+file = "mods/clientsort.pw.toml"
+hash = "9eaccd646891bab56c425ac4aa14c5a662da64e2239e1616db833a98e2298326"
+metafile = true
+
+[[files]]
+file = "mods/cloth-config.pw.toml"
+hash = "2b9727522c90a979eb9671ad7c5421443d91391b0697d1772146e6bfa19cb3c1"
+metafile = true
+
+[[files]]
+file = "mods/collective.pw.toml"
+hash = "c1dc85ba25b7ab3cb778e589b5336edb6202d75fcb4d82e93fbe2ccb5d472df8"
+metafile = true
+
+[[files]]
+file = "mods/distanthorizons.pw.toml"
+hash = "8cfd619edd7190fdd7f048bc7815193699d0583857f988e421b8e7816167ad25"
+metafile = true
+
+[[files]]
+file = "mods/entityculling.pw.toml"
+hash = "3d70571a3f55ab9d923addc371e87440286436b15141abf1ae780fa90dcbcf7d"
+metafile = true
+
+[[files]]
+file = "mods/fabric-api.pw.toml"
+hash = "fb72a70cb53c63f1da4520c25c8a7d806cc1c733e827016615623b65d751852d"
+metafile = true
+
+[[files]]
+file = "mods/ferrite-core.pw.toml"
+hash = "069d81cab53c0141459ad4d70bcf3e10f17652f24cc62d3b4a0fc2cd2b700871"
+metafile = true
+
+[[files]]
+file = "mods/lithium.pw.toml"
+hash = "bae28aaf888e212a4310264a51e585aa252051fcc2467c309670c7786b923ee5"
+metafile = true
+
+[[files]]
+file = "mods/modmenu.pw.toml"
+hash = "3feb5af047a7aabdcbae76e59f0c6603c61ef093d19c44f6d3ad76b48272a6dc"
+metafile = true
+
+[[files]]
+file = "mods/packet-fixer.pw.toml"
+hash = "ff6f634392e5fefbad2b57257e99472c4d8e07ca348f50f0d01ad729b48e8e45"
+metafile = true
+
+[[files]]
+file = "mods/servercore.pw.toml"
+hash = "4749bc4f6cd6687815cea963182e76e1f7a0679d95da7eed7afcccceee620ff5"
+metafile = true
+
+[[files]]
+file = "mods/tt20.pw.toml"
+hash = "44389002f2d64eea0f7e14c8a1c379af7b652cdf617bee113082e0e89c3bfc42"
+metafile = true
+
+[[files]]
+file = "mods/vmp-fabric.pw.toml"
+hash = "d9d97625ca8e65c474f373012b72c02dc6b8bce909d5acc91561bc4e3d0cb705"
+metafile = true
+
+[[files]]
+file = "mods/yosbr.pw.toml"
+hash = "649c259a4777ba1b544b69d04a79f2b1b0e1a3c520033cc86a3c14d5fa53564a"
+metafile = true

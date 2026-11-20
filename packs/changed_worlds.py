@@ -15,7 +15,7 @@ from pathlib import PurePosixPath
 from subprocess import CalledProcessError, check_output
 from sys import stderr
 
-WORLDS = ("mc1", "mc2", "mc3", "mc4")
+WORLDS = ("mc1", "mc2", "mc3", "mc4", "mc5")
 SHARED_FILES = {
     "flake.nix",
     "flake.lock",

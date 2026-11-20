@@ -1,7 +1,7 @@
 # ==============================================================================
 # Minecraft — Fabric servers
 # ==============================================================================
-# Three worlds, three containers. A world is a /data directory plus the server
+# One container per world. A world is a /data directory plus the server
 # properties around it, so another world is another container on its own
 # volume — never a second mount into the same one.
 #
@@ -20,6 +20,7 @@
 #   minecraft2  mc2    1.21.1    mc2.                     25576             minecraft2_data
 #   minecraft3  mc3    26.2      mc3.                     25577             minecraft3_data
 #   minecraft4  mc4    26.3      mc4.                     25578             minecraft4_data
+#   minecraft5  mc5    26.3      mc5.                     25579             minecraft5_data
 #
 # WHAT A WORLD RUNS IS ITS PACK, packs/<pack>, not a list here. Each is pinned
 # to exact Modrinth versions, and the .mrpack built from it is mounted into the
@@ -57,6 +58,7 @@ let
     "minecraft2"
     "minecraft3"
     "minecraft4"
+    "minecraft5"
   ];
 
   # Docker's default stop grace is 10s. A large world does not finish saving in
@@ -289,6 +291,18 @@ in
       rconPort = 25578;
       maxMemory = "4G";
       motd = "A Fourth Place for Gemstones to Chill";
+    };
+
+    # Fifth world: the old tailscale-hosted 1.21.10 server, moved here with its
+    # world and its server-side mod list, on 26.3, the newest release every
+    # one of those mods supports. See docs/src/minecraft/worlds/mc5.md.
+    minecraft5 = world {
+      name = "minecraft5";
+      image = "itzg/minecraft-server:java25@sha256:d209013e65134d9c6aa0c962e81ddf1214efa733a4eec81d5d079b1b49c0a598";
+      pack = packs.mc5;
+      rconPort = 25579;
+      maxMemory = "4G";
+      motd = "A Fifth Place for Gemstones to Chill";
     };
   };
 

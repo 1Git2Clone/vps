@@ -105,7 +105,7 @@ own `SSH_AUTH_SOCK`. It wakes a sleeping world for the command and puts it back
 to sleep after:
 
 ```sh
-scripts/rcon.sh mc4 whitelist add <name>    # mc1 to mc4
+scripts/rcon.sh mc4 whitelist add <name>    # mc1 to mc5
 scripts/rcon.sh mc1 list
 ```
 

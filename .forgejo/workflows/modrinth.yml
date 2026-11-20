@@ -39,4 +39,4 @@ jobs:
       - name: Upload changed packs
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-        run: nix develop .#ci -c packs/modrinth.sh mc1 mc2 mc3 mc4
+        run: nix develop .#ci -c packs/modrinth.sh mc1 mc2 mc3 mc4 mc5

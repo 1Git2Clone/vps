@@ -98,6 +98,7 @@ whitelisted, then join.
 | world 2 | `mc2.hu-tao.dev` | 1.21.1    | [mc2.hu-tao.dev-1.21.1.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/mc2.hu-tao.dev-1.21.1.mrpack) |
 | world 3 | `mc3.hu-tao.dev` | 26.2      | [mc3.hu-tao.dev-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2.mrpack)     |
 | world 4 | `mc4.hu-tao.dev` | 26.3      | [mc4.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3.mrpack)     |
+| world 5 | `mc5.hu-tao.dev` | 26.3      | [mc5.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc5/mc5.hu-tao.dev-26.3.mrpack)     |
 
 A sleeping world wakes when you join: you are turned away once while it starts,
 so join again a minute later. The full guide, including what to do when the
@@ -198,6 +199,7 @@ Beyond what the Ansible vault held, this port needs:
 | `minecraft2/rcon_password`                            | the second world's console. A separate password on purpose — one leak should not reach both worlds                                                                                                       |
 | `minecraft3/rcon_password`                            | the third world's console, separate for the same reason                                                                                                                                                  |
 | `minecraft4/rcon_password`                            | the fourth world's console, separate for the same reason                                                                                                                                                 |
+| `minecraft5/rcon_password`                            | the fifth   world's console, separate for the same reason                                                                                                                                                |
 | `serenity/bot_token`, `serenity/ai_api_key`           | the Discord bot's gateway token and its DeepSeek key                                                                                                                                                     |
 | `searxng/secret_key`                                  | signs searxng's session cookies; upstream's default is the literal `ultrasecretkey`                                                                                                                      |
 | `oauth2_proxy/*`                                      | the Forgejo sign-in gate's OIDC client (id and secret) and cookie secret; `secrets.example.yaml` says how to make each                                                                                   |

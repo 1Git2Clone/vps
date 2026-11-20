@@ -161,10 +161,12 @@ repos:
           .#checks.x86_64-linux.mc2-pack
           .#checks.x86_64-linux.mc3-pack
           .#checks.x86_64-linux.mc4-pack
+          .#checks.x86_64-linux.mc5-pack
           .#checks.x86_64-linux.mc1-options
           .#checks.x86_64-linux.mc2-options
           .#checks.x86_64-linux.mc3-options
           .#checks.x86_64-linux.mc4-options
+          .#checks.x86_64-linux.mc5-options
         language: system
         files: ^(packs/|tests/(mrpack-deps|options-txt)\.py$)
         pass_filenames: false

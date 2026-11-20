@@ -4,7 +4,7 @@
 #   scripts/rcon.sh mc4 whitelist add <name>
 #   scripts/rcon.sh mc1 list
 #
-# Worlds are mc1 to mc4, or their container names. ssh uses whatever
+# Worlds are mc1 to mc5, or their container names. ssh uses whatever
 # SSH_AUTH_SOCK you have. A sleeping world is woken for the command and put
 # back to sleep after it. A whitelist change also restarts mc-router, which
 # reads who may wake a world only at start, unless someone is online: the
@@ -15,7 +15,7 @@ set -euo pipefail
 
 if [ "${1:-}" != --remote ]; then
   if [ $# -lt 2 ]; then
-    echo "usage: $0 <mc1..mc4> <command...>" >&2
+    echo "usage: $0 <mc1..mc5> <command...>" >&2
     exit 2
   fi
   # The script goes as an argument, not on stdin: -t hands stdin to the

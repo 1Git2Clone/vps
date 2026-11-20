@@ -113,7 +113,7 @@ jobs:
       # .pre-commit-config.yaml keeps it that way.
       - name: Stage the modpacks
         run: |
-          for pack in mc1 mc2 mc3 mc4; do
+          for pack in mc1 mc2 mc3 mc4 mc5; do
             mkdir -p "_site/$pack"
             outs=$(nix build --print-out-paths --no-link ".#$pack-mrpack" ".#$pack-mrpack-with-options")
             for out in $outs; do

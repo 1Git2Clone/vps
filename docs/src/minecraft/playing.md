@@ -10,6 +10,7 @@ look and run better, so a pack from here can always join its world.
 | [world 2](worlds/mc2.md) | `mc2.hu-tao.dev` | 1.21.1    | zombies: hordes, mutants, guns, bunkers              | [mc2.hu-tao.dev-1.21.1.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/mc2.hu-tao.dev-1.21.1.mrpack) |
 | [world 3](worlds/mc3.md) | `mc3.hu-tao.dev` | 26.2      | Vanilla+: new biomes, structures and animals         | [mc3.hu-tao.dev-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2.mrpack)     |
 | [world 4](worlds/mc4.md) | `mc4.hu-tao.dev` | 26.3      | world 1's pack, light enough for integrated graphics | [mc4.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3.mrpack)     |
+| [world 5](worlds/mc5.md) | `mc5.hu-tao.dev` | 26.3      | the old tailscale server's world, near-vanilla       | [mc5.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc5/mc5.hu-tao.dev-26.3.mrpack)     |
 
 `minecraft.hu-tao.dev` and the server's bare IP also reach world 1. Each
 world's page says what its mods do and lists every one of them.

@@ -174,6 +174,9 @@
       minecraft4_rcon_password = {
         key = "minecraft4/rcon_password";
       };
+      minecraft5_rcon_password = {
+        key = "minecraft5/rcon_password";
+      };
 
       # === Navidrome ===
       # One Last.fm application registration, from

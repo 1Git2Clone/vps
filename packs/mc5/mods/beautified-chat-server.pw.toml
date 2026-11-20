@@ -1,0 +1,13 @@
+name = "Beautified Chat [Server]"
+filename = "beautifiedchatserver-26.3.0-4.0.jar"
+side = "both"
+
+[download]
+url = "https://cdn.modrinth.com/data/C00Y5Ci9/versions/RZmsz568/beautifiedchatserver-26.3.0-4.0.jar"
+hash-format = "sha512"
+hash = "8ea1ac627e317732f8013f43d2bf4affc4ed453ae92dcbd7d0add2d755744af298987bf44e454975eb4149a66fc2214f641a1d1aed34fee1a23bcab0874c50c0"
+
+[update]
+[update.modrinth]
+mod-id = "C00Y5Ci9"
+version = "RZmsz568"
