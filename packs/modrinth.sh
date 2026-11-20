@@ -41,7 +41,7 @@ for pack in "$@"; do
   meta="$(jq -n --rawfile page "$page/$pack.md" --rawfile mods "$page/$pack-mods.md" '
     def clean: gsub("(?s)<!--.*?-->\\s*"; "");
     {
-      description: ($page | capture("<!-- summary[^:]*:\\s*(?<s>.*?)\\s*-->"; "s").s | gsub("\\s+"; " ")),
+      description: ($page | (capture("(?s)<!-- summary[^:]*:\\s*(?<s>.*?)\\s*-->") // error("the world page has no summary comment")).s | gsub("\\s+"; " ")),
       body: ($page | gsub("(?m)^\\*\\*(Pack|With options)\\*\\* .*\\n"; "") | gsub("\\{\\{#include [^}]+\\}\\}"; $mods | clean) | clean
         | gsub("\\]\\((?<p>[a-z0-9-]+)\\.md\\)"; "](https://docs.hu-tao.dev/minecraft/worlds/\(.p).html)")),
       client_side: "required", server_side: "optional"
@@ -118,10 +118,7 @@ EOF
   fi
 
   # Modrinth requires disclosing AI-assisted text; the handbook pages this
-  # description comes from are written with an AI agent's help. It goes
-  # first: while a project is in review, Modrinth refuses every edit that
-  # leaves a required nag open, and a missing disclosure is one, so the
-  # PATCH below failed with a bare 400 (2026-11-20).
+  # description comes from are written with an AI agent's help.
   curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
     -d '{"set": [{"type": "ai_content", "uses": ["text"]}], "remove": []}' \
     "${api%/v2}/v3/project/$id/disclosures" || {
@@ -129,20 +126,11 @@ EOF
     exit 1
   }
 
-  if ! curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-    -d "$meta" "$api/project/$id"; then
+  curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+    -d "$meta" "$api/project/$id" || {
     cat "$tmp" >&2
-    # The v2 route refused with a bare 400 on 2026-11-20, with no required
-    # nag open. v3 gives its reason; retry the text alone there.
-    echo "$pack: v2 edit refused; retrying summary and description on v3" >&2
-    curl -sS --fail-with-body -D /dev/stderr -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-      -d "$(jq '{summary: .description, description: .body}' <<<"$meta")" \
-      "${api%/v2}/v3/project/$id" || {
-      cat "$tmp" >&2
-      exit 1
-    }
-    echo "::warning::$pack: v3 took the summary and description; the sides were not updated"
-  fi
+    exit 1
+  }
 
   # Still a draft (new, or a run that died before this): send it to review.
   # Modrinth answers a project that fails its publishing checklist with a bare
