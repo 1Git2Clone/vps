@@ -132,6 +132,10 @@ EOF
   curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
     -d "$meta" "$api/project/$id" || {
     cat "$tmp" >&2
+    # Modrinth's 400 here has no body; the nags it refused over are in
+    # the project's validation report.
+    curl -sS "${auth[@]}" "${api%/v2}/v3/project/$id/validate" |
+      jq -c '.nags[] | select(.severity == "required")' >&2 || true
     exit 1
   }
 
