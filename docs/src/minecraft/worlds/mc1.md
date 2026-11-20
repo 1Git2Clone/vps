@@ -5,6 +5,12 @@
      26.1.2. What the server changes, what the Gemstones pack adds, and
      every mod in it. -->
 
+<!-- summary (the Modrinth project's, which may not hold an address):
+     Close-to-vanilla survival on hard: trees fall in one cut, half the
+     players can skip the night, creepers spare your builds, and distant
+     terrain renders far past your view distance, with the performance mods
+     to keep it smooth. -->
+
 **Join at** `mc.hu-tao.dev` (also `minecraft.hu-tao.dev` or the bare IP)
 **Pack** [mc.hu-tao.dev-26.1.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/mc.hu-tao.dev-26.1.2.mrpack)
 **With options** [mc.hu-tao.dev-26.1.2-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc1/mc.hu-tao.dev-26.1.2-with-options.mrpack)

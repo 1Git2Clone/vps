@@ -32,14 +32,17 @@ for pack in "$@"; do
 
   # Summary, description and sides, re-sent every run so the project follows
   # the handbook. The description is the world's handbook page with its mod
-  # list inlined; the summary is its title, since Modrinth refuses one that
-  # holds an address. Sides on a project apply to all its versions.
+  # list inlined, minus the .mrpack links: Modrinth's rules forbid direct
+  # download links in a description. The summary is the page's summary
+  # comment, since Modrinth refuses one that holds an address and its
+  # moderators turned down the bare title (2026-11-20). Sides on a project
+  # apply to all its versions.
   page=docs/src/minecraft/worlds
   meta="$(jq -n --rawfile page "$page/$pack.md" --rawfile mods "$page/$pack-mods.md" '
     def clean: gsub("(?s)<!--.*?-->\\s*"; "");
     {
-      description: (($page | capture("^# (?<t>[^\\n]+)").t) + ", the modpack for a private, whitelisted Minecraft server."),
-      body: ($page | gsub("\\{\\{#include [^}]+\\}\\}"; $mods | clean) | clean
+      description: ($page | capture("<!-- summary[^:]*:\\s*(?<s>.*?)\\s*-->"; "s").s | gsub("\\s+"; " ")),
+      body: ($page | gsub("(?m)^\\*\\*(Pack|With options)\\*\\* .*\\n"; "") | gsub("\\{\\{#include [^}]+\\}\\}"; $mods | clean) | clean
         | gsub("\\]\\((?<p>[a-z0-9-]+)\\.md\\)"; "](https://docs.hu-tao.dev/minecraft/worlds/\(.p).html)")),
       client_side: "required", server_side: "optional"
     }')"
@@ -116,6 +119,15 @@ EOF
 
   curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
     -d "$meta" "$api/project/$id" || {
+    cat "$tmp" >&2
+    exit 1
+  }
+
+  # Modrinth requires disclosing AI-assisted text; the handbook pages this
+  # description comes from are written with an AI agent's help.
+  curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
+    -d '{"set": [{"type": "ai_content", "uses": ["text"]}], "remove": []}' \
+    "${api%/v2}/v3/project/$id/disclosures" || {
     cat "$tmp" >&2
     exit 1
   }

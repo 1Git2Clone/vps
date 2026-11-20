@@ -4,6 +4,12 @@
      World 4 on mc4.hu-tao.dev: world 1's close-to-vanilla survival on
      Minecraft 26.3, with a pack trimmed to run on integrated graphics. -->
 
+<!-- summary (the Modrinth project's, which may not hold an address):
+     World 1's close-to-vanilla survival, trimmed to run on integrated
+     graphics and 8 GB of RAM: trees fall in one cut, carry chests and
+     mobs, bases keep working while you are away, and everything that costs
+     frames for no gameplay is gone. -->
+
 **Join at** `mc4.hu-tao.dev`
 **Pack** [mc4.hu-tao.dev-26.3.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3.mrpack)
 **With options** [mc4.hu-tao.dev-26.3-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc4/mc4.hu-tao.dev-26.3-with-options.mrpack)

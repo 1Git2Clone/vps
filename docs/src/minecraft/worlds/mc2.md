@@ -5,6 +5,11 @@
      hordes, mutants, guns and bunkers. What each mod does, and every mod in
      the pack. -->
 
+<!-- summary (the Modrinth project's, which may not hold an address):
+     Zombie survival on hard, on 1.21.1: horde nights, mutant zombies that
+     track you by sound, light and scent, craftable guns and ammunition,
+     and underground bunkers worth finding. -->
+
 **Join at** `mc2.hu-tao.dev`
 **Pack** [mc2.hu-tao.dev-1.21.1.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/mc2.hu-tao.dev-1.21.1.mrpack)
 **With options** [mc2.hu-tao.dev-1.21.1-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc2/mc2.hu-tao.dev-1.21.1-with-options.mrpack)

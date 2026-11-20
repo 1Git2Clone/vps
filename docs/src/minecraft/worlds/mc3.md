@@ -5,6 +5,12 @@
      new biomes, structures, animals, cooking, storage and waystones. What
      each mod does, and every mod in it. -->
 
+<!-- summary (the Modrinth project's, which may not hold an address):
+     The Vanilla+ pack: nearly 100 new biomes and grander terrain,
+     villages, dungeons and taverns to explore, new animals, cooking and
+     farming, storage, backpacks and fast travel, all in Minecraft's own
+     style. -->
+
 **Join at** `mc3.hu-tao.dev`
 **Pack** [mc3.hu-tao.dev-26.2.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2.mrpack)
 **With options** [mc3.hu-tao.dev-26.2-with-options.mrpack](https://pages.hu-tao.dev/hutao/vps/mc3/mc3.hu-tao.dev-26.2-with-options.mrpack)
