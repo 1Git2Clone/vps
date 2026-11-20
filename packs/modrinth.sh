@@ -117,17 +117,20 @@ EOF
     echo "$pack: uploaded $name"
   fi
 
+  # Modrinth requires disclosing AI-assisted text; the handbook pages this
+  # description comes from are written with an AI agent's help. It goes
+  # first: while a project is in review, Modrinth refuses every edit that
+  # leaves a required nag open, and a missing disclosure is one, so the
+  # PATCH below failed with a bare 400 (2026-11-20).
   curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-    -d "$meta" "$api/project/$id" || {
+    -d '{"set": [{"type": "ai_content", "uses": ["text"]}], "remove": []}' \
+    "${api%/v2}/v3/project/$id/disclosures" || {
     cat "$tmp" >&2
     exit 1
   }
 
-  # Modrinth requires disclosing AI-assisted text; the handbook pages this
-  # description comes from are written with an AI agent's help.
   curl -sS --fail-with-body -o "$tmp" -X PATCH "${auth[@]}" -H 'Content-Type: application/json' \
-    -d '{"set": [{"type": "ai_content", "uses": ["text"]}], "remove": []}' \
-    "${api%/v2}/v3/project/$id/disclosures" || {
+    -d "$meta" "$api/project/$id" || {
     cat "$tmp" >&2
     exit 1
   }
